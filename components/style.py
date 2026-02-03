@@ -669,6 +669,40 @@ def apply_custom_style():
             border-image: linear-gradient(90deg, #00ffff, #0080ff) 1;
             padding-bottom: 0.5rem;
         }
+        
+        /* ================= FORM FIX - White on White Issue ================= */
+        /* Force all form elements to have visible text */
+        [data-testid="stForm"] {
+            background: rgba(15, 23, 42, 0.6) !important;
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        
+        [data-testid="stForm"] label,
+        [data-testid="stForm"] .stMarkdown,
+        [data-testid="stForm"] p,
+        [data-testid="stForm"] span {
+            color: #ffffff !important;
+        }
+        
+        [data-testid="stForm"] .stTextInput input,
+        [data-testid="stForm"] .stTextArea textarea,
+        [data-testid="stForm"] .stNumberInput input {
+            color: #ffffff !important;
+            background: rgba(10, 15, 30, 0.9) !important;
+            border: 1px solid rgba(0, 255, 255, 0.3) !important;
+        }
+        
+        [data-testid="stForm"] .stSelectbox > div > div,
+        [data-testid="stForm"] .stSelectbox > div > div > div {
+            color: #ffffff !important;
+            background: rgba(10, 15, 30, 0.9) !important;
+        }
+        
+        [data-testid="stForm"] .stSelectbox label {
+            color: #00ffff !important;
+        }
 
         /* ================= Subheaders and Labels ================= */
         .stSubheader, [data-testid="stSubheader"] {

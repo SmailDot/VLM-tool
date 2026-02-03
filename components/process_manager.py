@@ -262,13 +262,28 @@ def render_manage_tab(manager: ProcessLibraryManager):
                         edit_description = st.text_area("描述", value=pdata.get('description', ''), height=80, key=f"desc_{pid}")
                     
                     with col2:
+                        # 安全取得 category index
+                        categories = ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"]
+                        current_cat = pdata.get('category', '其他')
+                        cat_index = categories.index(current_cat) if current_cat in categories else 7
+                        
                         edit_category = st.selectbox(
                             "分類",
-                            ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"],
-                            index=["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"].index(
-                                pdata.get('category', '其他')
-                            ) if pdata.get('category', '其他') in ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"] else 7,
+                            categories,
+                            index=cat_index,
                             key=f"cat_{pid}"
+                        )
+                        
+                        # 安全取得 frequency index
+                        frequencies = ["高", "中", "低"]
+                        current_freq = pdata.get('frequency', '中')
+                        freq_index = frequencies.index(current_freq) if current_freq in frequencies else 1
+                        
+                        edit_frequency = st.selectbox(
+                            "優先級",
+                            frequencies,
+                            index=freq_index,
+                            key=f"freq_{pid}"
                         )
                         
                         edit_frequency = st.selectbox(

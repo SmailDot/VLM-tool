@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0.0",
-  "last_updated": "2026-02-03T15:05:28.153035",
+  "last_updated": "2026-02-03T19:43:21.034951",
   "description": "NKUST 鈑金製程知識庫 - 從 new.xlsx 轉換",
   "total_processes": 78,
   "processes": {
@@ -10,14 +10,22 @@
       "description": "優先檢索標註：出現 「抽牙」、「M3/M4/M5」 或 「中心沖」。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "M3/M4/M5",
+          "中心沖",
+          "抽牙"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "切割",
-      "keywords": [],
+      "keywords": [
+        "M3/M4/M5",
+        "中心沖",
+        "抽牙"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -27,14 +35,20 @@
       "description": "偵測圖面是否有 「折彎線」、「角度標註」 或側視圖有彎角。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "角度標註",
+          "折彎線"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "折彎成型",
-      "keywords": [],
+      "keywords": [
+        "角度標註",
+        "折彎線"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -44,14 +58,20 @@
       "description": "[複合條件] 同時偵測到「折彎線」與「植件中文名稱」。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "植件中文名稱",
+          "折彎線"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "折彎成型",
-      "keywords": [],
+      "keywords": [
+        "植件中文名稱",
+        "折彎線"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -103,7 +123,9 @@
       "description": "厚度與形狀判定：厚度 $\\ge$ 2.0T 且有折彎，或註明「磨除擠肉」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "磨除擠肉"
+        ],
         "geometry_features": [
           "bend_line"
         ],
@@ -114,7 +136,9 @@
         "customer_specific": []
       },
       "category": "去毛邊",
-      "keywords": [],
+      "keywords": [
+        "磨除擠肉"
+      ],
       "geometry_features": [
         "bend_line"
       ],
@@ -126,14 +150,18 @@
       "description": "排版分流：主要視 M3048 工作量而定。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "M3048"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "切割",
-      "keywords": [],
+      "keywords": [
+        "M3048"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -143,14 +171,18 @@
       "description": "工序特定：圖面註記或經驗回饋「先植再折」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "先植再折"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "折彎成型",
-      "keywords": [],
+      "keywords": [
+        "先植再折"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -177,7 +209,9 @@
       "description": "偵測特徵：「沖孔密集度高」 或現場回饋雷射後變形。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "沖孔密集度高"
+        ],
         "geometry_features": [
           "circles"
         ],
@@ -186,7 +220,9 @@
         "customer_specific": []
       },
       "category": "去毛邊",
-      "keywords": [],
+      "keywords": [
+        "沖孔密集度高"
+      ],
       "geometry_features": [
         "circles"
       ],
@@ -198,7 +234,10 @@
       "description": "偵測精密特徵：「沉頭孔」 或 「公差要求極小」 的孔徑。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "公差要求極小",
+          "沉頭孔"
+        ],
         "geometry_features": [
           "circles"
         ],
@@ -207,7 +246,10 @@
         "customer_specific": []
       },
       "category": "去毛邊",
-      "keywords": [],
+      "keywords": [
+        "公差要求極小",
+        "沉頭孔"
+      ],
       "geometry_features": [
         "circles"
       ],
@@ -219,7 +261,11 @@
       "description": "特殊特徵：「架橋」、「通風孔」 或材質標註為 「PP 瓦楞板」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "PP 瓦楞板",
+          "通風孔",
+          "架橋"
+        ],
         "geometry_features": [
           "circles"
         ],
@@ -228,7 +274,11 @@
         "customer_specific": []
       },
       "category": "切割",
-      "keywords": [],
+      "keywords": [
+        "PP 瓦楞板",
+        "通風孔",
+        "架橋"
+      ],
       "geometry_features": [
         "circles"
       ],
@@ -240,14 +290,18 @@
       "description": "檢索關鍵字：圖面明確標註 「拋光」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "拋光"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "去毛邊",
-      "keywords": [],
+      "keywords": [
+        "拋光"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -354,7 +408,9 @@
       "description": "特徵識別：偵測 Spot 符號及 「點焊螺帽/螺柱」 等特定零件。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "點焊螺帽/螺柱"
+        ],
         "geometry_features": [],
         "symbols": [
           "spot_welding"
@@ -363,7 +419,9 @@
         "customer_specific": []
       },
       "category": "焊接",
-      "keywords": [],
+      "keywords": [
+        "點焊螺帽/螺柱"
+      ],
       "geometry_features": [],
       "symbols": [
         "spot_welding"
@@ -375,7 +433,9 @@
       "description": "幾何判定：偵測圓管特徵且標註 「直徑 > 70mm」，且非市購標準件。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "直徑 > 70mm"
+        ],
         "geometry_features": [
           "circles"
         ],
@@ -384,7 +444,9 @@
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "直徑 > 70mm"
+      ],
       "geometry_features": [
         "circles"
       ],
@@ -396,14 +458,18 @@
       "description": "物件識別：圖面出現「圓棒」或需要特定長度裁切的管材零件。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "圓棒"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "圓棒"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -413,14 +479,18 @@
       "description": "零件檢索：偵測到 「植焊螺絲」 標註（通常由業務/AI 依圖面零件類型判定）。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "植焊螺絲"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "植焊螺絲"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -430,14 +500,18 @@
       "description": "經驗邏輯：特定結構（如長直焊縫）且註記需使用 「機械手臂」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "機械手臂"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "焊接",
-      "keywords": [],
+      "keywords": [
+        "機械手臂"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -447,14 +521,18 @@
       "description": "預測邏輯：判斷焊接位置是否易造成「熱變形」，或有相關現場備註。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "熱變形"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "熱變形"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -464,14 +542,18 @@
       "description": "特殊標註：偵測到「架橋」相關符號或文字描述。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "架橋"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "架橋"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -481,14 +563,18 @@
       "description": "材質異質性檢索：偵測到圖面標註包含 「一面鉛、一面鋁」 的特殊組合。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "一面鉛、一面鋁"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "一面鉛、一面鋁"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -498,14 +584,18 @@
       "description": "工序邏輯：需結合現場回饋，判斷是否具備 「先組裝後焊接」 的結構特徵。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "先組裝後焊接"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "焊接",
-      "keywords": [],
+      "keywords": [
+        "先組裝後焊接"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -515,14 +605,18 @@
       "description": "關聯判定：若先前步驟已判定為 「F16 自動焊接」，則自動帶入此研磨製程。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "F16 自動焊接"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "F16 自動焊接"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -549,14 +643,20 @@
       "description": "文字檢索：直接搜尋圖面備註（Note）是否出現 「Stress Relieving」 或 「應力消除」 字眼。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "Stress Relieving",
+          "應力消除"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "加工",
-      "keywords": [],
+      "keywords": [
+        "Stress Relieving",
+        "應力消除"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -566,14 +666,18 @@
       "description": "技術判定：基於現場回饋，針對特定薄板或高精度需求選擇 「光纖焊接」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "光纖焊接"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "焊接",
-      "keywords": [],
+      "keywords": [
+        "光纖焊接"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -583,14 +687,18 @@
       "description": "空間風險判定：針對複雜組裝件，為了 「避免焊完組不上」，依經驗判斷加入假組立。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "避免焊完組不上"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "焊接",
-      "keywords": [],
+      "keywords": [
+        "避免焊完組不上"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -600,7 +708,11 @@
       "description": "複合邏輯：偵測材質為 「白鐵/不鏽鋼」 且有 「焊接」 標記，但排除有「烤漆」的需求。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "白鐵/不鏽鋼",
+          "焊接",
+          "烤漆"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [
@@ -609,7 +721,11 @@
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "白鐵/不鏽鋼",
+        "焊接",
+        "烤漆"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -636,14 +752,22 @@
       "description": "文字檢索：圖面出現關鍵字 「網印」、「蓋印」 或 「貼紙」。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "網印",
+          "貼紙",
+          "蓋印"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "網印",
+        "貼紙",
+        "蓋印"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -653,14 +777,18 @@
       "description": "關聯邏輯：判斷後續是否有「委外加工」工序，若有則需加入防碰撞包裝。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "委外加工"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "委外加工"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -670,14 +798,18 @@
       "description": "文字檢索：圖面技術要求中明確註記 「鈍化 (Passivation)」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "鈍化 (Passivation)"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "鈍化 (Passivation)"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -687,14 +819,18 @@
       "description": "外部知識庫：比對客戶打單須知或材質標註為 「鋁」 且有洗淨要求。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "鋁"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "鋁"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -704,14 +840,18 @@
       "description": "需求判定：檢索圖面或客戶備註中是否提及 「脫脂」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "脫脂"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "脫脂"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -721,14 +861,18 @@
       "description": "特定邏輯：針對需「委外整平」的工件，偵測是否有撕膜與包裝需求。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "委外整平"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "委外整平"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -738,14 +882,20 @@
       "description": "工序前置：判斷後續是否有 「植螺紋護套」 或 「化學清洗」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "植螺紋護套",
+          "化學清洗"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "植螺紋護套",
+        "化學清洗"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -772,14 +922,18 @@
       "description": "環境要求檢索：圖面註記出現 「無塵室等級 (Cleanroom Class)」 或相關 ISO 規範。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "無塵室等級 (Cleanroom Class)"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "無塵室等級 (Cleanroom Class)"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -823,7 +977,10 @@
       "description": "客戶/工序關聯：偵測為 「ASML」 專用件，或為「化學清洗」的前置步驟。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "ASML",
+          "化學清洗"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
@@ -832,7 +989,10 @@
         ]
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "ASML",
+        "化學清洗"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -842,14 +1002,20 @@
       "description": "外部資訊連動：圖面看不出時，需由生管系統輸入 「委外焊接」+「原材料帶膜」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "委外焊接",
+          "原材料帶膜"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "委外焊接",
+        "原材料帶膜"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -893,14 +1059,20 @@
       "description": "技術要求檢索：圖面或客戶規範中註明 「三價鉻」 或 「Trivalent Chromium」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "Trivalent Chromium",
+          "三價鉻"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "表面處理",
-      "keywords": [],
+      "keywords": [
+        "Trivalent Chromium",
+        "三價鉻"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -927,14 +1099,20 @@
       "description": "工序連動：若製程中包含「焊接」或「烤漆」，則自動觸發第二次品檢。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "焊接",
+          "烤漆"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "檢驗",
-      "keywords": [],
+      "keywords": [
+        "焊接",
+        "烤漆"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -944,14 +1122,18 @@
       "description": "物件判定：針對「市購件」加工的第一道關卡，識別零件來源。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "市購件"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "檢驗",
-      "keywords": [],
+      "keywords": [
+        "市購件"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -961,14 +1143,20 @@
       "description": "文字檢索：圖面出現關鍵字 「測漏」 或 「不可漏水 (Leak Test)」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "不可漏水 (Leak Test)",
+          "測漏"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "檢驗",
-      "keywords": [],
+      "keywords": [
+        "不可漏水 (Leak Test)",
+        "測漏"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -978,14 +1166,18 @@
       "description": "環境要求檢索：圖面標註 「無塵室」 等級要求時。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "無塵室"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "檢驗",
-      "keywords": [],
+      "keywords": [
+        "無塵室"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1029,14 +1221,18 @@
       "description": "文字檢索：圖面明確指示需進行 「保壓 (Pressure Test)」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "保壓 (Pressure Test)"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "檢驗",
-      "keywords": [],
+      "keywords": [
+        "保壓 (Pressure Test)"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1131,14 +1327,20 @@
       "description": "特徵檢索：圖面出現標註 「刻字」、「雷雕」 或特定幾何位置的雕刻說明。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "雷雕",
+          "刻字"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "其他",
-      "keywords": [],
+      "keywords": [
+        "雷雕",
+        "刻字"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1148,14 +1350,20 @@
       "description": "物件屬性：判斷工件是否為 「研發件」 或 「測試件」 的最後審核流程。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "測試件",
+          "研發件"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "其他",
-      "keywords": [],
+      "keywords": [
+        "測試件",
+        "研發件"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1165,14 +1373,20 @@
       "description": "客戶/屬性判定：通常為 「首件」 或標題欄標註需「客戶到廠檢驗」。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "首件",
+          "客戶到廠檢驗"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "其他",
-      "keywords": [],
+      "keywords": [
+        "首件",
+        "客戶到廠檢驗"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1182,7 +1396,10 @@
       "description": "客戶/物流判定：客戶名稱為 「日本客戶」 或備註需「裝櫃/疊板」利於出口。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "日本客戶",
+          "裝櫃/疊板"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
@@ -1191,7 +1408,10 @@
         ]
       },
       "category": "其他",
-      "keywords": [],
+      "keywords": [
+        "日本客戶",
+        "裝櫃/疊板"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1252,14 +1472,20 @@
       "description": "特徵檢索：圖面出現 「拉打」、「拉帽」、或涉及多個工件組合標註。",
       "frequency": "高",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "拉打",
+          "拉帽"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "組裝與後處理",
-      "keywords": [],
+      "keywords": [
+        "拉打",
+        "拉帽"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1290,14 +1516,18 @@
       "description": "環境要求檢索：圖面技術要求中標註需在 「無塵室組裝」。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "無塵室組裝"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "組裝與後處理",
-      "keywords": [],
+      "keywords": [
+        "無塵室組裝"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1307,7 +1537,9 @@
       "description": "幾何精度判定：雷射/折彎無法達成之形狀，或標註 「公差極小」 之處。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "公差極小"
+        ],
         "geometry_features": [
           "bend_line"
         ],
@@ -1316,7 +1548,9 @@
         "customer_specific": []
       },
       "category": "切削",
-      "keywords": [],
+      "keywords": [
+        "公差極小"
+      ],
       "geometry_features": [
         "bend_line"
       ],
@@ -1328,14 +1562,18 @@
       "description": "文字檢索：圖面明確標註需 「鉻酸鹽」 處理。",
       "frequency": "中",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "鉻酸鹽"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "組裝與後處理",
-      "keywords": [],
+      "keywords": [
+        "鉻酸鹽"
+      ],
       "geometry_features": [],
       "symbols": []
     },
@@ -1362,14 +1600,18 @@
       "description": "文字檢索：圖面標註有 「植螺紋護套」（通常伴隨 H12 清潔）。",
       "frequency": "低",
       "triggers": {
-        "keywords": [],
+        "keywords": [
+          "植螺紋護套"
+        ],
         "geometry_features": [],
         "symbols": [],
         "material_conditions": [],
         "customer_specific": []
       },
       "category": "組裝與後處理",
-      "keywords": [],
+      "keywords": [
+        "植螺紋護套"
+      ],
       "geometry_features": [],
       "symbols": []
     },
