@@ -5,7 +5,7 @@
 
 ## 1. Project Context
 **Name**: NKUST 製程辨識系統 (Manufacturing Process Recognition System)
-**Goal**: Automatically analyze engineering drawings to identify required manufacturing processes from 96 process types.
+**Goal**: Automatically analyze engineering drawings to identify required manufacturing processes (process types dynamically loaded from knowledge base).
 **Tech Stack**:
 - **Frontend**: Streamlit (`aov_app.py`)
 - **Backend**: Python 3.8+
@@ -111,7 +111,8 @@ Group imports in the following order:
 | `app/manufacturing/pipeline.py` | **Pipeline**. Orchestrates feature extraction and decision making. |
 | `app/manufacturing/extractors/` | **Feature Extraction**. OCR, geometry, symbols, tolerance parsing, parent image parsing. |
 | `app/manufacturing/decision/` | **Decision Engine**. Multi-modal scoring and process prediction. |
-| `app/manufacturing/process_lib.json` | **Data**. Defines 96 manufacturing processes with triggers and rules. |
+| `app/manufacturing/process_lib.json` | **Data (v1, testing)**. Defines 6 manufacturing processes for testing. |
+| `app/manufacturing/process_lib_v2.json` | **Data (v2, production)**. Defines 78 manufacturing processes with triggers and rules. |
 | `components/` | **UI Components**. Styles, sidebar, visualizers for the Streamlit interface. |
 
 ### Adding a New Manufacturing Process

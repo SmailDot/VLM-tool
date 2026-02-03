@@ -5,6 +5,61 @@
 
 ---
 
+## [2.1.1] - 2026-02-03
+
+### 🐛 Bug Fixes
+
+#### 1. Dynamic Process Count
+**Issue**: Process count was hardcoded to "96" in multiple places, but actual knowledge base has 78 processes.
+
+**Solution**: 
+- Added `total_processes` property to all engine classes
+- Updated UI to dynamically display process count from loaded knowledge base
+- Updated documentation to remove hardcoded numbers
+
+**Files Modified**:
+- `app/manufacturing/decision/engine_v2.py`
+- `app/manufacturing/decision/rules.py`
+- `app/manufacturing/pipeline.py`
+- `aov_app.py`
+- `README.md`
+- `AGENTS.md`
+
+---
+
+#### 2. PaddleOCR OneDNN Compatibility Error
+**Issue**: When all three recognition options (OCR + Geometry + Symbols) are selected, the system crashes with:
+```
+(Unimplemented) ConvertPirAttribute2RuntimeAttribute not support 
+[pir::ArrayAttribute<pir::DoubleAttribute>]
+```
+
+**Root Cause**: PaddlePaddle 3.0.0-beta's PIR (Program Intermediate Representation) architecture has incomplete OneDNN backend support.
+
+**Solution**:
+1. **Environment Variables** (set before importing paddleocr):
+   ```python
+   os.environ['FLAGS_use_mkldnn'] = '0'
+   os.environ['FLAGS_use_onednn'] = '0'
+   ```
+
+2. **Initialization Parameters** (all PaddleOCR instances):
+   ```python
+   PaddleOCR(
+       enable_mkldnn=False,  # Disable OneDNN
+       use_gpu=False,        # Force CPU mode
+       ...
+   )
+   ```
+
+**Files Modified**:
+- `app/manufacturing/extractors/ocr.py` (lines 13-15, 64-78, 300-309)
+
+**Files Added**:
+- `test_full_features.py` - Full integration test for all three options
+
+---
+
 ## [2.1.0] - 2026-02-03
 
 ### 🧹 專案大清理
@@ -279,7 +334,7 @@ streamlit run aov_app.py
 
 - ✅ 從 AoV Tool v1.0 (影像演算法工具) 重構為製程辨識系統
 - ✅ 建立 `app/manufacturing/` 核心模組
-- ✅ 支援 96 種製程類型辨識
+- ✅ 支援多種製程類型辨識（動態載入）
 - ✅ 多模態特徵提取 (OCR + 幾何 + 符號)
 - ✅ Streamlit UI 介面
 - ✅ 規則基礎決策引擎

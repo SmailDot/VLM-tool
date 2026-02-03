@@ -9,6 +9,27 @@ from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import cv2
 from pathlib import Path
+import os
+
+# ==================== 修復 PaddleOCR 3.4.0 相容性問題 ====================
+# 
+# 問題 1: modelscope 依賴導致的 PyTorch DLL 載入錯誤
+# 解決方案: 禁用 PaddleX model source connectivity check
+os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+#
+# 問題 2: PaddlePaddle PIR 與 OneDNN 後端相容性問題
+# 錯誤: ConvertPirAttribute2RuntimeAttribute not support [pir::ArrayAttribute<pir::DoubleAttribute>]
+# 解決方案: 禁用 OneDNN (MKL-DNN) 後端
+os.environ['FLAGS_use_mkldnn'] = 'False'
+os.environ['FLAGS_use_onednn'] = 'False'
+
+# 在設定環境變數後才導入 paddle 和 paddleocr
+try:
+    import paddle
+    # 確保 flags 生效
+    paddle.set_flags({'FLAGS_use_mkldnn': False})
+except Exception as e:
+    print(f"Warning: Failed to set paddle flags: {e}")
 
 try:
     from paddleocr import PaddleOCR
@@ -55,7 +76,17 @@ class OCRExtractor:
         self.use_textline_orientation = use_angle_cls  # PaddleOCR 3.4.0+ uses this name
         
         # Initialize primary OCR engine
-        # PaddleOCR 3.4.0+ uses use_textline_orientation instead of use_angle_cls
+        # PaddleOCR 3.4.0+ 版本變更：
+        # - 使用 use_textline_orientation 參數（替代舊版 use_angle_cls）
+        # - 移除 enable_mkldnn, use_gpu, show_log 等參數（已不支援）
+        # - 透過環境變數控制後端行為（見模組頂部設定）
+        # 
+        # 修復 OneDNN 後端錯誤：
+        # 1. 環境變數已在模組頂部設定 (FLAGS_use_mkldnn, FLAGS_use_onednn)
+        # 2. 環境變數必須在 import paddleocr 之前設定才有效
+        # 
+        # 錯誤: ConvertPirAttribute2RuntimeAttribute not support [pir::ArrayAttribute<pir::DoubleAttribute>]
+        # 解決: 透過環境變數 FLAGS_use_onednn=0 禁用 OneDNN 後端
         self.ocr = PaddleOCR(
             use_textline_orientation=use_angle_cls,
             lang=lang
@@ -280,6 +311,7 @@ class OCRExtractor:
             # Get or create OCR engine for this language
             if lang not in self.ocr_engines:
                 try:
+                    # PaddleOCR 3.4.0+ 版本：移除不支援的參數
                     self.ocr_engines[lang] = PaddleOCR(
                         use_textline_orientation=self.use_textline_orientation,
                         lang=lang

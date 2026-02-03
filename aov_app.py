@@ -5,6 +5,15 @@ NKUST 製程辨識系統 - Manufacturing Process Recognition Tool
 重構版本：以製程辨識為核心，移除所有影像辨識演算法相關功能
 """
 
+# ==================== 重要：PaddleOCR 環境變數設定 ====================
+# 必須在任何 import 之前設定
+import os
+# 問題 1: 禁用 PaddleX model source check（避免 modelscope/PyTorch DLL 錯誤）
+os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+# 問題 2: 禁用 OneDNN 後端（避免 PIR 相容性錯誤）
+os.environ['FLAGS_use_mkldnn'] = 'False'
+os.environ['FLAGS_use_onednn'] = 'False'
+
 import streamlit as st
 import cv2
 import numpy as np
@@ -23,7 +32,7 @@ from components.process_manager import render_process_manager
 # ==================== Page Config ====================
 
 st.set_page_config(
-    page_title="NKUST 製程辨識系統",
+    page_title="製程辨識系統",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -63,12 +72,7 @@ st.markdown("""
     <h1 style='color: #1f77b4; font-size: 3rem; margin-bottom: 0.5rem;'>
         NKUST 製程辨識系統
     </h1>
-    <p style='font-size: 1.2rem; color: #666; margin-top: 0;'>
-        Manufacturing Process Recognition from Engineering Drawings
-    </p>
-    <p style='font-size: 1rem; color: #888;'>
-        國立高雄科技大學 視覺實驗室 | Manufacturing Process Recognition System
-    </p>
+    
 </div>
 """, unsafe_allow_html=True)
 
@@ -352,7 +356,7 @@ with col_left:
             - 幾何特徵辨識 (線條、孔洞、折彎線)
             - 符號辨識 (焊接符號、表面處理標記)
             - OCR 文字辨識 (可選)
-            - 製程推薦 (96 種製程類型)
+            - 製程推薦 (多種製程類型)
             
             ### 支援製程類別
             - **切割**: 雷射切割、水刀切割、剪板機等
@@ -572,16 +576,24 @@ with col_right:
         
         # 顯示系統資訊
         with st.expander("📈 系統資訊", expanded=False):
-            st.markdown("""
-            **製程辨識系統 v2.0**
+            # 動態取得製程數量
+            process_count = "載入中..."
+            if st.session_state.mfg_pipeline is not None:
+                try:
+                    process_count = f"{st.session_state.mfg_pipeline.total_processes} 種"
+                except:
+                    process_count = "無法取得"
             
-            - 支援製程: 96 種
+            st.markdown(f"""
+            **製程辨識系統 v2.1**
+            
+            - 支援製程: {process_count}
             - 製程類別: 8 大類
             - 特徵提取: OCR + 幾何 + 符號 + 視覺
             - 決策引擎: 多模態融合評分
             
             **技術架構:**
-            - OCR: PaddleOCR (中英文)
+            - OCR: PaddleOCR (多語言支援)
             - 幾何: OpenCV Hough + Contours
             - 符號: Template Matching
             - 視覺: DINOv2 (可選)
@@ -635,18 +647,27 @@ with st.sidebar:
     
     # 關於
     st.divider()
-    st.markdown("""
+    
+    # 動態取得製程數量用於側邊欄
+    sidebar_process_count = "多種"
+    if st.session_state.mfg_pipeline is not None:
+        try:
+            sidebar_process_count = f"{st.session_state.mfg_pipeline.total_processes} 種"
+        except:
+            sidebar_process_count = "多種"
+    
+    st.markdown(f"""
     ### ℹ️ 關於系統
     
     **NKUST 製程辨識系統**專為工程圖紙分析設計，能自動識別所需的製造製程。
     
     **核心功能:**
     - 工程圖紙自動分析
-    - 96 種製程自動辨識
+    - {sidebar_process_count}製程自動辨識
     - 多模態特徵融合
     - 信心度評分與依據
     
-    **Version**: 2.0.0 (Refactored)  
+    **Version**: 2.1.0 (Enhanced)  
     **Date**: 2026-02-03
     """)
 

@@ -97,6 +97,11 @@ class ManufacturingPipeline:
         else:
             self.decision_engine = DecisionEngine(process_lib_path)
     
+    @property
+    def total_processes(self) -> int:
+        """Get total number of processes in the loaded library."""
+        return self.decision_engine.total_processes
+    
     def recognize(
         self,
         image: Union[str, np.ndarray],

@@ -86,6 +86,11 @@ class DecisionEngineV2:
             self.processes[process_id] = process_data
             self.process_library.append(process_data)
     
+    @property
+    def total_processes(self) -> int:
+        """Get total number of processes in the library."""
+        return len(self.processes)
+    
     def predict(
         self,
         features: ExtractedFeatures,

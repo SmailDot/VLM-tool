@@ -2,7 +2,7 @@
 
 > **國立高雄科技大學 視覺實驗室**  
 > Manufacturing Process Recognition from Engineering Drawings  
-> Version: 2.0 (Refactored) | 最後更新：2026-02-03
+> Version: 2.1 (Enhanced) | 最後更新：2026-02-03
 
 ---
 
@@ -11,7 +11,7 @@
 **NKUST 製程辨識系統** 是專為工程圖紙分析設計的AI辨識工具。系統能夠自動分析工程圖紙內容，並識別所需的製造製程。
 
 ### ✨ 核心特色
-- 🏭 **製程自動辨識**：支援 96 種製程類型
+- 🏭 **製程自動辨識**：支援多種製程類型（動態載入）
 - 🔍 **多模態分析**：OCR文字 + 幾何特徵 + 符號辨識
 - 📊 **信心度評分**：每個預測都附帶信心度與辨識依據
 - 🎯 **專業領域**：針對工程圖紙(白底黑線)優化
@@ -106,7 +106,11 @@ http://localhost:8501
 
 ---
 
-## 🏭 支援的製程類型 (96 種)
+## 🏭 支援的製程類型
+
+系統支援多種製程類型，實際數量由 `process_lib_v2.json` 知識庫動態載入。
+
+### 製程分類（8 大類）
 
 ### 切割類 (7 種)
 繪圖者、排版、雷射切割、剪板機、CNC 裁切、水刀切割、線切割
@@ -210,7 +214,8 @@ AoV_Tool_V2/
 ├── app/
 │   └── manufacturing/                  # 製程辨識核心模組
 │       ├── schema.py                   # 資料結構定義
-│       ├── process_lib.json            # 96 種製程定義
+│       ├── process_lib.json            # 製程定義 (v1, 測試用)
+│       ├── process_lib_v2.json         # 製程定義 (v2, 正式版)
 │       ├── pipeline.py                 # 管線協調器
 │       ├── extractors/                 # 特徵提取器
 │       │   ├── ocr.py                  # OCR 文字辨識
@@ -281,7 +286,7 @@ AoV_Tool_V2/
 └── 視覺嵌入 (可選)
     ↓
 決策引擎
-├── 載入 96 種製程定義
+├── 載入製程定義 (動態數量)
 ├── 多模態評分 (文字+符號+幾何+視覺)
 └── 加權融合 (40%+30%+20%+10%)
     ↓
@@ -295,7 +300,7 @@ Top-N 預測結果
 
 **實驗室**: 國立高雄科技大學 視覺實驗室  
 **專案**: NKUST AoV Tool - Manufacturing Process Recognition  
-**版本**: 2.1.0 (Clean & Enhanced)  
+**版本**: 2.1.1 (Dynamic Process Count + OneDNN Fix)  
 **日期**: 2026-02-03
 
 ---
@@ -311,6 +316,13 @@ Top-N 預測結果
 ---
 
 **祝你使用愉快！** 🎉
+
+**Version 2.1.1 更新重點 (2026-02-03)**：
+- ✅ **動態製程數量**: 從知識庫自動讀取，不再硬編碼「96 種」
+- ✅ **OneDNN 錯誤修復**: 解決全選三個辨識選項時的 PIR 相容性問題
+  - 環境變數禁用 OneDNN: `FLAGS_use_mkldnn=0`, `FLAGS_use_onednn=0`
+  - PaddleOCR 初始化參數: `enable_mkldnn=False`, `use_gpu=False`
+- ✅ **新增測試檔案**: `test_full_features.py` 驗證全選功能
 
 **Version 2.1 更新重點**：
 - ✅ **程式碼大清理**: 移除所有舊版遺留檔案
