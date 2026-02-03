@@ -460,18 +460,31 @@ with col_right:
                 
                 # 信心度顏色標記
                 if confidence_pct >= 70:
-                    color_tag = "[高]"
+                    color_emoji = "🟢"
+                    color_text = "高"
+                    color_style = "color: #28a745; font-weight: bold;"  # 綠色
                 elif confidence_pct >= 50:
-                    color_tag = "[中]"
+                    color_emoji = "🟡"
+                    color_text = "中"
+                    color_style = "color: #ffc107; font-weight: bold;"  # 黃色
                 else:
-                    color_tag = "[低]"
+                    color_emoji = "🔴"
+                    color_text = "低"
+                    color_style = "color: #dc3545; font-weight: bold;"  # 紅色
                 
                 with st.expander(
-                    f"**{i}. {pred.name}** ({confidence_pct:.1f}%) {color_tag}",
+                    f"{color_emoji} **{i}. {pred.name}** ({confidence_pct:.1f}%) - {color_text}信心度",
                     expanded=(i <= 3)  # 展開前3個結果
                 ):
-                    # 信心度進度條
-                    st.progress(pred.confidence)
+                    # 信心度進度條（帶顏色）
+                    col_prog1, col_prog2 = st.columns([3, 1])
+                    with col_prog1:
+                        st.progress(pred.confidence)
+                    with col_prog2:
+                        st.markdown(
+                            f"<span style='{color_style}'>{confidence_pct:.1f}%</span>",
+                            unsafe_allow_html=True
+                        )
                     
                     # 辨識依據
                     if pred.reasoning:
@@ -485,8 +498,8 @@ with col_right:
                     # 製程資訊 (如果有的話)
                     st.caption(f"製程 ID: {pred.process_id}")
         else:
-            st.warning("未找到符合條件的製程")
-            st.info("建議:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
+            st.warning("⚠️ 未找到符合條件的製程")
+            st.info("💡 **建議**:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
         
         st.divider()
         
