@@ -5,7 +5,7 @@ Uses PaddleOCR to extract Chinese and English text from engineering drawings.
 Optimized for technical blueprints with both language requirements.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import cv2
 from pathlib import Path
@@ -55,8 +55,7 @@ class OCRExtractor:
         # Initialize primary OCR engine
         self.ocr = PaddleOCR(
             use_angle_cls=use_angle_cls,
-            lang=lang,
-            show_log=False
+            lang=lang
         )
         
         # Cache for additional language engines (lazy loading)
@@ -277,8 +276,7 @@ class OCRExtractor:
                 try:
                     self.ocr_engines[lang] = PaddleOCR(
                         use_angle_cls=self.use_angle_cls,
-                        lang=lang,
-                        show_log=False
+                        lang=lang
                     )
                 except Exception as e:
                     print(f"Warning: Failed to load OCR for language '{lang}': {e}")
@@ -343,7 +341,7 @@ class OCRExtractor:
         scan_bottom_right: bool = True,
         region_ratio: float = 0.25,
         confidence_threshold: float = 0.5
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Detect and extract notes from engineering drawing title block area.
         Typically located in bottom-right corner.

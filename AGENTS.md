@@ -4,14 +4,15 @@
 > This file provides project-specific context, commands, and standards for AI agents (Sisyphus, Cursor, Copilot, etc.) working on the NKUST AoV Tool.
 
 ## 1. Project Context
-**Name**: NKUST AoV Tool (FPGA-aware Computer Vision Pipeline Generator)
-**Goal**: Allow users to generate OpenCV algorithm pipelines via natural language, with real-time FPGA resource estimation.
+**Name**: NKUST 製程辨識系統 (Manufacturing Process Recognition System)
+**Goal**: Automatically analyze engineering drawings to identify required manufacturing processes from 96 process types.
 **Tech Stack**:
 - **Frontend**: Streamlit (`aov_app.py`)
 - **Backend**: Python 3.8+
 - **CV Engine**: OpenCV (`cv2`), NumPy, Pillow
-- **Visualization**: Graphviz, PyVis
-- **Data**: JSON for project storage (`tech_lib.json`, project exports)
+- **OCR**: PaddleOCR (optional)
+- **Visualization**: PyVis
+- **Data**: JSON for process library (`process_lib.json`)
 
 ## 2. Environment & Commands
 
@@ -107,16 +108,16 @@ Group imports in the following order:
 | Module | Responsibility |
 |--------|----------------|
 | `aov_app.py` | **Entry Point**. Streamlit UI layout, state management (`st.session_state`), and event handling. |
-| `logic_engine.py` | **Brain**. Handles LLM query processing, JSON parsing, and pipeline generation logic. |
-| `processor.py` | **Execution**. `ImageProcessor` class. Maps string operation names (e.g., "Canny") to OpenCV calls. |
-| `library_manager.py` | **Database**. Manages `tech_lib.json` (algorithms, FPGA constraints). |
-| `project_manager.py` | **I/O**. Handles Import/Export of `.json` project files. |
-| `tech_lib.json` | **Data**. Defines available algorithms, their parameters, and FPGA resource costs. |
+| `app/manufacturing/pipeline.py` | **Pipeline**. Orchestrates feature extraction and decision making. |
+| `app/manufacturing/extractors/` | **Feature Extraction**. OCR, geometry, symbols, tolerance parsing, parent image parsing. |
+| `app/manufacturing/decision/` | **Decision Engine**. Multi-modal scoring and process prediction. |
+| `app/manufacturing/process_lib.json` | **Data**. Defines 96 manufacturing processes with triggers and rules. |
+| `components/` | **UI Components**. Styles, sidebar, visualizers for the Streamlit interface. |
 
-### Adding a New Algorithm
-1. **Definition**: Add entry to `tech_lib.json` (name, params, FPGA stats).
-2. **Implementation**: Add method `_op_new_algo` to `ImageProcessor` in `processor.py`.
-3. **Registration**: Ensure `ImageProcessor.operation_map` points to the new method.
+### Adding a New Manufacturing Process
+1. **Definition**: Add entry to `process_lib.json` (id, name, triggers, category, frequency).
+2. **Triggers**: Define keywords, geometry features, symbols, and material conditions.
+3. **Rules**: Add custom logic in `decision/rules.py` if needed for complex conditions.
 
 ## 5. Agent Behavior Guidelines
 

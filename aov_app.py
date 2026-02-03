@@ -67,7 +67,7 @@ st.markdown("""
         Manufacturing Process Recognition from Engineering Drawings
     </p>
     <p style='font-size: 1rem; color: #888;'>
-        國立高雄科技大學 視覺實驗室 | FPGA-aware CV Pipeline Generator
+        國立高雄科技大學 視覺實驗室 | Manufacturing Process Recognition System
     </p>
 </div>
 """, unsafe_allow_html=True)

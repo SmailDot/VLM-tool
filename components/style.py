@@ -1116,8 +1116,8 @@ def render_hero_section():
     st.markdown("""
         <div class="hero-header">
             <div>
-                <div class="hero-title">◈ NKUST AoV Tool</div>
-                <div class="hero-subtitle">FPGA-AWARE COMPUTER VISION PIPELINE GENERATOR</div>
+                <div class="hero-title">◈ NKUST 製程辨識系統</div>
+                <div class="hero-subtitle">MANUFACTURING PROCESS RECOGNITION SYSTEM</div>
             </div>
             <div style="text-align: right;">
                 <div style="font-family: 'JetBrains Mono', monospace; color: #00ffff; font-size: 0.75rem;">
