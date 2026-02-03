@@ -17,6 +17,9 @@ from app.manufacturing import ManufacturingPipeline
 # UI 樣式
 from components.style import apply_custom_style
 
+# 製程管理界面
+from components.process_manager import render_process_manager
+
 # ==================== Page Config ====================
 
 st.set_page_config(
@@ -71,9 +74,16 @@ st.markdown("""
 
 st.divider()
 
-# ==================== Main Layout ====================
+# ==================== Main Tabs ====================
 
-col_left, col_right = st.columns([1, 1.5], gap="large")
+tab1, tab2 = st.tabs(["🔍 製程辨識", "🔧 製程管理"])
+
+# ==================== Tab 1: 製程辨識 ====================
+
+with tab1:
+    # ==================== Main Layout ====================
+    
+    col_left, col_right = st.columns([1, 1.5], gap="large")
 
 # ==================== Left Column: Upload & Settings ====================
 
@@ -453,6 +463,11 @@ with col_footer2:
 
 with col_footer3:
     st.caption("📚 [查看文件](MANUFACTURING_USER_GUIDE.md)")
+
+# ==================== Tab 2: 製程管理 ====================
+
+with tab2:
+    render_process_manager()
 
 # ==================== Sidebar (Optional) ====================
 
