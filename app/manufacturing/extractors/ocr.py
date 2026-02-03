@@ -40,6 +40,8 @@ class OCRExtractor:
         
         Args:
             use_angle_cls: Enable text direction classification (useful for rotated text).
+                          NOTE: This parameter is deprecated in PaddleOCR 3.4.0+
+                          Internally uses 'use_textline_orientation' for compatibility.
             lang: Primary language code. 
                   - 'ch': Chinese Simplified + English
                   - 'chinese_cht': Chinese Traditional + English
@@ -50,11 +52,12 @@ class OCRExtractor:
         """
         self.primary_lang = lang
         self.enable_multilang = enable_multilang
-        self.use_angle_cls = use_angle_cls
+        self.use_textline_orientation = use_angle_cls  # PaddleOCR 3.4.0+ uses this name
         
         # Initialize primary OCR engine
+        # PaddleOCR 3.4.0+ uses use_textline_orientation instead of use_angle_cls
         self.ocr = PaddleOCR(
-            use_angle_cls=use_angle_cls,
+            use_textline_orientation=use_angle_cls,
             lang=lang
         )
         
@@ -93,7 +96,10 @@ class OCRExtractor:
         # Run PaddleOCR
         # Returns: List[List[bbox, (text, confidence)]]
         # bbox: [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
-        result = self.ocr.ocr(image, cls=True)
+        # 
+        # PaddleOCR 3.4.0+: The 'cls' parameter has been removed.
+        # Text orientation is now controlled via 'use_textline_orientation' during initialization.
+        result = self.ocr.ocr(image)
         
         # Parse results
         ocr_results = []
@@ -275,7 +281,7 @@ class OCRExtractor:
             if lang not in self.ocr_engines:
                 try:
                     self.ocr_engines[lang] = PaddleOCR(
-                        use_angle_cls=self.use_angle_cls,
+                        use_textline_orientation=self.use_textline_orientation,
                         lang=lang
                     )
                 except Exception as e:
@@ -286,7 +292,8 @@ class OCRExtractor:
             
             # Run OCR with this language
             try:
-                result = ocr_engine.ocr(image, cls=True)
+                # PaddleOCR 3.4.0+: Remove cls parameter, orientation is set during init
+                result = ocr_engine.ocr(image)
                 
                 if result is None or len(result) == 0:
                     continue
