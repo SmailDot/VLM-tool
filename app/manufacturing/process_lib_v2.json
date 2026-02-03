@@ -1,0 +1,2535 @@
+{
+  "schema_version": "2.0.0",
+  "total_processes": 78,
+  "last_updated": "2026-02-03",
+  "source": "new.xlsx",
+  "description": "增強版製程知識庫，支援邏輯規則、頻率過濾、區域掃描",
+  "processes": {
+    "C05": {
+      "process_id": "C05",
+      "name": "M3048",
+      "frequency": "高",
+      "logic_description": "優先檢索標註：出現 「抽牙」、「M3/M4/M5」 或 「中心沖」。",
+      "required_text": [
+        "M3/M4/M5",
+        "中心沖",
+        "出現 「抽牙",
+        "抽牙"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "conflicts_with": [
+          "C01"
+        ],
+        "auto_adds": [],
+        "requires": []
+      }
+    },
+    "D01": {
+      "process_id": "D01",
+      "name": "折彎",
+      "frequency": "高",
+      "logic_description": "偵測圖面是否有 「折彎線」、「角度標註」 或側視圖有彎角。",
+      "required_text": [],
+      "required_geometry": [
+        "angles",
+        "bend_lines"
+      ],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.1,
+        "geometry": 0.6,
+        "visual": 0.1
+      },
+      "rules": {
+        "replaced_by": [
+          "D04"
+        ],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "D04": {
+      "process_id": "D04",
+      "name": "折彎/植零件",
+      "frequency": "高",
+      "logic_description": "[複合條件] 同時偵測到「折彎線」與「植件中文名稱」。",
+      "required_text": [
+        "植件中文名稱"
+      ],
+      "required_geometry": [
+        "bend_lines"
+      ],
+      "required_symbols": [],
+      "condition_type": "AND",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": true,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.1,
+        "geometry": 0.6,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": [
+          "D01"
+        ],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "D06": {
+      "process_id": "D06",
+      "name": "植零件",
+      "frequency": "高",
+      "logic_description": "偵測中文關鍵字：「壓鉚螺帽」、「接地螺絲」、「浮動螺絲」。",
+      "required_text": [
+        "壓鉚螺帽",
+        "接地螺絲",
+        "浮動螺絲"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replaced_by": [
+          "D04",
+          "D07",
+          "D09"
+        ],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "E01": {
+      "process_id": "E01",
+      "name": "去毛邊",
+      "frequency": "高",
+      "logic_description": "基本製程：預設幾乎所有金屬切割件均包含，處理攻牙、皿頭。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "E02": {
+      "process_id": "E02",
+      "name": "去毛邊2",
+      "frequency": "中",
+      "logic_description": "厚度與形狀判定：厚度 $\\ge$ 2.0T 且有折彎，或註明「磨除擠肉」。",
+      "required_text": [
+        "磨除擠肉"
+      ],
+      "required_geometry": [
+        "thickness"
+      ],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.1,
+        "geometry": 0.6,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "C04": {
+      "process_id": "C04",
+      "name": "M2048",
+      "frequency": "中",
+      "logic_description": "排版分流：主要視 M3048 工作量而定。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "D07": {
+      "process_id": "D07",
+      "name": "植零件/折彎",
+      "frequency": "中",
+      "logic_description": "工序特定：圖面註記或經驗回饋「先植再折」。",
+      "required_text": [
+        "先植再折"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "C01": {
+      "process_id": "C01",
+      "name": "單機切割",
+      "frequency": "高",
+      "logic_description": "預設切割方式（若無 C05 的抽牙需求則以此為主）。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "conflicts_with": [
+          "C05"
+        ],
+        "auto_adds": [],
+        "requires": []
+      }
+    },
+    "E08": {
+      "process_id": "E08",
+      "name": "廠內整平",
+      "frequency": "低",
+      "logic_description": "偵測特徵：「沖孔密集度高」 或現場回饋雷射後變形。",
+      "required_text": [
+        "沖孔密集度高"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "E11": {
+      "process_id": "E11",
+      "name": "傳統銑床",
+      "frequency": "低",
+      "logic_description": "偵測精密特徵：「沉頭孔」 或 「公差要求極小」 的孔徑。",
+      "required_text": [
+        "公差要求極小",
+        "沉頭孔"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "C03": {
+      "process_id": "C03",
+      "name": "複合機",
+      "frequency": "低",
+      "logic_description": "特殊特徵：「架橋」、「通風孔」 或材質標註為 「PP 瓦楞板」。",
+      "required_text": [
+        "PP 瓦楞板",
+        "架橋",
+        "通風孔"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "E04": {
+      "process_id": "E04",
+      "name": "廠內拋光",
+      "frequency": "低",
+      "logic_description": "檢索關鍵字：圖面明確標註 「拋光」。",
+      "required_text": [
+        "圖面明確標註 「拋光",
+        "拋光"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "D09": {
+      "process_id": "D09",
+      "name": "植零件/貼膠",
+      "frequency": "低",
+      "logic_description": "[複合條件] 同時出現植件與貼膠需求。",
+      "required_text": [
+        "植件",
+        "貼膠需求"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "AND",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": true,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "D10": {
+      "process_id": "D10",
+      "name": "折彎整平",
+      "frequency": "低",
+      "logic_description": "精度要求：一般整平無法達成，需靠折彎模具修正時。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F01": {
+      "process_id": "F01",
+      "name": "焊接",
+      "frequency": "高",
+      "logic_description": "符號與文字：偵測「焊接符號」或標註中出現 「焊接」 字眼。",
+      "required_text": [
+        "偵測「焊接符號",
+        "標註中出現 「焊接」 字眼",
+        "焊接",
+        "焊接」 字眼",
+        "焊接符號"
+      ],
+      "required_geometry": [],
+      "required_symbols": [
+        "welding"
+      ],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F14": {
+      "process_id": "F14",
+      "name": "焊接研磨",
+      "frequency": "高",
+      "logic_description": "邏輯關聯：只要偵測到 F01（焊接），預設必須接續此工序。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "requires": [
+          "F01"
+        ],
+        "auto_adds": [],
+        "conflicts_with": []
+      }
+    },
+    "F11": {
+      "process_id": "F11",
+      "name": "廠內烤漆",
+      "frequency": "高",
+      "logic_description": "文字檢索：圖面出現 「烤漆」、「色號」 或特定的色粉需求。",
+      "required_text": [
+        "烤漆",
+        "色號"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.6,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F03": {
+      "process_id": "F03",
+      "name": "SPOT (點焊)",
+      "frequency": "中",
+      "logic_description": "特徵識別：偵測 Spot 符號及 「點焊螺帽/螺柱」 等特定零件。",
+      "required_text": [
+        "點焊螺帽/螺柱"
+      ],
+      "required_geometry": [],
+      "required_symbols": [
+        "spot_weld"
+      ],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.6,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F05": {
+      "process_id": "F05",
+      "name": "廠內捲圓",
+      "frequency": "中",
+      "logic_description": "幾何判定：偵測圓管特徵且標註 「直徑 > 70mm」，且非市購標準件。",
+      "required_text": [
+        "直徑 > 70mm"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.6,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F06": {
+      "process_id": "F06",
+      "name": "廠內裁管",
+      "frequency": "中",
+      "logic_description": "物件識別：圖面出現「圓棒」或需要特定長度裁切的管材零件。",
+      "required_text": [
+        "圓棒",
+        "需要特定長度裁切的管材零件"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F10": {
+      "process_id": "F10",
+      "name": "植焊螺絲",
+      "frequency": "中",
+      "logic_description": "零件檢索：偵測到 「植焊螺絲」 標註（通常由業務/AI 依圖面零件類型判定）。",
+      "required_text": [
+        "植焊螺絲"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F16": {
+      "process_id": "F16",
+      "name": "自動焊接",
+      "frequency": "中",
+      "logic_description": "經驗邏輯：特定結構（如長直焊縫）且註記需使用 「機械手臂」。",
+      "required_text": [
+        "機械手臂"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F09": {
+      "process_id": "F09",
+      "name": "銲接整形",
+      "frequency": "低",
+      "logic_description": "預測邏輯：判斷焊接位置是否易造成「熱變形」，或有相關現場備註。",
+      "required_text": [
+        "熱變形"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F12": {
+      "process_id": "F12",
+      "name": "廠內架橋",
+      "frequency": "低",
+      "logic_description": "特殊標註：偵測到「架橋」相關符號或文字描述。",
+      "required_text": [
+        "偵測到「架橋」相關符號",
+        "文字描述",
+        "架橋"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F17": {
+      "process_id": "F17",
+      "name": "貼鉛",
+      "frequency": "低",
+      "logic_description": "材質異質性檢索：偵測到圖面標註包含 「一面鉛、一面鋁」 的特殊組合。",
+      "required_text": [
+        "一面鉛",
+        "一面鋁"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F19": {
+      "process_id": "F19",
+      "name": "組立焊接",
+      "frequency": "低",
+      "logic_description": "工序邏輯：需結合現場回饋，判斷是否具備 「先組裝後焊接」 的結構特徵。",
+      "required_text": [
+        "先組裝後焊接"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F20": {
+      "process_id": "F20",
+      "name": "自動研磨",
+      "frequency": "中",
+      "logic_description": "關聯判定：若先前步驟已判定為 「F16 自動焊接」，則自動帶入此研磨製程。",
+      "required_text": [
+        "F16 自動焊接"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F22": {
+      "process_id": "F22",
+      "name": "油壓整平",
+      "frequency": "低",
+      "logic_description": "精度/經驗判定：一般整平無法達成（由現場或生技單位回饋）時的替代方案。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F23": {
+      "process_id": "F23",
+      "name": "應力消除",
+      "frequency": "低",
+      "logic_description": "文字檢索：直接搜尋圖面備註（Note）是否出現 「Stress Relieving」 或 「應力消除」 字眼。",
+      "required_text": [
+        "Stress Relieving",
+        "應力消除",
+        "應力消除」 字眼"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F25": {
+      "process_id": "F25",
+      "name": "光纖焊接",
+      "frequency": "中",
+      "logic_description": "技術判定：基於現場回饋，針對特定薄板或高精度需求選擇 「光纖焊接」。",
+      "required_text": [
+        "光纖焊接"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "F27": {
+      "process_id": "F27",
+      "name": "焊接假組立",
+      "frequency": "低",
+      "logic_description": "空間風險判定：針對複雜組裝件，為了 「避免焊完組不上」，依經驗判斷加入假組立。",
+      "required_text": [
+        "避免焊完組不上"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H01": {
+      "process_id": "H01",
+      "name": "除焦洗淨",
+      "frequency": "高",
+      "logic_description": "複合邏輯：偵測材質為 「白鐵/不鏽鋼」 且有 「焊接」 標記，但排除有「烤漆」的需求。",
+      "required_text": [
+        "烤漆",
+        "焊接",
+        "白鐵/不鏽鋼"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H02": {
+      "process_id": "H02",
+      "name": "部品包裝",
+      "frequency": "高",
+      "logic_description": "基本製程：出貨前的標準動作，系統預設必選。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H03": {
+      "process_id": "H03",
+      "name": "包裝網蓋貼",
+      "frequency": "高",
+      "logic_description": "文字檢索：圖面出現關鍵字 「網印」、「蓋印」 或 「貼紙」。",
+      "required_text": [
+        "網印",
+        "蓋印",
+        "貼紙",
+        "關鍵字 「網印"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H08": {
+      "process_id": "H08",
+      "name": "委外前處理",
+      "frequency": "高",
+      "logic_description": "關聯邏輯：判斷後續是否有「委外加工」工序，若有則需加入防碰撞包裝。",
+      "required_text": [
+        "委外加工"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H14": {
+      "process_id": "H14",
+      "name": "廠內鈍化",
+      "frequency": "中",
+      "logic_description": "文字檢索：圖面技術要求中明確註記 「鈍化 (Passivation)」。",
+      "required_text": [
+        "鈍化 (Passivation)"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H04": {
+      "process_id": "H04",
+      "name": "鋁洗淨",
+      "frequency": "低",
+      "logic_description": "外部知識庫：比對客戶打單須知或材質標註為 「鋁」 且有洗淨要求。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H06": {
+      "process_id": "H06",
+      "name": "脫脂洗淨",
+      "frequency": "低",
+      "logic_description": "需求判定：檢索圖面或客戶備註中是否提及 「脫脂」。",
+      "required_text": [
+        "脫脂"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H10": {
+      "process_id": "H10",
+      "name": "整平前委外處理",
+      "frequency": "低",
+      "logic_description": "特定邏輯：針對需「委外整平」的工件，偵測是否有撕膜與包裝需求。",
+      "required_text": [
+        "委外整平"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H12": {
+      "process_id": "H12",
+      "name": "表面清潔",
+      "frequency": "低",
+      "logic_description": "工序前置：判斷後續是否有 「植螺紋護套」 或 「化學清洗」。",
+      "required_text": [
+        "化學清洗",
+        "植螺紋護套"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H17": {
+      "process_id": "H17",
+      "name": "廠內皮膜",
+      "frequency": "無",
+      "logic_description": "目前無明確觸發條件，留作備用。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H26": {
+      "process_id": "H26",
+      "name": "無塵室清潔",
+      "frequency": "中",
+      "logic_description": "環境要求檢索：圖面註記出現 「無塵室等級 (Cleanroom Class)」 或相關 ISO 規範。",
+      "required_text": [
+        "無塵室等級 (Cleanroom Class)",
+        "相關 ISO 規範"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H27": {
+      "process_id": "H27",
+      "name": "無塵室包裝",
+      "frequency": "中",
+      "logic_description": "環境要求檢索：與 H26 相同，偵測是否要求在無塵環境下封裝。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H31": {
+      "process_id": "H31",
+      "name": "無塵室清潔/包裝",
+      "frequency": "中",
+      "logic_description": "複合條件：當圖面同時要求清潔與包裝皆需在無塵室進行時。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H32": {
+      "process_id": "H32",
+      "name": "整理清潔",
+      "frequency": "中",
+      "logic_description": "客戶/工序關聯：偵測為 「ASML」 專用件，或為「化學清洗」的前置步驟。",
+      "required_text": [
+        "ASML",
+        "化學清洗"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H28": {
+      "process_id": "H28",
+      "name": "委外焊接前撕膜",
+      "frequency": "低",
+      "logic_description": "外部資訊連動：圖面看不出時，需由生管系統輸入 「委外焊接」+「原材料帶膜」。",
+      "required_text": [
+        "原材料帶膜",
+        "委外焊接"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H29": {
+      "process_id": "H29",
+      "name": "超音波清洗",
+      "frequency": "低",
+      "logic_description": "特定製程指令：依現場反饋或特定高精密零件（如微小孔洞）判定。",
+      "required_text": [],
+      "required_geometry": [
+        "holes"
+      ],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.2,
+        "symbol": 0.1,
+        "geometry": 0.6,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H33": {
+      "process_id": "H33",
+      "name": "藥劑清潔",
+      "frequency": "低",
+      "logic_description": "前置工序關聯：判定後續有 H34 需求時，自動觸發此清潔步驟。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "H34": {
+      "process_id": "H34",
+      "name": "擦三價鉻藥水",
+      "frequency": "低",
+      "logic_description": "技術要求檢索：圖面或客戶規範中註明 「三價鉻」 或 「Trivalent Chromium」。",
+      "required_text": [
+        "Trivalent Chromium",
+        "三價鉻"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "auto_adds": [
+          "H33"
+        ],
+        "requires": [
+          "H33"
+        ],
+        "conflicts_with": []
+      }
+    },
+    "I01": {
+      "process_id": "I01",
+      "name": "成品全檢",
+      "frequency": "高",
+      "logic_description": "基本製程：包裝前的標準品檢，系統預設必選。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I02": {
+      "process_id": "I02",
+      "name": "成品全檢2",
+      "frequency": "高",
+      "logic_description": "工序連動：若製程中包含「焊接」或「烤漆」，則自動觸發第二次品檢。",
+      "required_text": [
+        "烤漆",
+        "焊接"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I14": {
+      "process_id": "I14",
+      "name": "進料檢驗",
+      "frequency": "中",
+      "logic_description": "物件判定：針對「市購件」加工的第一道關卡，識別零件來源。",
+      "required_text": [
+        "市購件"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I04": {
+      "process_id": "I04",
+      "name": "測漏全檢",
+      "frequency": "中",
+      "logic_description": "文字檢索：圖面出現關鍵字 「測漏」 或 「不可漏水 (Leak Test)」。",
+      "required_text": [
+        "不可漏水 (Leak Test)",
+        "測漏",
+        "關鍵字 「測漏"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I19": {
+      "process_id": "I19",
+      "name": "無塵室成品全檢",
+      "frequency": "中",
+      "logic_description": "環境要求檢索：圖面標註 「無塵室」 等級要求時。",
+      "required_text": [
+        "無塵室"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I03": {
+      "process_id": "I03",
+      "name": "尺寸全檢",
+      "frequency": "低",
+      "logic_description": "特殊精度判定：針對全尺寸檢驗需求，或生技單位指定的特殊件。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I07": {
+      "process_id": "I07",
+      "name": "二次元檢查",
+      "frequency": "低",
+      "logic_description": "精度標註檢索：圖面有特定幾何公差或二次元量測要求。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I12": {
+      "process_id": "I12",
+      "name": "保壓測試",
+      "frequency": "低",
+      "logic_description": "文字檢索：圖面明確指示需進行 「保壓 (Pressure Test)」。",
+      "required_text": [
+        "保壓 (Pressure Test)"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I15": {
+      "process_id": "I15",
+      "name": "開槽拍照",
+      "frequency": "低",
+      "logic_description": "客戶需求檢索：針對特定的焊接開槽施工拍照存證需求。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I16": {
+      "process_id": "I16",
+      "name": "烤漆前外觀全檢",
+      "frequency": "低",
+      "logic_description": "製作需求判定：依工單或製作需求，在送烤漆前進行目視檢查。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I21": {
+      "process_id": "I21",
+      "name": "無塵室廠驗",
+      "frequency": "低",
+      "logic_description": "複合條件：無塵室件且涉及首件檢查或業務特別告知。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I22": {
+      "process_id": "I22",
+      "name": "烤漆前預組",
+      "frequency": "低",
+      "logic_description": "空間判定：判斷烤漆後是否可能因膜厚影響組裝，需預先試組。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "I23/24": {
+      "process_id": "I23/24",
+      "name": "廠內三次元/出貨報告",
+      "frequency": "無",
+      "logic_description": "目前無明確自動判定邏輯。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O02": {
+      "process_id": "O02",
+      "name": "設計雷射雕刻",
+      "frequency": "高",
+      "logic_description": "特徵檢索：圖面出現標註 「刻字」、「雷雕」 或特定幾何位置的雕刻說明。",
+      "required_text": [
+        "刻字",
+        "標註 「刻字",
+        "雷雕"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O14": {
+      "process_id": "O14",
+      "name": "生技課",
+      "frequency": "中",
+      "logic_description": "物件屬性：判斷工件是否為 「研發件」 或 「測試件」 的最後審核流程。",
+      "required_text": [
+        "測試件",
+        "研發件"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O04": {
+      "process_id": "O04",
+      "name": "廠驗",
+      "frequency": "低",
+      "logic_description": "客戶/屬性判定：通常為 「首件」 或標題欄標註需「客戶到廠檢驗」。",
+      "required_text": [
+        "客戶到廠檢驗",
+        "首件"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O12": {
+      "process_id": "O12",
+      "name": "疊板裝箱",
+      "frequency": "低",
+      "logic_description": "客戶/物流判定：客戶名稱為 「日本客戶」 或備註需「裝櫃/疊板」利於出口。",
+      "required_text": [
+        "日本客戶",
+        "裝櫃/疊板"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O13 系列": {
+      "process_id": "O13 系列",
+      "name": "廠外維修/焊接/補漆",
+      "frequency": "低",
+      "logic_description": "外部需求連動：非圖面特徵，需由業務端開單觸發。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "O15": {
+      "process_id": "O15",
+      "name": "客戶端組裝",
+      "frequency": "低",
+      "logic_description": "外部需求連動：依業務開單需求判定，非圖面直接決定。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "J01": {
+      "process_id": "J01",
+      "name": "燕巢倉庫",
+      "frequency": "高",
+      "logic_description": "基本製程：所有成品完成後的最終站，系統預設必選。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": true,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q01": {
+      "process_id": "Q01",
+      "name": "組裝",
+      "frequency": "高",
+      "logic_description": "特徵檢索：圖面出現 「拉打」、「拉帽」、或涉及多個工件組合標註。",
+      "required_text": [
+        "拉帽",
+        "拉打"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q07": {
+      "process_id": "Q07",
+      "name": "防烤/表處遮蔽",
+      "frequency": "中",
+      "logic_description": "文字檢索：偵測關鍵字 「不烤漆」、「防烤」 或 「請遮蔽」。",
+      "required_text": [
+        "不烤漆",
+        "請遮蔽",
+        "防烤"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.6,
+        "symbol": 0.2,
+        "geometry": 0.1,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q11": {
+      "process_id": "Q11",
+      "name": "無塵室組裝",
+      "frequency": "中",
+      "logic_description": "環境要求檢索：圖面技術要求中標註需在 「無塵室組裝」。",
+      "required_text": [
+        "無塵室組裝"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "K01": {
+      "process_id": "K01",
+      "name": "燕巢切削",
+      "frequency": "中",
+      "logic_description": "幾何精度判定：雷射/折彎無法達成之形狀，或標註 「公差極小」 之處。",
+      "required_text": [
+        "公差極小"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q04": {
+      "process_id": "Q04",
+      "name": "清潔/脫脂/鉻酸鹽",
+      "frequency": "中",
+      "logic_description": "文字檢索：圖面明確標註需 「鉻酸鹽」 處理。",
+      "required_text": [
+        "鉻酸鹽"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "P01/P03": {
+      "process_id": "P01/P03",
+      "name": "客戶供料/加工",
+      "frequency": "低",
+      "logic_description": "外部狀態判定：由客戶提供材料或中途帶回加工之特殊流程。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q05": {
+      "process_id": "Q05",
+      "name": "植螺紋護套",
+      "frequency": "低",
+      "logic_description": "文字檢索：圖面標註有 「植螺紋護套」（通常伴隨 H12 清潔）。",
+      "required_text": [
+        "植螺紋護套"
+      ],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "title_block",
+        "notes",
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    },
+    "Q08/Q09": {
+      "process_id": "Q08/Q09",
+      "name": "廠驗組裝/配管",
+      "frequency": "低",
+      "logic_description": "特定任務判定：依據廠驗需求或特定的配管圖紙進行。",
+      "required_text": [],
+      "required_geometry": [],
+      "required_symbols": [],
+      "condition_type": "OR",
+      "min_matches": 1,
+      "is_default_process": false,
+      "is_combined_condition": false,
+      "scan_regions": [
+        "drawing_area"
+      ],
+      "confidence_weights": {
+        "text": 0.4,
+        "symbol": 0.3,
+        "geometry": 0.2,
+        "visual": 0.1
+      },
+      "rules": {
+        "replace_by": null,
+        "replaced_by": [],
+        "auto_adds": [],
+        "requires": [],
+        "conflicts_with": []
+      }
+    }
+  }
+}

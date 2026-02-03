@@ -1,0 +1,33 @@
+# Core Framework
+streamlit>=1.52.0
+flask>=3.0.0
+streamlit-drawable-canvas>=0.9.3
+pyngrok>=7.0.0
+
+# Computer Vision
+opencv-python>=4.12.0
+numpy>=2.2.0
+pillow>=12.1.0
+
+# Visualization
+graphviz>=0.21
+pyvis>=0.3.2
+
+# Knowledge Base / RAG
+faiss-cpu>=1.7.4
+git+https://github.com/openai/CLIP.git
+torch>=2.0.0
+torchvision>=0.15.0
+ftfy
+regex
+tqdm
+
+# Manufacturing Recognition (Phase 1 MVP)
+# NOTE: PaddleOCR requires PaddlePaddle to be installed separately:
+#   Windows: pip install paddlepaddle==2.6.1 -i https://mirror.baidu.com/pypi/simple
+#   Linux/Mac: pip install paddlepaddle==2.6.1
+paddleocr>=3.4.0
+rank_bm25>=0.2.2
+timm>=1.0.0
+pymupdf>=1.26.0
+pdfplumber>=0.11.0
