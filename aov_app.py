@@ -61,7 +61,7 @@ if 'last_settings' not in st.session_state:
 st.markdown("""
 <div style='text-align: center; padding: 2rem 0;'>
     <h1 style='color: #1f77b4; font-size: 3rem; margin-bottom: 0.5rem;'>
-        🏭 NKUST 製程辨識系統
+        NKUST 製程辨識系統
     </h1>
     <p style='font-size: 1.2rem; color: #666; margin-top: 0;'>
         Manufacturing Process Recognition from Engineering Drawings
@@ -76,7 +76,7 @@ st.divider()
 
 # ==================== Main Tabs ====================
 
-tab1, tab2 = st.tabs(["🔍 製程辨識", "🔧 製程管理"])
+tab1, tab2 = st.tabs(["製程辨識", "製程管理"])
 
 # ==================== Tab 1: 製程辨識 ====================
 
@@ -88,12 +88,12 @@ with tab1:
 # ==================== Left Column: Upload & Settings ====================
 
 with col_left:
-    st.markdown("### 📤 上傳工程圖紙")
+    st.markdown("### 上傳工程圖紙")
     
-    st.info("💡 **雙圖辨識模式**: 父圖提供全域資訊（材質、客戶、特殊要求），子圖提供局部特徵（形狀、標註、符號）")
+    st.info("**雙圖辨識模式**: 父圖提供全域資訊（材質、客戶、特殊要求），子圖提供局部特徵（形狀、標註、符號）")
     
     # 父圖上傳（選填）
-    with st.expander("🗂️ 父圖（選填）- 全視圖/標題欄/備註", expanded=False):
+    with st.expander("父圖（選填）- 全視圖/標題欄/備註", expanded=False):
         parent_file = st.file_uploader(
             "上傳父圖（可選）",
             type=['jpg', 'jpeg', 'png', 'bmp'],
@@ -113,15 +113,15 @@ with col_left:
                     use_container_width=True
                 )
                 h, w = parent_image.shape[:2]
-                st.caption(f"✅ 已載入父圖 | 尺寸: {w} × {h} px")
+                st.caption(f"已載入父圖 | 尺寸: {w} × {h} px")
             else:
                 st.error("無法讀取父圖")
         else:
             st.session_state.parent_drawing = None
-            st.caption("⚪ 未上傳父圖（將僅依子圖特徵判定）")
+            st.caption("未上傳父圖（將僅依子圖特徵判定）")
     
     # 子圖上傳（必填）
-    st.markdown("#### 📋 子圖（必填）- 零件局部特徵")
+    st.markdown("#### 子圖（必填）- 零件局部特徵")
     uploaded_file = st.file_uploader(
         "選擇子圖檔案 *",
         type=['jpg', 'jpeg', 'png', 'bmp'],
@@ -151,23 +151,23 @@ with col_left:
             st.divider()
             
             # ==================== 辨識設定 ====================
-            st.markdown("### ⚙️ 辨識設定")
+            st.markdown("### 辨識設定")
             
             with st.expander("特徵提取選項", expanded=True):
                 use_ocr = st.checkbox(
-                    "📝 OCR 文字辨識",
+                    "OCR 文字辨識",
                     value=False,
                     help="需要安裝 PaddlePaddle (可選功能)"
                 )
                 
                 use_geometry = st.checkbox(
-                    "📐 幾何特徵分析",
+                    "幾何特徵分析",
                     value=True,
                     help="分析線條、孔洞、折彎線等幾何特徵 (建議啟用)"
                 )
                 
                 use_symbols = st.checkbox(
-                    "🔣 符號辨識",
+                    "符號辨識",
                     value=True,
                     help="辨識焊接符號、表面處理標記等"
                 )
@@ -215,7 +215,7 @@ with col_left:
             st.divider()
             
             # ==================== 執行辨識 ====================
-            if st.button("🚀 開始辨識製程", type="primary", use_container_width=True):
+            if st.button("開始辨識製程", type="primary", use_container_width=True):
                 with st.spinner("正在分析工程圖紙..."):
                     try:
                         # 初始化管線
@@ -233,7 +233,7 @@ with col_left:
                         # 檢查是否有父圖
                         parent_img = st.session_state.parent_drawing
                         if parent_img is not None:
-                            st.info("📊 雙圖模式: 正在解析父圖全域資訊...")
+                            st.info("雙圖模式: 正在解析父圖全域資訊...")
                         
                         result = st.session_state.mfg_pipeline.recognize(
                             drawing_image,
@@ -247,16 +247,16 @@ with col_left:
                         st.session_state.recognition_result = result
                         
                         if parent_img is not None:
-                            st.success(f"✅ 雙圖辨識完成！處理時間: {elapsed:.2f} 秒")
+                            st.success(f"雙圖辨識完成！處理時間: {elapsed:.2f} 秒")
                         else:
-                            st.success(f"✅ 辨識完成！處理時間: {elapsed:.2f} 秒")
+                            st.success(f"辨識完成！處理時間: {elapsed:.2f} 秒")
                         st.rerun()
                         
                     except ImportError as e:
-                        st.error(f"❌ 模組載入失敗: {str(e)}")
+                        st.error(f"模組載入失敗: {str(e)}")
                         st.info("請確認已安裝相關依賴套件 (參考 requirements.txt)")
                     except Exception as e:
-                        st.error(f"❌ 辨識過程發生錯誤: {str(e)}")
+                        st.error(f"辨識過程發生錯誤: {str(e)}")
                         with st.expander("查看錯誤詳情"):
                             import traceback
                             st.code(traceback.format_exc())
@@ -264,18 +264,18 @@ with col_left:
             st.error("無法讀取圖片，請確認檔案格式正確")
     else:
         # 無圖紙時顯示說明
-        st.info("👆 請上傳工程圖紙以開始製程辨識")
+        st.info("請上傳工程圖紙以開始製程辨識")
         
-        with st.expander("ℹ️ 使用說明", expanded=True):
+        with st.expander("使用說明", expanded=True):
             st.markdown("""
-            ### 📋 系統功能
-            - 🔍 自動分析工程圖紙內容
-            - 📐 幾何特徵辨識 (線條、孔洞、折彎線)
-            - 🔣 符號辨識 (焊接符號、表面處理標記)
-            - 📝 OCR 文字辨識 (可選)
-            - 🎯 製程推薦 (96 種製程類型)
+            ### 系統功能
+            - 自動分析工程圖紙內容
+            - 幾何特徵辨識 (線條、孔洞、折彎線)
+            - 符號辨識 (焊接符號、表面處理標記)
+            - OCR 文字辨識 (可選)
+            - 製程推薦 (96 種製程類型)
             
-            ### 🏭 支援製程類別
+            ### 支援製程類別
             - **切割**: 雷射切割、水刀切割、剪板機等
             - **折彎**: 折彎、滾圓、滾弧等
             - **焊接**: 點焊、氬焊、電焊、CO2焊接等
@@ -283,7 +283,7 @@ with col_left:
             - **組裝**: 自攻牙、螺絲、鉚接、拉釘等
             - **檢驗**: 成品全檢、尺寸檢驗、外觀檢驗等
             
-            ### ✨ 建議圖紙品質
+            ### 建議圖紙品質
             - **解析度**: 300 DPI 以上
             - **格式**: JPG, PNG, BMP
             - **類型**: 工程圖 (白底黑線)
@@ -293,7 +293,7 @@ with col_left:
 # ==================== Right Column: Results ====================
 
 with col_right:
-    st.markdown("### 📊 辨識結果")
+    st.markdown("### 辨識結果")
     
     if st.session_state.recognition_result is not None:
         result = st.session_state.recognition_result
@@ -325,24 +325,21 @@ with col_right:
         
         # 顯示預測結果
         if result.predictions:
-            st.markdown("#### 🎯 製程預測結果")
+            st.markdown("#### 製程預測結果")
             
             for i, pred in enumerate(result.predictions, 1):
                 confidence_pct = pred.confidence * 100
                 
                 # 信心度顏色標記
                 if confidence_pct >= 70:
-                    color_emoji = "🟢"
-                    color_tag = "高信心度"
+                    color_tag = "[高]"
                 elif confidence_pct >= 50:
-                    color_emoji = "🟡"
-                    color_tag = "中等信心度"
+                    color_tag = "[中]"
                 else:
-                    color_emoji = "🔴"
-                    color_tag = "低信心度"
+                    color_tag = "[低]"
                 
                 with st.expander(
-                    f"{color_emoji} **{i}. {pred.name}** ({confidence_pct:.1f}%) - {color_tag}",
+                    f"**{i}. {pred.name}** ({confidence_pct:.1f}%) {color_tag}",
                     expanded=(i <= 3)  # 展開前3個結果
                 ):
                     # 信心度進度條
@@ -360,13 +357,13 @@ with col_right:
                     # 製程資訊 (如果有的話)
                     st.caption(f"製程 ID: {pred.process_id}")
         else:
-            st.warning("⚠️ 未找到符合條件的製程")
+            st.warning("未找到符合條件的製程")
             st.info("建議:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
         
         st.divider()
         
         # 診斷資訊
-        with st.expander("🔍 診斷資訊 (Diagnostics)", expanded=False):
+        with st.expander("診斷資訊 (Diagnostics)", expanded=False):
             # 基本診斷
             diag = {
                 "total_time": result.total_time,
@@ -408,7 +405,7 @@ with col_right:
             and st.session_state.uploaded_drawing is not None
             and st.session_state.mfg_pipeline is not None):
             st.divider()
-            st.markdown("#### 🎨 特徵視覺化")
+            st.markdown("#### 特徵視覺化")
             
             try:
                 settings = st.session_state.last_settings
@@ -429,7 +426,7 @@ with col_right:
     
     else:
         # 無結果時顯示佔位內容
-        st.info("📋 上傳工程圖紙並執行辨識後，結果將顯示在此處")
+        st.info("上傳工程圖紙並執行辨識後，結果將顯示在此處")
         
         # 顯示系統資訊
         with st.expander("📈 系統資訊", expanded=False):
@@ -456,13 +453,13 @@ st.divider()
 col_footer1, col_footer2, col_footer3 = st.columns(3)
 
 with col_footer1:
-    st.caption("💡 **提示**: 使用高解析度圖紙可提升辨識準確度")
+    st.caption("**提示**: 使用高解析度圖紙可提升辨識準確度")
 
 with col_footer2:
-    st.caption("🏫 **NKUST 視覺實驗室** © 2026")
+    st.caption("**NKUST 視覺實驗室** © 2026")
 
 with col_footer3:
-    st.caption("📚 [查看文件](MANUFACTURING_USER_GUIDE.md)")
+    st.caption("[查看文件](MANUFACTURING_USER_GUIDE.md)")
 
 # ==================== Tab 2: 製程管理 ====================
 
@@ -472,11 +469,11 @@ with tab2:
 # ==================== Sidebar (Optional) ====================
 
 with st.sidebar:
-    st.markdown("### 🛠 系統設定")
+    st.markdown("### 系統設定")
     
     # 系統狀態
     with st.expander("系統狀態", expanded=False):
-        pipeline_status = "✅ 已初始化" if st.session_state.mfg_pipeline else "⏳ 未初始化"
+        pipeline_status = "已初始化" if st.session_state.mfg_pipeline else "未初始化"
         st.text(f"管線狀態: {pipeline_status}")
         
         if st.session_state.uploaded_drawing is not None:
@@ -488,7 +485,7 @@ with st.sidebar:
     
     # 清除按鈕
     st.divider()
-    if st.button("🗑️ 清除所有資料", use_container_width=True):
+    if st.button("清除所有資料", use_container_width=True):
         st.session_state.mfg_pipeline = None
         st.session_state.uploaded_drawing = None
         st.session_state.recognition_result = None
