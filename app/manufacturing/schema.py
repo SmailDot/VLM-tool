@@ -318,7 +318,11 @@ class RecognitionResult:
                 "surface_treatment": self.parent_context.surface_treatment,
                 "special_requirements": self.parent_context.special_requirements,
                 "detected_keywords": list(self.parent_context.detected_keywords),
-                "triggered_processes": self.parent_context.triggered_processes
+                "triggered_processes": self.parent_context.triggered_processes,
+                # NEW: 注意事項
+                "important_notes": self.parent_context.important_notes if hasattr(self.parent_context, 'important_notes') else [],
+                "title_block_text": self.parent_context.title_block_text if hasattr(self.parent_context, 'title_block_text') else [],
+                "detected_languages": list(self.parent_context.detected_languages) if hasattr(self.parent_context, 'detected_languages') else []
             }
         
         return result

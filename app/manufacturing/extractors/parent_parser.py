@@ -40,6 +40,11 @@ class ParentImageContext:
     # 預設製程 (由父圖觸發)
     triggered_processes: List[str] = None  # 製程 ID 列表
     
+    # NEW: 注意事項 (從標題欄/技術要求區域提取)
+    important_notes: List[str] = None  # 重要注意事項
+    title_block_text: List[str] = None  # 標題欄所有文字
+    detected_languages: Set[str] = None  # 檢測到的語言
+    
     def __post_init__(self):
         if self.surface_treatment is None:
             self.surface_treatment = []
@@ -51,6 +56,12 @@ class ParentImageContext:
             self.ocr_results = []
         if self.triggered_processes is None:
             self.triggered_processes = []
+        if self.important_notes is None:
+            self.important_notes = []
+        if self.title_block_text is None:
+            self.title_block_text = []
+        if self.detected_languages is None:
+            self.detected_languages = set()
 
 
 class ParentImageParser:
@@ -111,7 +122,8 @@ class ParentImageParser:
     def parse(
         self,
         parent_image: np.ndarray,
-        ocr_threshold: float = 0.5
+        ocr_threshold: float = 0.5,
+        scan_title_block: bool = True
     ) -> ParentImageContext:
         """
         解析父圖，提取全域資訊
@@ -119,23 +131,44 @@ class ParentImageParser:
         Args:
             parent_image: 父圖 numpy array (BGR)
             ocr_threshold: OCR 信心度門檻
+            scan_title_block: 是否掃描標題欄區域 (右下角)
         
         Returns:
             ParentImageContext 包含全域資訊
         """
         context = ParentImageContext()
         
-        # 1. 執行 OCR (如果有)
+        # 1. 執行 OCR (如果有) - 使用多語言支持
         if self.ocr_extractor:
-            context.ocr_results = self.ocr_extractor.extract(
+            # 全圖 OCR (多語言)
+            context.ocr_results = self.ocr_extractor.extract_multilang(
                 parent_image,
-                ocr_threshold
+                languages=['chinese_cht', 'ch', 'en', 'japan', 'korean'],
+                confidence_threshold=ocr_threshold,
+                translate_to_chinese=False
             )
+            
+            # 記錄檢測到的語言
+            for result in context.ocr_results:
+                if hasattr(result, 'metadata') and 'language' in result.metadata:
+                    context.detected_languages.add(result.metadata['language'])
+            
+            # 掃描標題欄區域 (右下角) 提取注意事項
+            if scan_title_block:
+                title_block_data = self.ocr_extractor.detect_title_block_notes(
+                    parent_image,
+                    scan_bottom_right=True,
+                    region_ratio=0.25,
+                    confidence_threshold=ocr_threshold
+                )
+                
+                context.title_block_text = title_block_data['raw_texts']
+                context.important_notes = title_block_data['important_notes']
         
-        # 2. 提取文字內容
-        detected_text = " ".join([
-            ocr.text for ocr in context.ocr_results
-        ]).lower()
+        # 2. 提取文字內容 (全圖 + 標題欄)
+        all_text = " ".join([ocr.text for ocr in context.ocr_results])
+        title_block_text = " ".join(context.title_block_text)
+        detected_text = (all_text + " " + title_block_text).lower()
         
         # 3. 解析材質
         context.material = self._detect_material(detected_text)
