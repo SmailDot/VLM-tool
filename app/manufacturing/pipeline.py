@@ -23,7 +23,9 @@ from .extractors import (
     OCRExtractor,
     GeometryExtractor,
     SymbolDetector,
-    VisualEmbedder
+    VisualEmbedder,
+    PDFImageExtractor,
+    is_pdf_available
 )
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
@@ -81,6 +83,14 @@ class ManufacturingPipeline:
         # Initialize parent image parser
         self.parent_parser = ParentImageParser(self.ocr_extractor)
         
+        # Initialize PDF extractor (if available)
+        self.pdf_extractor = None
+        if is_pdf_available():
+            try:
+                self.pdf_extractor = PDFImageExtractor(target_dpi=300)
+            except ImportError:
+                pass  # PDF功能不可用
+        
         # Initialize decision engine (v2 by default)
         if use_v2_engine:
             self.decision_engine = DecisionEngineV2(process_lib_path)
@@ -119,11 +129,19 @@ class ManufacturingPipeline:
         # Parse parent image (optional)
         parent_context = None
         if parent_image is not None:
-            # Load parent image
+            # Load parent image (支援 PDF)
             if isinstance(parent_image, str):
-                parent_img_array = cv2.imread(parent_image)
-                if parent_img_array is None:
-                    raise ValueError(f"Failed to load parent image: {parent_image}")
+                if parent_image.lower().endswith('.pdf') and self.pdf_extractor:
+                    # PDF → 高解析度圖片
+                    try:
+                        parent_img_array = self.pdf_extractor.extract_full_page(parent_image, page_num=0)
+                    except Exception as e:
+                        raise ValueError(f"Failed to extract parent image from PDF: {e}")
+                else:
+                    # 一般圖片檔案
+                    parent_img_array = cv2.imread(parent_image)
+                    if parent_img_array is None:
+                        raise ValueError(f"Failed to load parent image: {parent_image}")
             else:
                 parent_img_array = parent_image
             
@@ -134,11 +152,20 @@ class ManufacturingPipeline:
             )
         
         # Load child image (required)
+        # 支援 PDF 檔案自動轉換
         if isinstance(image, str):
-            img_array = cv2.imread(image)
-            if img_array is None:
-                raise ValueError(f"Failed to load image: {image}")
             image_path = image
+            if image.lower().endswith('.pdf') and self.pdf_extractor:
+                # PDF → 高解析度圖片
+                try:
+                    img_array = self.pdf_extractor.extract_full_page(image, page_num=0)
+                except Exception as e:
+                    raise ValueError(f"Failed to extract image from PDF: {e}")
+            else:
+                # 一般圖片檔案
+                img_array = cv2.imread(image)
+                if img_array is None:
+                    raise ValueError(f"Failed to load image: {image}")
         else:
             img_array = image
             image_path = None

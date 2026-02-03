@@ -1,33 +1,26 @@
 """
-Manufacturing Extractors Module.
+Feature Extractors for Manufacturing Recognition.
 
-Provides feature extractors for engineering drawing analysis:
-- OCR: Text extraction (PaddleOCR)
-- Geometry: Line/shape detection (OpenCV)
-- Symbols: Technical symbol recognition (Template matching)
-- Embeddings: Visual semantic embeddings (DINOv2/CLIP)
+Modules:
+- ocr: PaddleOCR text extraction
+- geometry: Geometric primitive detection
+- symbols: Symbol template matching
+- embeddings: Visual embeddings (DINOv2)
+- pdf_extractor: High-resolution PDF image extraction
 """
 
-from .ocr import OCRExtractor, extract_text
-from .geometry import GeometryExtractor, extract_geometry
-from .symbols import SymbolDetector, detect_symbols, SymbolType
-from .embeddings import VisualEmbedder, extract_embedding
+from .ocr import OCRExtractor
+from .geometry import GeometryExtractor
+from .symbols import SymbolDetector
+from .embeddings import VisualEmbedder
+from .pdf_extractor import PDFImageExtractor, is_pdf_available, extract_from_pdf
 
 __all__ = [
-    # OCR
-    "OCRExtractor",
-    "extract_text",
-    
-    # Geometry
-    "GeometryExtractor",
-    "extract_geometry",
-    
-    # Symbols
-    "SymbolDetector",
-    "detect_symbols",
-    "SymbolType",
-    
-    # Embeddings
-    "VisualEmbedder",
-    "extract_embedding",
+    'OCRExtractor',
+    'GeometryExtractor',
+    'SymbolDetector',
+    'VisualEmbedder',
+    'PDFImageExtractor',
+    'is_pdf_available',
+    'extract_from_pdf'
 ]
