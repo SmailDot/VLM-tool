@@ -285,13 +285,6 @@ def render_manage_tab(manager: ProcessLibraryManager):
                             index=freq_index,
                             key=f"freq_{pid}"
                         )
-                        
-                        edit_frequency = st.selectbox(
-                            "優先級",
-                            ["高", "中", "低"],
-                            index=["高", "中", "低"].index(pdata.get('frequency', '中')),
-                            key=f"freq_{pid}"
-                        )
                     
                     st.divider()
                     
