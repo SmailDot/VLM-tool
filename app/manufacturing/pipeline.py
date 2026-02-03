@@ -78,7 +78,22 @@ class ManufacturingPipeline:
         self.ocr_extractor = OCRExtractor() if use_ocr else None
         self.geometry_extractor = GeometryExtractor() if use_geometry else None
         self.symbol_detector = SymbolDetector(template_dir) if use_symbols else None
-        self.visual_embedder = VisualEmbedder() if use_visual else None
+        
+        # Initialize visual embedder (gracefully handle unavailability)
+        self.visual_embedder = None
+        if use_visual:
+            try:
+                self.visual_embedder = VisualEmbedder()
+                # Check if it actually loaded successfully
+                if self.visual_embedder.model is None:
+                    print("Info: Visual embeddings unavailable - using OCR + Geometry + Symbols")
+                    self.visual_embedder = None
+                    self.use_visual = False
+            except Exception as e:
+                print(f"Warning: Failed to initialize visual embedder: {e}")
+                print("   Continuing with OCR + Geometry + Symbols only")
+                self.visual_embedder = None
+                self.use_visual = False
         
         # Initialize parent image parser
         self.parent_parser = ParentImageParser(self.ocr_extractor)

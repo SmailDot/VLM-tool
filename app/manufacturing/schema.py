@@ -45,6 +45,7 @@ class OCRResult:
     confidence: float           # OCR confidence (0-1)
     bbox: Optional[List[int]] = None  # [x, y, w, h]
     normalized_text: str = ""   # Cleaned/normalized text
+    metadata: Dict[str, Any] = field(default_factory=dict)  # Additional metadata (e.g., language)
     
     def __post_init__(self):
         if not self.normalized_text:

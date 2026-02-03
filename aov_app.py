@@ -645,6 +645,12 @@ with st.sidebar:
         st.session_state.recognition_result = None
         st.rerun()
     
+    # OCR 快取清除按鈕（調試用）
+    if st.button("🔄 清除 OCR 快取", use_container_width=True):
+        st.cache_resource.clear()
+        st.success("快取已清除，請重新載入頁面")
+        st.rerun()
+    
     # 關於
     st.divider()
     

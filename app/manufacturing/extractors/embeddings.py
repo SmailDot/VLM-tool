@@ -10,12 +10,17 @@ import numpy as np
 import cv2
 from pathlib import Path
 
+# Try to import PyTorch dependencies (optional feature)
+EMBEDDINGS_AVAILABLE = True
+IMPORT_ERROR_MSG = None
+
 try:
     import torch
     import timm
     from PIL import Image
-except ImportError:
-    raise ImportError("Required packages not installed. Run: pip install torch timm pillow")
+except ImportError as e:
+    EMBEDDINGS_AVAILABLE = False
+    IMPORT_ERROR_MSG = str(e)
 
 
 class VisualEmbedder:
@@ -25,6 +30,9 @@ class VisualEmbedder:
     Supports:
     - DINOv2 (recommended for technical drawings - better at line/shape features)
     - CLIP (optional - good for multimodal text+image)
+    
+    Note: This feature requires PyTorch and timm. If unavailable, methods will
+    gracefully return None or raise informative errors.
     """
     
     def __init__(
@@ -41,12 +49,22 @@ class VisualEmbedder:
             model_name: Model variant name (for timm or CLIP).
             device: "cuda", "cpu", or None (auto-detect).
         """
+        # Check if embeddings are available
+        if not EMBEDDINGS_AVAILABLE:
+            print(f"Warning: Visual embeddings disabled - PyTorch unavailable ({IMPORT_ERROR_MSG})")
+            print("   System will use OCR + Geometry + Symbols only (recommended combination)")
+            self.model = None
+            self.model_type = model_type
+            self.model_name = model_name
+            self.device = "cpu"
+            return
+        
         self.model_type = model_type
         self.model_name = model_name
         
         # Auto-detect device
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = "cuda" if (EMBEDDINGS_AVAILABLE and torch.cuda.is_available()) else "cpu"
         else:
             self.device = device
         
@@ -58,10 +76,14 @@ class VisualEmbedder:
         else:
             raise ValueError(f"Unknown model_type: {model_type}")
         
-        self.model.eval()
+        if self.model is not None:
+            self.model.eval()
     
     def _load_dinov2(self):
         """Load DINOv2 model from timm."""
+        if not EMBEDDINGS_AVAILABLE:
+            return None
+        
         # DINOv2 ViT-Base (recommended for technical drawings)
         # Outputs 768-dim embeddings
         model = timm.create_model(
@@ -79,6 +101,9 @@ class VisualEmbedder:
     
     def _load_clip(self):
         """Load CLIP model (optional)."""
+        if not EMBEDDINGS_AVAILABLE:
+            return None
+        
         try:
             import clip
         except ImportError:
@@ -88,7 +113,7 @@ class VisualEmbedder:
         self.transform = preprocess
         return model
     
-    def extract(self, image: np.ndarray) -> np.ndarray:
+    def extract(self, image: np.ndarray) -> Optional[np.ndarray]:
         """
         Extract embedding vector from image.
         
@@ -96,10 +121,14 @@ class VisualEmbedder:
             image: Input image (BGR format from OpenCV).
         
         Returns:
-            Embedding vector (numpy array, shape [embedding_dim]).
+            Embedding vector (numpy array, shape [embedding_dim]) or None if unavailable.
             - DINOv2 ViT-Base: 768-dim
             - CLIP ViT-B/32: 512-dim
         """
+        # Return None if embeddings unavailable
+        if self.model is None or not EMBEDDINGS_AVAILABLE:
+            return None
+        
         # Convert BGR to RGB
         if len(image.shape) == 3:
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -132,7 +161,7 @@ class VisualEmbedder:
         
         return embedding_np
     
-    def extract_from_file(self, image_path: str) -> np.ndarray:
+    def extract_from_file(self, image_path: str) -> Optional[np.ndarray]:
         """
         Extract embedding from image file.
         
@@ -140,8 +169,11 @@ class VisualEmbedder:
             image_path: Path to image file.
         
         Returns:
-            Embedding vector (numpy array).
+            Embedding vector (numpy array) or None if unavailable.
         """
+        if self.model is None or not EMBEDDINGS_AVAILABLE:
+            return None
+        
         if not Path(image_path).exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
         
@@ -151,7 +183,7 @@ class VisualEmbedder:
         
         return self.extract(image)
     
-    def batch_extract(self, images: list[np.ndarray]) -> np.ndarray:
+    def batch_extract(self, images: list[np.ndarray]) -> Optional[np.ndarray]:
         """
         Extract embeddings for multiple images (batch processing).
         
@@ -159,8 +191,11 @@ class VisualEmbedder:
             images: List of images (BGR format).
         
         Returns:
-            Embeddings matrix (shape [num_images, embedding_dim]).
+            Embeddings matrix (shape [num_images, embedding_dim]) or None if unavailable.
         """
+        if self.model is None or not EMBEDDINGS_AVAILABLE:
+            return None
+        
         # Preprocess all images
         input_tensors = []
         for image in images:
@@ -197,6 +232,9 @@ class VisualEmbedder:
     
     def get_embedding_dim(self) -> int:
         """Get embedding dimensionality."""
+        if not EMBEDDINGS_AVAILABLE or self.model is None:
+            return 0
+        
         if self.model_type == "dinov2":
             # DINOv2 ViT-Base: 768
             # DINOv2 ViT-Small: 384
@@ -214,7 +252,7 @@ class VisualEmbedder:
 
 
 # Convenience function
-def extract_embedding(image: np.ndarray, model_type: str = "dinov2") -> np.ndarray:
+def extract_embedding(image: np.ndarray, model_type: str = "dinov2") -> Optional[np.ndarray]:
     """
     Quick embedding extraction without creating embedder object.
     
@@ -223,7 +261,7 @@ def extract_embedding(image: np.ndarray, model_type: str = "dinov2") -> np.ndarr
         model_type: "dinov2" or "clip".
     
     Returns:
-        Embedding vector (numpy array).
+        Embedding vector (numpy array) or None if unavailable.
     """
     embedder = VisualEmbedder(model_type=model_type)
     return embedder.extract(image)
