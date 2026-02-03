@@ -246,6 +246,21 @@ def apply_custom_style():
             color: #00ccff !important;
             text-shadow: 0 0 10px rgba(0, 200, 255, 0.5) !important;
         }
+        
+        /* NUCLEAR OPTION - Force cyan on ALL expander content including expanded state */
+        details[data-testid="stExpander"] summary[data-testid="stExpanderHeader"],
+        details[data-testid="stExpander"] summary[data-testid="stExpanderHeader"] *,
+        details[data-testid="stExpander"][open] summary[data-testid="stExpanderHeader"],
+        details[data-testid="stExpander"][open] summary[data-testid="stExpanderHeader"] * {
+            color: #00ccff !important;
+            background-color: transparent !important;
+            text-shadow: 0 0 10px rgba(0, 200, 255, 0.5) !important;
+        }
+        
+        /* Fix white-on-white issue when expanded */
+        details[data-testid="stExpander"][open] summary {
+            background: rgba(30, 41, 59, 0.8) !important;
+        }
 
         /* ================= Tech Buttons ================= */
         div.stButton > button {
@@ -864,6 +879,36 @@ def apply_custom_style():
                 0 0 80px rgba(0, 200, 255, 0.2) !important;
             transform: scale(1.02);
             transition: all 0.4s ease;
+        }
+        
+        /* ================= FINAL FIX: Expander Header Visibility ================= */
+        /* This MUST be at the end to override all other rules */
+        /* Target ALL possible Streamlit expander header selectors */
+        details summary,
+        details[data-testid="stExpander"] summary,
+        details[data-testid="stExpander"] summary *,
+        details[open] summary,
+        details[open] summary *,
+        summary[data-testid="stExpanderHeader"],
+        summary[data-testid="stExpanderHeader"] *,
+        [data-testid="stExpanderHeader"],
+        [data-testid="stExpanderHeader"] *,
+        .streamlit-expanderHeader,
+        .streamlit-expanderHeader * {
+            color: #00ccff !important;
+            background-color: transparent !important;
+            text-shadow: 0 0 10px rgba(0, 200, 255, 0.5) !important;
+        }
+        
+        /* Force cyan color on expanded state */
+        details[open] summary {
+            background: rgba(30, 41, 59, 0.8) !important;
+        }
+        
+        details[open] summary *,
+        details[data-testid="stExpander"][open] summary *,
+        summary[data-testid="stExpanderHeader"] * {
+            color: #00ccff !important;
         }
         </style>
     """, unsafe_allow_html=True)
