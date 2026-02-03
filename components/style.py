@@ -703,6 +703,28 @@ def apply_custom_style():
         [data-testid="stForm"] .stSelectbox label {
             color: #00ffff !important;
         }
+        
+        /* Form Submit Buttons - Fix white text on white background */
+        [data-testid="stForm"] button[kind="primary"],
+        [data-testid="stForm"] .stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #0066cc 0%, #0099ff 50%, #00ccff 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 4px 15px rgba(0, 153, 255, 0.4) !important;
+        }
+        
+        [data-testid="stForm"] button[kind="secondary"],
+        [data-testid="stForm"] button:not([kind="primary"]),
+        [data-testid="stForm"] .stButton > button:not([kind="primary"]) {
+            background: rgba(30, 41, 59, 0.8) !important;
+            color: #00ccff !important;
+            border: 1px solid rgba(0, 255, 255, 0.3) !important;
+        }
+        
+        [data-testid="stForm"] button:hover {
+            opacity: 0.9 !important;
+            transform: translateY(-1px) !important;
+        }
 
         /* ================= Subheaders and Labels ================= */
         .stSubheader, [data-testid="stSubheader"] {

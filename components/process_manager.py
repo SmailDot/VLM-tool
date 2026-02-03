@@ -247,125 +247,141 @@ def render_manage_tab(manager: ProcessLibraryManager):
     
     st.divider()
     
-    # 顯示製程表格（直接可編輯）
+    # 按分類分組顯示
     if not filtered_processes:
         st.info("沒有符合條件的製程")
     else:
-        for pid, pdata in sorted(filtered_processes.items()):
-            with st.expander(f"{pid} - {pdata.get('name', '未命名')}", expanded=False):
-                # 使用 form 讓用戶可以編輯
-                with st.form(key=f"edit_form_{pid}"):
-                    col1, col2 = st.columns([2, 1])
-                    
-                    with col1:
-                        edit_name = st.text_input("名稱", value=pdata.get('name', ''), key=f"name_{pid}")
-                        edit_description = st.text_area("描述", value=pdata.get('description', ''), height=80, key=f"desc_{pid}")
-                    
-                    with col2:
-                        # 安全取得 category index
-                        categories = ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"]
-                        current_cat = pdata.get('category', '其他')
-                        cat_index = categories.index(current_cat) if current_cat in categories else 7
-                        
-                        edit_category = st.selectbox(
-                            "分類",
-                            categories,
-                            index=cat_index,
-                            key=f"cat_{pid}"
-                        )
-                        
-                        # 安全取得 frequency index
-                        frequencies = ["高", "中", "低"]
-                        current_freq = pdata.get('frequency', '中')
-                        freq_index = frequencies.index(current_freq) if current_freq in frequencies else 1
-                        
-                        edit_frequency = st.selectbox(
-                            "優先級",
-                            frequencies,
-                            index=freq_index,
-                            key=f"freq_{pid}"
-                        )
-                    
-                    st.divider()
-                    
-                    # 特徵設定
-                    col1, col2 = st.columns(2)
-                    
-                    current_keywords = pdata.get('keywords', []) + pdata.get('triggers', {}).get('keywords', [])
-                    current_symbols = pdata.get('symbols', []) + pdata.get('triggers', {}).get('symbols', [])
-                    
-                    with col1:
-                        edit_keywords = st.text_area(
-                            "關鍵字（每行一個）",
-                            value='\n'.join(list(set(current_keywords))),
-                            height=120,
-                            key=f"kw_{pid}"
-                        )
-                    
-                    with col2:
-                        edit_symbols = st.text_area(
-                            "符號（每行一個）",
-                            value='\n'.join(list(set(current_symbols))),
-                            height=120,
-                            key=f"sym_{pid}"
-                        )
-                    
-                    # 操作按鈕
-                    col1, col2, col3 = st.columns([2, 1, 1])
-                    
-                    with col1:
-                        save_btn = st.form_submit_button("儲存", use_container_width=True)
-                    
-                    with col2:
-                        delete_btn = st.form_submit_button("刪除", use_container_width=True, type="secondary")
-                    
-                    with col3:
-                        st.form_submit_button("取消", use_container_width=True)
-                    
-                    # 處理儲存
-                    if save_btn:
-                        keywords_list = [k.strip() for k in edit_keywords.split('\n') if k.strip()]
-                        symbols_list = [s.strip() for s in edit_symbols.split('\n') if s.strip()]
-                        
-                        updates = {
-                            "name": edit_name,
-                            "description": edit_description,
-                            "frequency": edit_frequency,
-                            "category": edit_category,
-                            "keywords": keywords_list,
-                            "symbols": symbols_list,
-                            "triggers": {
-                                "keywords": keywords_list,
-                                "geometry_features": pdata.get('triggers', {}).get('geometry_features', []),
-                                "symbols": symbols_list,
-                                "material_conditions": pdata.get('triggers', {}).get('material_conditions', []),
-                                "customer_specific": pdata.get('triggers', {}).get('customer_specific', [])
-                            }
-                        }
-                        
-                        if manager.update_process(pid, updates):
-                            st.success(f"已更新製程 {pid}")
-                            st.session_state.process_manager = ProcessLibraryManager()
-                            st.rerun()
-                    
-                    # 處理刪除
-                    if delete_btn:
-                        # 使用 session state 記錄要刪除的 ID
-                        if 'confirm_delete' not in st.session_state:
-                            st.session_state.confirm_delete = None
-                        
-                        if st.session_state.confirm_delete == pid:
-                            # 執行刪除
-                            if manager.delete_process(pid):
-                                st.success(f"已刪除製程 {pid}")
-                                st.session_state.confirm_delete = None
-                                st.session_state.process_manager = ProcessLibraryManager()
-                                st.rerun()
-                        else:
-                            # 要求確認
-                            st.session_state.confirm_delete = pid
-                            st.warning(f"再次點擊「刪除」確認刪除 {pid}")
-                            st.rerun()
+        # 將製程按分類分組
+        processes_by_category = {}
+        for pid, pdata in filtered_processes.items():
+            cat = pdata.get('category', '其他')
+            if cat not in processes_by_category:
+                processes_by_category[cat] = {}
+            processes_by_category[cat][pid] = pdata
+        
+        # 為每個分類創建一個大折疊區塊
+        for category in sorted(processes_by_category.keys()):
+            category_processes = processes_by_category[category]
+            count = len(category_processes)
+            
+            # 大分類折疊區塊
+            with st.expander(f"**{category}** ({count} 個製程)", expanded=(selected_category != "全部")):
+                for pid, pdata in sorted(category_processes.items()):
+                    # 每個製程的小折疊區塊
+                    with st.expander(f"{pid} - {pdata.get('name', '未命名')}", expanded=False):
+                        # 使用 form 讓用戶可以編輯
+                        with st.form(key=f"edit_form_{pid}"):
+                            col1, col2 = st.columns([2, 1])
+                            
+                            with col1:
+                                edit_name = st.text_input("名稱", value=pdata.get('name', ''), key=f"name_{pid}")
+                                edit_description = st.text_area("描述", value=pdata.get('description', ''), height=80, key=f"desc_{pid}")
+                            
+                            with col2:
+                                # 安全取得 category index
+                                categories_list = ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"]
+                                current_cat = pdata.get('category', '其他')
+                                cat_index = categories_list.index(current_cat) if current_cat in categories_list else 7
+                                
+                                edit_category = st.selectbox(
+                                    "分類",
+                                    categories_list,
+                                    index=cat_index,
+                                    key=f"cat_{pid}"
+                                )
+                                
+                                # 安全取得 frequency index
+                                frequencies_list = ["高", "中", "低"]
+                                current_freq = pdata.get('frequency', '中')
+                                freq_index = frequencies_list.index(current_freq) if current_freq in frequencies_list else 1
+                                
+                                edit_frequency = st.selectbox(
+                                    "優先級",
+                                    frequencies_list,
+                                    index=freq_index,
+                                    key=f"freq_{pid}"
+                                )
+                            
+                            st.divider()
+                            
+                            # 特徵設定
+                            col1, col2 = st.columns(2)
+                            
+                            current_keywords = pdata.get('keywords', []) + pdata.get('triggers', {}).get('keywords', [])
+                            current_symbols = pdata.get('symbols', []) + pdata.get('triggers', {}).get('symbols', [])
+                            
+                            with col1:
+                                edit_keywords = st.text_area(
+                                    "關鍵字（每行一個）",
+                                    value='\n'.join(list(set(current_keywords))),
+                                    height=120,
+                                    key=f"kw_{pid}"
+                                )
+                            
+                            with col2:
+                                edit_symbols = st.text_area(
+                                    "符號（每行一個）",
+                                    value='\n'.join(list(set(current_symbols))),
+                                    height=120,
+                                    key=f"sym_{pid}"
+                                )
+                            
+                            # 操作按鈕
+                            col1, col2, col3 = st.columns([2, 1, 1])
+                            
+                            with col1:
+                                save_btn = st.form_submit_button("儲存", use_container_width=True, type="primary")
+                            
+                            with col2:
+                                delete_btn = st.form_submit_button("刪除", use_container_width=True, type="secondary")
+                            
+                            with col3:
+                                st.form_submit_button("取消", use_container_width=True)
+                            
+                            # 處理儲存
+                            if save_btn:
+                                keywords_list = [k.strip() for k in edit_keywords.split('\n') if k.strip()]
+                                symbols_list = [s.strip() for s in edit_symbols.split('\n') if s.strip()]
+                                
+                                updates = {
+                                    "name": edit_name,
+                                    "description": edit_description,
+                                    "frequency": edit_frequency,
+                                    "category": edit_category,
+                                    "keywords": keywords_list,
+                                    "symbols": symbols_list,
+                                    "triggers": {
+                                        "keywords": keywords_list,
+                                        "geometry_features": pdata.get('triggers', {}).get('geometry_features', []),
+                                        "symbols": symbols_list,
+                                        "material_conditions": pdata.get('triggers', {}).get('material_conditions', []),
+                                        "customer_specific": pdata.get('triggers', {}).get('customer_specific', [])
+                                    }
+                                }
+                                
+                                if manager.update_process(pid, updates):
+                                    st.success(f"已更新製程 {pid}")
+                                    st.session_state.process_manager = ProcessLibraryManager()
+                                    st.rerun()
+                            
+                            # 處理刪除
+                            if delete_btn:
+                                # 使用 session state 記錄要刪除的 ID
+                                if 'confirm_delete' not in st.session_state:
+                                    st.session_state.confirm_delete = None
+                                
+                                if st.session_state.confirm_delete == pid:
+                                    # 執行刪除
+                                    if manager.delete_process(pid):
+                                        st.success(f"已刪除製程 {pid}")
+                                        st.session_state.confirm_delete = None
+                                        st.session_state.process_manager = ProcessLibraryManager()
+                                        st.rerun()
+                                else:
+                                    # 要求確認
+                                    st.session_state.confirm_delete = pid
+                                    st.warning(f"再次點擊「刪除」確認刪除 {pid}")
+                                    st.rerun()
 
 
 def render_add_tab(manager: ProcessLibraryManager):
