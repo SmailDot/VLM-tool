@@ -29,6 +29,8 @@ from .extractors import (
 )
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
+from .extractors.vlm_client import VLMClient
+from .prompts import EngineeringPrompts
 from .decision import DecisionEngine
 from .decision.engine_v2 import DecisionEngineV2
 
@@ -53,6 +55,7 @@ class ManufacturingPipeline:
         use_geometry: bool = True,
         use_symbols: bool = True,
         use_visual: bool = False,  # Visual embeddings optional (expensive)
+        use_vlm: bool = False,  # VLM analysis optional (requires LM Studio)
         template_dir: Optional[str] = None,
         process_lib_path: Optional[str] = None,
         use_v2_engine: bool = True  # Use DecisionEngineV2 by default
@@ -65,6 +68,7 @@ class ManufacturingPipeline:
             use_geometry: Enable geometry analysis.
             use_symbols: Enable symbol detection.
             use_visual: Enable visual embedding (DINOv2).
+            use_vlm: Enable VLM-based process recognition (requires LM Studio).
             template_dir: Directory for symbol templates.
             process_lib_path: Path to process_lib.json or process_lib_v2.json.
             use_v2_engine: Use DecisionEngineV2 (supports logic rules).
@@ -73,6 +77,7 @@ class ManufacturingPipeline:
         self.use_geometry = use_geometry
         self.use_symbols = use_symbols
         self.use_visual = use_visual
+        self.use_vlm = use_vlm
         
         # Initialize extractors
         self.ocr_extractor = OCRExtractor() if use_ocr else None
@@ -94,6 +99,32 @@ class ManufacturingPipeline:
                 print("   Continuing with OCR + Geometry + Symbols only")
                 self.visual_embedder = None
                 self.use_visual = False
+        
+        # Initialize VLM client (gracefully handle unavailability)
+        self.vlm_client = None
+        self.vlm_prompt_template = None
+        if use_vlm:
+            try:
+                self.vlm_client = VLMClient()
+                # Check if VLM service is available
+                if not self.vlm_client.is_available():
+                    print("Info: VLM service not available - LM Studio may not be running")
+                    print("   Continuing with traditional feature extraction only")
+                    self.vlm_client = None
+                    self.use_vlm = False
+                else:
+                    # Load VLM prompt template
+                    self.vlm_prompt_template = EngineeringPrompts.get_process_recognition_prompt(
+                        include_examples=True,
+                        language="zh-TW",
+                        detail_level="standard"
+                    )
+                    print("Info: VLM service connected successfully")
+            except Exception as e:
+                print(f"Warning: Failed to initialize VLM client: {e}")
+                print("   Continuing with traditional feature extraction only")
+                self.vlm_client = None
+                self.use_vlm = False
         
         # Initialize parent image parser
         self.parent_parser = ParentImageParser(self.ocr_extractor)
@@ -194,7 +225,8 @@ class ManufacturingPipeline:
         features = self._extract_features(
             img_array,
             ocr_threshold,
-            symbol_threshold
+            symbol_threshold,
+            image_path=image_path  # Pass image path for VLM
         )
         
         # Run decision engine (pass parent_context if available)
@@ -223,7 +255,8 @@ class ManufacturingPipeline:
         self,
         image: np.ndarray,
         ocr_threshold: float,
-        symbol_threshold: float
+        symbol_threshold: float,
+        image_path: Optional[str] = None
     ) -> ExtractedFeatures:
         """
         Extract all features from image.
@@ -232,6 +265,7 @@ class ManufacturingPipeline:
             image: Input image (BGR).
             ocr_threshold: OCR confidence threshold.
             symbol_threshold: Symbol confidence threshold.
+            image_path: Optional image file path (for VLM).
         
         Returns:
             ExtractedFeatures object.
@@ -262,12 +296,37 @@ class ManufacturingPipeline:
         if self.use_visual and self.visual_embedder:
             visual_embedding = self.visual_embedder.extract(image)
         
+        # VLM analysis (NEW!)
+        vlm_analysis = None
+        if self.use_vlm and self.vlm_client and self.vlm_prompt_template:
+            try:
+                # Use image_path if available, otherwise use numpy array
+                input_image = image_path if image_path else image
+                
+                vlm_result = self.vlm_client.analyze_image(
+                    image_path=input_image,
+                    prompt=self.vlm_prompt_template.user_prompt,
+                    response_format="json",
+                    temperature=0.0,
+                    max_tokens=2000
+                )
+                
+                if vlm_result:
+                    vlm_analysis = vlm_result
+                    print(f"Info: VLM analysis completed - detected {len(vlm_result.get('suggested_process_ids', []))} suggested processes")
+                else:
+                    print("Warning: VLM analysis returned None")
+            except Exception as e:
+                print(f"Warning: VLM analysis failed: {e}")
+                vlm_analysis = None
+        
         return ExtractedFeatures(
             ocr_results=ocr_results,
             geometry=geometry,
             symbols=symbols,
             visual_embedding=visual_embedding,
-            tolerances=tolerances  # NEW!
+            tolerances=tolerances,  # NEW!
+            vlm_analysis=vlm_analysis  # NEW!
         )
     
     def batch_recognize(
@@ -335,7 +394,12 @@ class ManufacturingPipeline:
             img_array = image.copy()
         
         # Extract features
-        features = self._extract_features(img_array, 0.5, 0.6)
+        features = self._extract_features(
+            img_array, 
+            0.5, 
+            0.6,
+            image_path=image if isinstance(image, str) else None
+        )
         
         # Draw features
         vis_image = img_array.copy()

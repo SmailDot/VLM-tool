@@ -218,8 +218,16 @@ class DecisionEngineV2:
     ) -> List[ProcessPrediction]:
         """
         Score all processes against features.
+        Integrates VLM suggestions with traditional scoring.
         """
         candidates = []
+        
+        # Get VLM suggested process IDs and their confidence scores
+        vlm_suggestions = {}
+        if features.vlm_analysis:
+            suggested_ids = features.vlm_analysis.get("suggested_process_ids", [])
+            confidence_scores = features.vlm_analysis.get("confidence_scores", {})
+            vlm_suggestions = {pid: confidence_scores.get(pid, 0.7) for pid in suggested_ids}
         
         for process_id, process_def in self.processes.items():
             # Apply frequency filter
@@ -228,7 +236,7 @@ class DecisionEngineV2:
                 if process_freq not in frequency_filter:
                     continue
             
-            # Calculate scores
+            # Calculate traditional scores
             text_score = self._score_text_match(
                 features.ocr_results,
                 process_def.get("required_text", [])
@@ -244,19 +252,35 @@ class DecisionEngineV2:
                 process_def.get("required_geometry", [])
             )
             
-            # Get weights
+            # Check if VLM suggested this process
+            vlm_score = vlm_suggestions.get(process_id, 0.0)
+            
+            # Get weights (default or from process definition)
             weights = process_def.get("confidence_weights", {
                 "text": 0.4,
                 "symbol": 0.3,
                 "geometry": 0.2,
-                "visual": 0.1
+                "visual": 0.0,
+                "vlm": 0.1  # Default VLM weight
             })
+            
+            # If VLM is active, adjust weights dynamically
+            if vlm_score > 0:
+                # Increase VLM weight if it suggested this process
+                weights = {
+                    "text": 0.25,
+                    "symbol": 0.20,
+                    "geometry": 0.15,
+                    "visual": 0.00,
+                    "vlm": 0.40  # High confidence in VLM suggestions
+                }
             
             # Fuse scores
             final_score = (
-                text_score * weights["text"] +
-                symbol_score * weights["symbol"] +
-                geometry_score * weights["geometry"]
+                text_score * weights.get("text", 0.4) +
+                symbol_score * weights.get("symbol", 0.3) +
+                geometry_score * weights.get("geometry", 0.2) +
+                vlm_score * weights.get("vlm", 0.1)
                 # visual score not implemented yet
             )
             
@@ -266,7 +290,8 @@ class DecisionEngineV2:
                 features,
                 text_score,
                 symbol_score,
-                geometry_score
+                geometry_score,
+                vlm_score
             )
             
             # Create prediction
@@ -653,10 +678,28 @@ class DecisionEngineV2:
         features: ExtractedFeatures,
         text_score: float,
         symbol_score: float,
-        geometry_score: float
+        geometry_score: float,
+        vlm_score: float = 0.0
     ) -> List[str]:
         """Collect evidence for prediction."""
         evidence = []
+        
+        # VLM evidence (highest priority)
+        if vlm_score > 0.3 and features.vlm_analysis:
+            vlm_reasoning = features.vlm_analysis.get("reasoning", "")
+            if vlm_reasoning:
+                evidence.append(f"[VLM 分析] {vlm_reasoning[:200]}")  # Truncate to 200 chars
+            
+            # Add VLM detected features
+            detected_features = features.vlm_analysis.get("detected_features", {})
+            if detected_features:
+                geometry_features = detected_features.get("geometry", [])
+                if geometry_features:
+                    evidence.append(f"[VLM 幾何] {', '.join(geometry_features[:3])}")
+                
+                symbols_features = detected_features.get("symbols", [])
+                if symbols_features:
+                    evidence.append(f"[VLM 符號] {', '.join(symbols_features[:3])}")
         
         # Text evidence
         if text_score > 0.3 and process_def.get("required_text"):

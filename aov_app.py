@@ -62,6 +62,7 @@ if 'last_settings' not in st.session_state:
         'use_ocr': False,
         'use_geometry': True,
         'use_symbols': True,
+        'use_vlm': False,
         'show_visualization': False
     }
 
@@ -254,6 +255,24 @@ with col_left:
                     value=True,
                     help="辨識焊接符號、表面處理標記等"
                 )
+                
+                use_vlm = st.checkbox(
+                    "🤖 VLM 視覺語言模型分析 (實驗功能)",
+                    value=False,
+                    help="使用 AI 視覺語言模型進行製程辨識 (需要 LM Studio 運行中)"
+                )
+                
+                # VLM 狀態檢查
+                if use_vlm:
+                    from app.manufacturing.extractors.vlm_client import VLMClient
+                    try:
+                        vlm_test = VLMClient()
+                        if vlm_test.is_available():
+                            st.success("✅ VLM 服務已連接 (LM Studio)")
+                        else:
+                            st.warning("⚠️ VLM 服務未運行 - 請確認 LM Studio 已啟動 (http://localhost:1234)")
+                    except Exception as e:
+                        st.error(f"❌ VLM 初始化失敗: {str(e)}")
             
             with st.expander("進階選項", expanded=False):
                 top_n = st.slider(
@@ -292,6 +311,7 @@ with col_left:
                     'use_ocr': use_ocr,
                     'use_geometry': use_geometry,
                     'use_symbols': use_symbols,
+                    'use_vlm': use_vlm,
                     'show_visualization': show_visualization
                 }
             
@@ -307,7 +327,8 @@ with col_left:
                                 use_ocr=use_ocr,
                                 use_geometry=use_geometry,
                                 use_symbols=use_symbols,
-                                use_visual=False  # DINOv2 可選 (耗時)
+                                use_visual=False,  # DINOv2 可選 (耗時)
+                                use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
                             )
                         
                         # 執行辨識（支援雙圖模式）
@@ -541,6 +562,41 @@ with col_right:
                 for sym in result.features.symbols:
                     st.caption(f"- {sym.symbol_type} (信心度: {sym.confidence:.2f})")
             
+            # VLM 分析結果 (NEW!)
+            if result.features.vlm_analysis:
+                st.markdown("**🤖 VLM 視覺語言模型分析:**")
+                vlm = result.features.vlm_analysis
+                
+                # 形狀描述
+                if vlm.get("shape_description"):
+                    st.caption(f"形狀: {vlm['shape_description']}")
+                
+                # 複雜度
+                if vlm.get("overall_complexity"):
+                    st.caption(f"複雜度: {vlm['overall_complexity']}")
+                
+                # 建議製程
+                if vlm.get("suggested_process_ids"):
+                    st.caption(f"VLM 建議製程: {', '.join(vlm['suggested_process_ids'][:5])}")
+                
+                # 檢測特徵
+                if vlm.get("detected_features"):
+                    det_feat = vlm["detected_features"]
+                    features_summary = []
+                    if det_feat.get("geometry"):
+                        features_summary.append(f"幾何 ({len(det_feat['geometry'])})")
+                    if det_feat.get("symbols"):
+                        features_summary.append(f"符號 ({len(det_feat['symbols'])})")
+                    if det_feat.get("text_annotations"):
+                        features_summary.append(f"文字 ({len(det_feat['text_annotations'])})")
+                    if features_summary:
+                        st.caption(f"檢測特徵: {', '.join(features_summary)}")
+                
+                # 推理依據（可展開查看）
+                if vlm.get("reasoning"):
+                    with st.expander("查看 VLM 推理依據"):
+                        st.text(vlm["reasoning"])
+            
             # 父圖上下文資訊
             if result.parent_context:
                 st.markdown("**父圖上下文資訊:**")
@@ -602,7 +658,7 @@ with col_right:
             
             - 支援製程: {process_count}
             - 製程類別: 8 大類
-            - 特徵提取: OCR + 幾何 + 符號 + 視覺
+            - 特徵提取: OCR + 幾何 + 符號 + 視覺 + VLM
             - 決策引擎: 多模態融合評分
             
             **技術架構:**
@@ -610,6 +666,7 @@ with col_right:
             - 幾何: OpenCV Hough + Contours
             - 符號: Template Matching
             - 視覺: DINOv2 (可選)
+            - VLM: Vision Language Model (實驗功能, 需 LM Studio)
             - 決策: 規則基礎 + 加權融合
             """)
 

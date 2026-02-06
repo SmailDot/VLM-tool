@@ -105,6 +105,9 @@ class ExtractedFeatures:
     # Tolerances (NEW)
     tolerances: List[Any] = field(default_factory=list)  # List[ToleranceSpec] - Any to avoid circular import
     
+    # VLM Analysis (NEW - Vision Language Model)
+    vlm_analysis: Optional[Dict[str, Any]] = None  # VLM-based process recognition result
+    
     # Metadata
     image_shape: Optional[tuple] = None  # (H, W, C)
     extraction_time: float = 0.0  # seconds
@@ -134,11 +137,11 @@ class ExtractedFeatures:
                 for sym in self.symbols
             ],
             "geometry": {
-                "lines": self.geometry.lines,
-                "circles": self.geometry.circles,
-                "contours": self.geometry.contours,
-                "holes": self.geometry.holes,
-                "bend_lines": self.geometry.bend_lines
+                "lines": self.geometry.lines if self.geometry else [],
+                "circles": self.geometry.circles if self.geometry else [],
+                "contours": self.geometry.contours if self.geometry else [],
+                "holes": self.geometry.holes if self.geometry else [],
+                "bend_lines": self.geometry.bend_lines if self.geometry else []
             },
             "tolerances": [
                 {
@@ -151,6 +154,7 @@ class ExtractedFeatures:
                 }
                 for tol in self.tolerances
             ],
+            "vlm_analysis": self.vlm_analysis,
             "image_shape": self.image_shape,
             "extraction_time": self.extraction_time
         }
