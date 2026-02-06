@@ -31,3 +31,7 @@ rank_bm25>=0.2.2
 timm>=1.0.0
 pymupdf>=1.26.0
 pdfplumber>=0.11.0
+
+# VLM (Vision Language Model) Support
+# Compatible with LM Studio (OpenAI API)
+openai>=1.0.0
