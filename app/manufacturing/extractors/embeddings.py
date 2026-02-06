@@ -18,7 +18,7 @@ try:
     import torch
     import timm
     from PIL import Image
-except ImportError as e:
+except (ImportError, OSError) as e:
     EMBEDDINGS_AVAILABLE = False
     IMPORT_ERROR_MSG = str(e)
 

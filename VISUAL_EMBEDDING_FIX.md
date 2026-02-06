@@ -1,25 +1,35 @@
 # Visual Embedding Fix - PyTorch Graceful Degradation
 
-**Date**: 2026-02-03  
-**Version**: 2.1.3 (Bug Fix Release)  
+**Date**: 2026-02-06 (Updated)  
+**Version**: 2.1.4 (OSError Fix)  
 **Status**: ✅ COMPLETE
 
 ---
 
 ## 🎯 Problem Summary
 
-After fixing the dynamic process count and OneDNN issues, we encountered a **PyTorch DLL loading error** that blocked system startup:
+After fixing the dynamic process count and OneDNN issues, we encountered a **PyTorch CUDA DLL loading error** that blocked system startup:
 
 ```
-ImportError: DLL load failed while importing _C: 找不到指定的模組
+OSError: [WinError 127] 找不到指定的程序。Error loading "torch\lib\shm.dll"
 ```
 
 ### Root Cause Analysis
 
 1. **Visual embeddings module** (`app/manufacturing/extractors/embeddings.py`) imports PyTorch dependencies at module level
-2. User's PyTorch installation is corrupted (DLL issue)
-3. When pipeline imports embeddings, the entire system fails to start
-4. **Impact**: Even users who don't need visual embeddings cannot use the system
+2. User has CUDA-enabled PyTorch installed but **CUDA Toolkit is NOT installed** (missing runtime DLLs)
+3. PyTorch raises `OSError` (not `ImportError`) when CUDA DLLs are missing
+4. **Original code only caught `ImportError`**, so `OSError` crashed the entire system
+5. **Impact**: Even users who don't need visual embeddings cannot use the system
+
+### 2026-02-06 Update: OSError Fix
+
+The original fix caught `ImportError` but **PyTorch CUDA DLL errors raise `OSError`**, not `ImportError`. This caused the system to crash when:
+- NVIDIA GPU present (CUDA 12.8 Driver)
+- PyTorch CUDA version installed
+- CUDA Toolkit NOT installed (missing `shm.dll` and other runtime libraries)
+
+**Solution**: Changed exception handling from `except ImportError` to `except (ImportError, OSError)`
 
 ---
 
@@ -42,7 +52,7 @@ try:
     import torch
     import timm
     from PIL import Image
-except ImportError as e:
+except (ImportError, OSError) as e:
     EMBEDDINGS_AVAILABLE = False
     IMPORT_ERROR_MSG = str(e)
 ```
@@ -347,14 +357,29 @@ python -c "import your_module; obj = YourClass(); print('Works:', obj.model is n
 
 ## 🎉 Final Status
 
-**Version**: 2.1.3 (Bug Fix Release)  
-**Date**: 2026-02-03 23:20  
+**Version**: 2.1.4 (OSError Fix)  
+**Date**: 2026-02-06 16:24  
 **Status**: ✅ COMPLETE AND VERIFIED
 
 **All systems operational. Ready for production use.**
 
 ---
 
-**最後更新**: 2026-02-03 23:20  
-**處理時間**: ~10 分鐘（方案 2 實作）  
-**影響範圍**: 0% 核心功能損失，10% 可選功能暫時不可用
+## 📝 Change History
+
+### v2.1.4 (2026-02-06) - OSError Fix
+- **Critical Fix**: Changed `except ImportError` to `except (ImportError, OSError)` in `embeddings.py` line 21
+- **Problem**: PyTorch CUDA DLL errors raise `OSError`, not `ImportError`
+- **Impact**: System now handles missing CUDA Toolkit gracefully
+- **Test Result**: ✅ App starts successfully, gracefully falls back to OCR+Geometry+Symbols
+
+### v2.1.3 (2026-02-03) - Initial Graceful Degradation
+- Added safe import pattern for PyTorch dependencies
+- Made visual embeddings optional feature
+- Added robust initialization in pipeline
+
+---
+
+**最後更新**: 2026-02-06 16:24  
+**處理時間**: ~5 分鐘（OSError fix）  
+**影響範圍**: 0% 核心功能損失，10% 可選功能暫時不可用（視覺嵌入）
