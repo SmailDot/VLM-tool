@@ -109,86 +109,86 @@ with tab1:
 
 with col_left:
     st.markdown("### 上傳工程圖紙")
-    
+
     st.info("**雙圖辨識模式**: 父圖提供全域資訊（材質、客戶、特殊要求），子圖提供局部特徵（形狀、標註、符號）")
-    
+
     # 父圖上傳（選填）
-    with st.expander("父圖（選填）- 全視圖/標題欄/備註", expanded=False):
-        parent_file = st.file_uploader(
-            "上傳父圖（可選）",
-            type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
-            help="父圖包含：標題欄、技術要求、材質說明、客戶資訊等全域文字。支援 PDF 格式（將以 300 DPI 高解析度渲染）",
-            key="parent_uploader"
-        )
-        
-        if parent_file is not None:
-            # 檢查檔案類型
-            file_extension = parent_file.name.lower().split('.')[-1]
-            
-            if file_extension == 'pdf':
-                # PDF 檔案 → 使用 PDFImageExtractor
-                st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
-                try:
-                    from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
-                    
-                    if not is_pdf_available():
-                        st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")
-                        st.session_state.parent_drawing = None
-                    else:
-                        # 儲存 PDF 到臨時檔案
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                            tmp_file.write(parent_file.read())
-                            tmp_pdf_path = tmp_file.name
-                        
-                        # 提取高解析度圖片
-                        pdf_extractor = PDFImageExtractor(target_dpi=300)
-                        parent_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
-                        
-                        # 清理臨時檔案
-                        import os
-                        os.unlink(tmp_pdf_path)
-                        
-                        if parent_image is not None:
-                            st.session_state.parent_drawing = parent_image
-                            st.image(
-                                cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
-                                caption=f"父圖（PDF 渲染）: {parent_file.name}",
-                                use_container_width=True
-                            )
-                            h, w = parent_image.shape[:2]
-                            st.success(f"✅ PDF 已成功轉換 | 解析度: {w} × {h} px (300 DPI)")
-                        else:
-                            st.error("無法渲染 PDF")
-                            st.session_state.parent_drawing = None
-                
-                except Exception as e:
-                    st.error(f"PDF 處理失敗: {str(e)}")
+    st.markdown("#### 📂 上傳父圖/全域規範 (Parent Drawing/BOM)")
+    parent_file = st.file_uploader(
+        "選擇父圖檔案 (可選)",
+        type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
+        help="父圖包含：標題欄、技術要求、材質說明、客戶資訊等全域文字。支援 PDF 格式（將以 300 DPI 高解析度渲染）",
+        key="parent_uploader"
+    )
+
+    if parent_file is not None:
+        # 檢查檔案類型
+        file_extension = parent_file.name.lower().split('.')[-1]
+
+        if file_extension == 'pdf':
+            # PDF 檔案 → 使用 PDFImageExtractor
+            st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
+            try:
+                from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
+
+                if not is_pdf_available():
+                    st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")
                     st.session_state.parent_drawing = None
-            
-            else:
-                # 一般圖片檔案
-                parent_bytes = np.asarray(bytearray(parent_file.read()), dtype=np.uint8)
-                parent_image = cv2.imdecode(parent_bytes, cv2.IMREAD_COLOR)
-                
-                if parent_image is not None:
-                    st.session_state.parent_drawing = parent_image
-                    st.image(
-                        cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
-                        caption=f"父圖: {parent_file.name}",
-                        use_container_width=True
-                    )
-                    h, w = parent_image.shape[:2]
-                    st.caption(f"已載入父圖 | 尺寸: {w} × {h} px")
                 else:
-                    st.error("無法讀取父圖")
-                    st.session_state.parent_drawing = None
+                    # 儲存 PDF 到臨時檔案
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                        tmp_file.write(parent_file.read())
+                        tmp_pdf_path = tmp_file.name
+
+                    # 提取高解析度圖片
+                    pdf_extractor = PDFImageExtractor(target_dpi=300)
+                    parent_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
+
+                    # 清理臨時檔案
+                    import os
+                    os.unlink(tmp_pdf_path)
+
+                    if parent_image is not None:
+                        st.session_state.parent_drawing = parent_image
+                        st.image(
+                            cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
+                            caption=f"父圖（PDF 渲染）: {parent_file.name}",
+                            use_container_width=True
+                        )
+                        h, w = parent_image.shape[:2]
+                        st.success(f"✅ PDF 已成功轉換 | 解析度: {w} × {h} px (300 DPI)")
+                    else:
+                        st.error("無法渲染 PDF")
+                        st.session_state.parent_drawing = None
+
+            except Exception as e:
+                st.error(f"PDF 處理失敗: {str(e)}")
+                st.session_state.parent_drawing = None
+
         else:
-            st.session_state.parent_drawing = None
-            st.caption("未上傳父圖（將僅依子圖特徵判定）")
-    
+            # 一般圖片檔案
+            parent_bytes = np.asarray(bytearray(parent_file.read()), dtype=np.uint8)
+            parent_image = cv2.imdecode(parent_bytes, cv2.IMREAD_COLOR)
+
+            if parent_image is not None:
+                st.session_state.parent_drawing = parent_image
+                st.image(
+                    cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
+                    caption=f"父圖: {parent_file.name}",
+                    use_container_width=True
+                )
+                h, w = parent_image.shape[:2]
+                st.caption(f"已載入父圖 | 尺寸: {w} × {h} px")
+            else:
+                st.error("無法讀取父圖")
+                st.session_state.parent_drawing = None
+    else:
+        st.session_state.parent_drawing = None
+        st.caption("未上傳父圖（將僅依子圖特徵判定）")
+
     # 子圖上傳（必填）
-    st.markdown("#### 子圖（必填）- 零件局部特徵")
+    st.markdown("#### 📄 上傳零件圖 (Child Drawing)")
     uploaded_file = st.file_uploader(
         "選擇子圖檔案 *",
         type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],

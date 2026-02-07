@@ -151,7 +151,7 @@ class ManufacturingPipeline:
     
     def recognize(
         self,
-        image: Union[str, np.ndarray],
+        image: Optional[Union[str, np.ndarray]],
         parent_image: Optional[Union[str, np.ndarray]] = None,
         top_n: Optional[int] = None,
         min_confidence: float = 0.3,
@@ -181,6 +181,7 @@ class ManufacturingPipeline:
         
         # Parse parent image (optional)
         parent_context = None
+        parent_context_text = ""
         if parent_image is not None:
             # Load parent image (支援 PDF)
             if isinstance(parent_image, str):
@@ -203,6 +204,19 @@ class ManufacturingPipeline:
                 parent_img_array,
                 ocr_threshold
             )
+            parent_context_text = self.parent_parser.analyze_parent_context(parent_img_array)
+
+            if image is None:
+                processing_time = time.time() - start_time
+                return RecognitionResult(
+                    predictions=[],
+                    features=ExtractedFeatures(),
+                    parent_context=parent_context,
+                    total_time=processing_time,
+                    warnings=[
+                        f"這是父圖，已提取資訊：{parent_context_text}" if parent_context_text else "這是父圖，已提取資訊。"
+                    ]
+                )
         
         # Load child image (required)
         # 支援 PDF 檔案自動轉換
@@ -224,11 +238,18 @@ class ManufacturingPipeline:
             image_path = None
         
         # Extract features from child image
+        parent_prompt = ""
+        if parent_context_text:
+            parent_prompt = get_default_prompt(parent_context=parent_context_text).replace(
+                "{rag_examples}", ""
+            )
+
         features = self._extract_features(
             img_array,
             ocr_threshold,
             symbol_threshold,
-            image_path=image_path  # Pass image path for VLM
+            image_path=image_path,
+            prompt_override=parent_prompt
         )
 
         rag_references: List[Dict[str, Any]] = []
@@ -261,7 +282,9 @@ class ManufacturingPipeline:
         if rag_context_text and self.vlm_client:
             try:
                 input_image = image_path if image_path else img_array
-                prompt = get_default_prompt().replace("{rag_examples}", rag_context_text)
+                prompt = get_default_prompt(parent_context=parent_context_text).replace(
+                    "{rag_examples}", rag_context_text
+                )
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,
                     prompt=prompt,
@@ -310,7 +333,8 @@ class ManufacturingPipeline:
         image: np.ndarray,
         ocr_threshold: float,
         symbol_threshold: float,
-        image_path: Optional[str] = None
+        image_path: Optional[str] = None,
+        prompt_override: str = ""
     ) -> ExtractedFeatures:
         """
         Extract all features from image.
@@ -356,10 +380,10 @@ class ManufacturingPipeline:
             try:
                 # Use image_path if available, otherwise use numpy array
                 input_image = image_path if image_path else image
-                
+                prompt = prompt_override or self.vlm_prompt_template.user_prompt
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,
-                    prompt=self.vlm_prompt_template.user_prompt,
+                    prompt=prompt,
                     response_format="json",
                     temperature=0.0,
                     max_tokens=2000

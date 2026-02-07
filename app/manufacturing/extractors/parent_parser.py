@@ -15,6 +15,7 @@ import cv2
 from dataclasses import dataclass
 
 from ..schema import OCRResult
+from .vlm_client import VLMClient
 
 
 @dataclass
@@ -82,6 +83,7 @@ class ParentImageParser:
             ocr_extractor: OCR 提取器實例
         """
         self.ocr_extractor = ocr_extractor
+        self.vlm_client = VLMClient()
         
         # 定義關鍵字規則 (來自 ChatGPT.txt)
         self.keyword_rules = {
@@ -192,6 +194,42 @@ class ParentImageParser:
         context.triggered_processes = self._trigger_processes(context)
         
         return context
+
+    def analyze_parent_context(self, image: np.ndarray) -> str:
+        """
+        Analyze parent drawing/BOM with VLM to extract global constraints.
+
+        Args:
+            image: Parent image as numpy array (BGR).
+
+        Returns:
+            str: Context text extracted from parent drawing.
+        """
+        if not self.vlm_client or not self.vlm_client.is_available():
+            return ""
+
+        prompt = """
+你是一位製造工程助理。這是一張組立圖或 BOM 表。
+請不要分析製程，而是提取全域規範資訊：
+1. 材質資訊
+2. 表面處理要求（如酸洗、烤漆）
+3. 特殊註記或注意事項
+
+請用精簡的條列文字回覆，不要輸出 JSON。
+""".strip()
+
+        try:
+            result = self.vlm_client.analyze_image(
+                image_path=image,
+                prompt=prompt,
+                response_format="text",
+                temperature=0.0,
+                max_tokens=800
+            )
+            return result if isinstance(result, str) else ""
+        except Exception as e:
+            print(f"Warning: Parent VLM analysis failed: {e}")
+            return ""
     
     def _detect_material(self, text: str) -> Optional[str]:
         """檢測材質"""

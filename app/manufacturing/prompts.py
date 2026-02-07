@@ -496,7 +496,7 @@ def _get_few_shot_examples(language: str = "zh-TW") -> List[Dict[str, Any]]:
 
 
 # Convenience function for quick access
-def get_default_prompt() -> str:
+def get_default_prompt(parent_context: str = "") -> str:
     """
     Generate the main prompt for VLM analysis.
     Now includes specific Symbol knowledge and Process ID mapping.
@@ -527,8 +527,16 @@ def get_default_prompt() -> str:
         "reasoning": "你的判斷理由 (請引用看到的具體符號)"
         }
     """
-    return """
-你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
+    parent_section = ""
+    if parent_context:
+        parent_section = (
+            "【全域規範 (來自父圖/BOM)】\n"
+            f"{parent_context}\n"
+            "(請注意：子圖的材質與後處理必須遵循上述規範)\n\n"
+        )
+
+    return f"""
+{parent_section}你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
 請嚴格遵守代碼表，禁止自行新增或改寫代碼含義。
 
 代碼表 (Knowledge Base)：
