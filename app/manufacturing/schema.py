@@ -302,6 +302,9 @@ class RecognitionResult:
     # Diagnostics
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
+
+    # RAG references (optional)
+    rag_references: List[Dict[str, Any]] = field(default_factory=list)
     
     def to_dict(self) -> Dict:
         """Convert to JSON-serializable dict"""
@@ -310,7 +313,8 @@ class RecognitionResult:
             "features": self.features.to_dict(),
             "total_time": self.total_time,
             "warnings": self.warnings,
-            "errors": self.errors
+            "errors": self.errors,
+            "rag_references": self.rag_references
         }
         
         # Add parent_context if available

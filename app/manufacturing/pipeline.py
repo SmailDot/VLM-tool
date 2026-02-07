@@ -30,7 +30,7 @@ from .extractors import (
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
-from .prompts import EngineeringPrompts
+from .prompts import EngineeringPrompts, get_default_prompt
 from .decision import DecisionEngine
 from .decision.engine_v2 import DecisionEngineV2
 
@@ -156,7 +156,8 @@ class ManufacturingPipeline:
         min_confidence: float = 0.3,
         ocr_threshold: float = 0.5,
         symbol_threshold: float = 0.6,
-        frequency_filter: Optional[List[str]] = None
+        frequency_filter: Optional[List[str]] = None,
+        use_rag: bool = False
     ) -> RecognitionResult:
         """
         Recognize manufacturing processes from engineering drawing.
@@ -228,6 +229,49 @@ class ManufacturingPipeline:
             symbol_threshold,
             image_path=image_path  # Pass image path for VLM
         )
+
+        rag_references: List[Dict[str, Any]] = []
+        rag_context_text = ""
+
+        # RAG retrieval based on initial VLM analysis
+        if use_rag and features.vlm_analysis:
+            try:
+                from app.knowledge.manager import KnowledgeBaseManager
+
+                kb = KnowledgeBaseManager()
+                similar_cases = kb.retrieve_similar(features.vlm_analysis, top_k=3)
+                if similar_cases:
+                    rag_references = similar_cases
+                    rag_context_text = "\n".join(
+                        [
+                            (
+                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description')}]，"
+                                f"特徵{case['features'].get('detected_features', {}).get('geometry')}，"
+                                f"正確製程{case['correct_processes']}，"
+                                f"理由：{case['reasoning']}"
+                            )
+                            for i, case in enumerate(similar_cases)
+                        ]
+                    )
+            except Exception as e:
+                print(f"Warning: RAG retrieval failed: {e}")
+
+        # If RAG context exists, re-run VLM with injected prompt
+        if rag_context_text and self.vlm_client:
+            try:
+                input_image = image_path if image_path else img_array
+                prompt = get_default_prompt().replace("{rag_examples}", rag_context_text)
+                vlm_result = self.vlm_client.analyze_image(
+                    image_path=input_image,
+                    prompt=prompt,
+                    response_format="json",
+                    temperature=0.0,
+                    max_tokens=2000
+                )
+                if vlm_result:
+                    features.vlm_analysis = vlm_result
+            except Exception as e:
+                print(f"Warning: RAG VLM analysis failed: {e}")
         
         # Run decision engine (pass parent_context if available)
         predictions = self.decision_engine.predict(
@@ -246,7 +290,8 @@ class ManufacturingPipeline:
             predictions=predictions,
             features=features,
             parent_context=parent_context,
-            total_time=processing_time
+            total_time=processing_time,
+            rag_references=rag_references
         )
         
         return result
