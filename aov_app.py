@@ -31,7 +31,6 @@ from components.style import apply_custom_style
 # 製程管理界面
 from components.process_manager import render_process_manager
 from components.sidebar import render_recognition_sidebar
-import pandas as pd
 
 # ==================== Page Config ====================
 
@@ -428,13 +427,20 @@ with col_right:
         
         st.divider()
 
-        # === [新增] 製程預測與人工校正 (整合表格) ===
+        # === [新增] 製程預測與人工校正 (互動卡片清單) ===
         st.markdown("### 製程預測與人工校正")
 
         pipeline = st.session_state.mfg_pipeline
-        process_defs: Dict[str, Dict] = {}
+        process_defs: Dict[str, Dict[str, object]] = {}
         if pipeline is not None:
-            process_defs = pipeline.decision_engine.processes
+            process_defs = {
+                pid: {
+                    "name": getattr(proc, "name", proc.get("name", ""))
+                    if isinstance(proc, dict)
+                    else getattr(proc, "name", "")
+                }
+                for pid, proc in pipeline.decision_engine.processes.items()
+            }
 
         def _sorted_process_options() -> List[str]:
             def _sort_key(pid: str) -> tuple:
@@ -459,49 +465,74 @@ with col_right:
 
         options = _sorted_process_options()
 
-        base_rows = []
-        for pred in result.predictions:
-            base_rows.append({
-                "啟用": True,
-                "製程代號": _display_label(pred.process_id),
-                "製程名稱": pred.name,
-                "信心度": pred.confidence,
-                "判斷依據(Reasoning)": pred.reasoning
-            })
+        if "editing_predictions" not in st.session_state:
+            st.session_state.editing_predictions = []
 
-        if "prediction_editor" not in st.session_state:
-            st.session_state.prediction_editor = pd.DataFrame(base_rows)
+        if "editing_source_signature" not in st.session_state:
+            st.session_state.editing_source_signature = None
 
-        # Sync names based on selected IDs
-        current_df = st.session_state.prediction_editor.copy()
-        if not current_df.empty:
-            current_df["製程代號"] = current_df["製程代號"].fillna("")
-            current_df["啟用"] = current_df["啟用"].fillna(False)
-            current_df["判斷依據(Reasoning)"] = current_df["判斷依據(Reasoning)"].fillna("")
-            current_df["製程名稱"] = current_df["製程代號"].apply(
-                lambda x: process_defs.get(_extract_id(x), {}).get("name", "")
-            )
-
-        edited_df = st.data_editor(
-            current_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            column_config={
-                "啟用": st.column_config.CheckboxColumn("啟用"),
-                "製程代號": st.column_config.SelectboxColumn(
-                    "製程代號",
-                    options=options
-                ),
-                "製程名稱": st.column_config.TextColumn("製程名稱", disabled=True),
-                "信心度": st.column_config.NumberColumn("信心度", format="%.2f", disabled=True),
-                "判斷依據(Reasoning)": st.column_config.TextColumn(
-                    "判斷依據(Reasoning)",
-                    help="每列獨立可編輯"
-                )
-            }
+        signature = "|".join(
+            [f"{p.process_id}:{p.confidence:.3f}:{p.reasoning}" for p in result.predictions]
         )
 
-        st.session_state.prediction_editor = edited_df
+        if st.session_state.editing_source_signature != signature:
+            st.session_state.editing_predictions = [
+                {
+                    "process_id": pred.process_id,
+                    "process_name": pred.name,
+                    "confidence": pred.confidence,
+                    "reasoning": pred.reasoning
+                }
+                for pred in result.predictions
+            ]
+            st.session_state.editing_source_signature = signature
+
+        for idx, item in enumerate(st.session_state.editing_predictions):
+            with st.container(border=True):
+                col_title, col_conf, col_action = st.columns([4, 3, 1])
+
+                with col_title:
+                    st.markdown(
+                        f"**{item['process_id']} - {item['process_name']}**"
+                    )
+
+                with col_conf:
+                    st.progress(item["confidence"])
+                    st.caption(f"信心度: {item['confidence'] * 100:.1f}%")
+
+                with col_action:
+                    if st.button("🗑️ 刪除", key=f"del_{idx}"):
+                        st.session_state.editing_predictions.pop(idx)
+                        st.rerun()
+
+                updated_reasoning = st.text_area(
+                    "判斷依據 (Reasoning)",
+                    value=item["reasoning"],
+                    height=100,
+                    key=f"reason_{idx}"
+                )
+                item["reasoning"] = updated_reasoning
+
+        st.markdown("#### 新增製程")
+        col_add1, col_add2 = st.columns([4, 1])
+        with col_add1:
+            selected_process = st.selectbox(
+                "選擇製程",
+                options=options,
+                key="add_process_select"
+            )
+        with col_add2:
+            if st.button("➕ 加入", key="add_process_button"):
+                new_id = _extract_id(selected_process)
+                if new_id:
+                    new_name = process_defs.get(new_id, {}).get("name", "")
+                    st.session_state.editing_predictions.append({
+                        "process_id": new_id,
+                        "process_name": new_name,
+                        "confidence": 0.5,
+                        "reasoning": ""
+                    })
+                    st.rerun()
 
         col1, col2 = st.columns([1, 4])
         with col1:
@@ -511,25 +542,17 @@ with col_right:
                 else:
                     from app.knowledge.manager import KnowledgeBaseManager
 
-                    cleaned_rows = edited_df.copy()
-                    cleaned_rows["製程代號"] = cleaned_rows["製程代號"].fillna("")
-                    cleaned_rows["啟用"] = cleaned_rows["啟用"].fillna(False)
-                    cleaned_rows["判斷依據(Reasoning)"] = cleaned_rows[
-                        "判斷依據(Reasoning)"
-                    ].fillna("")
-
-                    enabled_rows = cleaned_rows[cleaned_rows["啟用"] == True]
+                    enabled_rows = st.session_state.editing_predictions
                     correct_processes = [
-                        _extract_id(label)
-                        for label in enabled_rows["製程代號"].tolist()
-                        if _extract_id(label)
+                        item["process_id"]
+                        for item in enabled_rows
+                        if item.get("process_id")
                     ]
-                    reasoning_lines = []
-                    for _, row in enabled_rows.iterrows():
-                        pid = _extract_id(row["製程代號"])
-                        text = row["判斷依據(Reasoning)"]
-                        if pid:
-                            reasoning_lines.append(f"{pid}: {text}")
+                    reasoning_lines = [
+                        f"{item['process_id']}: {item.get('reasoning', '')}"
+                        for item in enabled_rows
+                        if item.get("process_id")
+                    ]
 
                     kb_manager = KnowledgeBaseManager()
                     kb_manager.add_entry(
