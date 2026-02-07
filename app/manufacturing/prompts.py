@@ -498,17 +498,76 @@ def _get_few_shot_examples(language: str = "zh-TW") -> List[Dict[str, Any]]:
 # Convenience function for quick access
 def get_default_prompt() -> str:
     """
-    Get default process recognition prompt (standard detail level).
+    Generate the main prompt for VLM analysis.
+    Now includes specific Symbol knowledge and Process ID mapping.
     
     Returns:
-        Complete prompt string ready for VLM
+        請分析這張鈑金工程圖，並以 JSON 格式輸出你的發現。
+
+        重要：你必須嚴格遵守以下的製程代號對照表，不可發明代號：
+        - F01: 焊接 (特徵：三角形符號 △、箭頭指向接合處、Weld字樣)
+        - D01: 折彎 (特徵：L型、U型、折彎線、展開圖)
+        - D04: 折彎/植零件 (特徵：同時有折彎和壓鉚螺母/螺柱)
+        - C05: M3048/沖孔 (特徵：大量孔洞、百葉窗、特殊成形)
+        - D06: 植零件 (特徵：壓鉚螺母、螺柱)
+
+        特殊符號教學：
+        1. 如果看到 "4|4△" 且有箭頭指向線條，代表線條上的這個地方是「焊接 (F01)」。
+        2. 如果看到 "R5" 或 "90°" 標註，這是「折彎 (D01)」。
+        3. 請忽略尺寸標註線與輔助線，不要把它們當成折彎線。
+
+        請輸出如下 JSON 格式：
+        {
+        "shape_description": "描述零件形狀 (如 L型支架)",
+        "detected_features": {
+        "geometry": ["特徵1", "特徵2"],
+        "symbols": ["看到的符號文字"]
+        },
+        "suggested_process_ids": ["F01", "D01"],
+        "reasoning": "你的判斷理由 (請引用看到的具體符號)"
+        }
     """
-    template = EngineeringPrompts.get_process_recognition_prompt(
-        include_examples=False,
-        detail_level="standard"
-    )
-    
-    return f"{template.system_prompt}\n\n{template.user_prompt}"
+    return """
+你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
+請嚴格遵守代碼表，禁止自行新增或改寫代碼含義。
+
+代碼表 (Knowledge Base)：
+- C05: 必須是「沖孔/M3048」。特徵：圖面上有密集的圓孔、方孔。**絕對不是焊接**。
+- F01: 焊接。特徵：必須看到「△」、「4|4△」符號，或是有箭頭指向兩零件接合處。
+- D01: 折彎。特徵：實線標示的 L 型/U 型結構。
+
+輔助線規則：
+- 細線、虛線、帶有數字的引線（如「110」、「30」）是尺寸標註，不是折彎線。**請忽略**。
+
+思維鏈 (CoT) 要求：輸出 JSON 之前，請在 reasoning 欄位中進行「視覺過濾」。
+Step 1: 掃描所有線條，區分實線（輪廓）與細線（尺寸）。
+Step 2: 尋找特殊符號（三角形、R角）。
+Step 3: 根據代碼表匹配製程。
+
+輸出格式：保持原本的 JSON 結構，**不要包含任何其他文字**。
+
+```json
+{
+  "shape_description": "零件形狀的簡要描述",
+  "overall_complexity": "簡單/中等/複雜",
+  "detected_features": {
+    "geometry": ["特徵1", "特徵2"],
+    "symbols": ["符號1", "符號2"],
+    "text_annotations": ["標註1", "標註2"],
+    "material_info": "材質資訊或null"
+  },
+  "suggested_process_ids": ["C05", "D01", "F01"],
+  "confidence_scores": {
+    "C05": 0.95,
+    "D01": 0.85,
+    "F01": 0.10
+  },
+  "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據",
+  "process_sequence": ["C05", "D01", "F01"]
+}
+```
+""".strip()
+
 
 
 # Export main classes and functions

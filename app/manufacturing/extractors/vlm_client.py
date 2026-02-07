@@ -13,6 +13,7 @@ Compatible with:
 from typing import Optional, Dict, Any, Union
 import base64
 import json
+import re
 from pathlib import Path
 import numpy as np
 import cv2
@@ -230,8 +231,14 @@ class VLMClient:
             if response_format == "json":
                 try:
                     # content is guaranteed to be str here (None check above)
-                    result = json.loads(content)
-                    return result
+                    match = re.search(r"\{.*\}", content, re.DOTALL)
+                    if match:
+                        json_str = match.group(0)
+                        return json.loads(json_str)
+
+                    if "```json" in content:
+                        content = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(content)
                 except json.JSONDecodeError as e:
                     print(f"Warning: Failed to parse response as JSON: {e}")
                     print(f"Raw response: {content}")
