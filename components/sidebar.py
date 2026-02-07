@@ -1,5 +1,61 @@
 
 import streamlit as st
+from typing import Dict, Any, Optional
+
+
+def render_recognition_sidebar(
+    container: Optional[Any] = None,
+    default_min_confidence: float = 0.25,
+    default_use_vlm: bool = False,
+    default_use_rag: bool = False
+) -> Dict[str, Any]:
+    """
+    Render recognition controls in the sidebar.
+
+    Returns:
+        Dict[str, Any]: Settings for recognition.
+    """
+    target = container if container is not None else st.sidebar
+
+    if "use_vlm" not in st.session_state:
+        st.session_state.use_vlm = default_use_vlm
+    if "use_rag" not in st.session_state:
+        st.session_state.use_rag = default_use_rag
+    if "min_confidence" not in st.session_state:
+        st.session_state.min_confidence = default_min_confidence
+
+    with target:
+        st.title("🔧 系統設定")
+
+        use_vlm = st.checkbox(
+            "啟用 VLM 視覺語言模型",
+            value=st.session_state.use_vlm
+        )
+        st.session_state.use_vlm = use_vlm
+
+        use_rag = st.checkbox(
+            "└─ 開啟知識庫輔助 (RAG)",
+            value=st.session_state.use_rag if use_vlm else False,
+            disabled=not use_vlm
+        )
+        st.session_state.use_rag = use_rag if use_vlm else False
+
+        min_confidence = st.slider(
+            "信心度門檻",
+            min_value=0.1,
+            max_value=0.9,
+            value=st.session_state.min_confidence,
+            step=0.01,
+            help="只顯示超過門檻的製程"
+        )
+        st.session_state.min_confidence = min_confidence
+
+    return {
+        "use_vlm": st.session_state.use_vlm,
+        "use_rag": st.session_state.use_rag,
+        "min_confidence": st.session_state.min_confidence
+    }
+
 
 def render_sidebar(engine):
     """
@@ -7,7 +63,7 @@ def render_sidebar(engine):
     """
     with st.sidebar:
         st.header("System Info")
-        
+
         # Access safely in case engine is still initializing or lib load failed
         try:
             schema_ver = engine.lib_manager.data.get('schema_version', 'N/A')
@@ -16,16 +72,16 @@ def render_sidebar(engine):
             contrib_count = len(libs.get('contributed', {}))
         except Exception:
             schema_ver, official_count, contrib_count = "Error", 0, 0
-        
+
         st.caption(f"Ver: {schema_ver}")
         st.caption(f"Official: {official_count}")
         st.caption(f"Contrib: {contrib_count}")
-        
+
         st.divider()
-        
+
         st.header("LLM Settings")
         st.caption("Set up LLM API for intelligence")
-        
+
         # Ensure session state exists
         if 'use_mock_llm' not in st.session_state:
             st.session_state.use_mock_llm = True
@@ -33,10 +89,10 @@ def render_sidebar(engine):
             st.session_state.llm_api_key = ""
         if 'llm_base_url' not in st.session_state:
             st.session_state.llm_base_url = "https://api.openai.com/v1"
-        
+
         use_mock = st.toggle("使用 Mock 模式 (測試用)", value=st.session_state.use_mock_llm)
         st.session_state.use_mock_llm = use_mock
-        
+
         if not use_mock:
             # 1. 定義預設設定 (Presets) - Updated 2025.01 (Gemini 2.5 Era)
             PROVIDERS = {
@@ -44,7 +100,7 @@ def render_sidebar(engine):
                     "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
                     "models": [
                         "gemini-2.0-flash",
-                        "gemini-2.0-flash-exp", 
+                        "gemini-2.0-flash-exp",
                         "gemini-2.5-flash",
                         "gemini-exp-1206"
                     ],
@@ -79,41 +135,41 @@ def render_sidebar(engine):
 
             # 2. 選擇服務商 (Provider)
             provider = st.selectbox(
-                "選擇服務商 (Provider)", 
+                "選擇服務商 (Provider)",
                 list(PROVIDERS.keys()),
                 index=0,
                 help="選擇後會自動帶入對應的 URL 與模型建議"
             )
-            
+
             selected_preset = PROVIDERS[provider]
-            
+
             # 3. Base URL (Auto-filled but editable)
             # 使用 key 來強制更新預設值，當 provider 改變時
             base_url = st.text_input(
-                "Base URL", 
+                "Base URL",
                 value=selected_preset["url"],
                 help=selected_preset["help"],
-                key=f"url_{provider}" # Trick to auto-update value when provider changes
+                key=f"url_{provider}"  # Trick to auto-update value when provider changes
             )
-            
+
             # 4. API Key
             api_key = st.text_input("API Key", type="password", value=st.session_state.llm_api_key)
-            
+
             # 5. Model Selection
             # 合併預設模型與「手動輸入」選項
             model_options = selected_preset["models"] + ["Custom Input..."]
-            
+
             selected_model_option = st.selectbox(
                 "Model Name",
                 model_options,
                 help="Select a model or choose Custom Input"
             )
-            
+
             if selected_model_option == "Custom Input...":
                 final_model_name = st.text_input("Enter Model Name", placeholder="e.g. gpt-4-32k")
             else:
                 final_model_name = selected_model_option
-            
+
             # Connection Test Button
             if st.button("Test Connection", use_container_width=True):
                 with st.spinner("Testing connection..."):
@@ -130,11 +186,11 @@ def render_sidebar(engine):
                 st.session_state.llm_api_key = api_key
                 st.session_state.llm_base_url = base_url
                 st.session_state.llm_model_name = final_model_name
-                
+
                 # Show status
                 st.caption(f"Provider: {provider}")
             else:
                 st.warning("Please enter API Key and Model Name")
-        
+
         st.divider()
         st.caption("NKUST Vision Lab")

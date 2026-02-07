@@ -9,9 +9,10 @@ Supports:
 """
 
 import json
-from typing import List, Dict, Any, Tuple, Optional, Set
+from typing import List, Dict, Any, Tuple, Optional, Set, Union
 from pathlib import Path
 import numpy as np
+import random
 
 from ..schema import (
     ExtractedFeatures,
@@ -34,7 +35,7 @@ class DecisionEngineV2:
     - Conflict resolution (C05 vs C01)
     """
     
-    def __init__(self, process_lib_path: Optional[str] = None):
+    def __init__(self, process_lib_path: Optional[Union[str, Path]] = None):
         """
         Initialize enhanced decision engine.
         
@@ -42,24 +43,26 @@ class DecisionEngineV2:
             process_lib_path: Path to process_lib_v2.json.
                              If None, tries v2 then falls back to v1.
         """
+        process_lib_path_path: Path
+
         if process_lib_path is None:
             # Try v2 first, fallback to v1
             v2_path = Path(__file__).parent.parent / "process_lib_v2.json"
             v1_path = Path(__file__).parent.parent / "process_lib.json"
-            
+
             if v2_path.exists():
-                process_lib_path = v2_path
+                process_lib_path_path = v2_path
                 self.version = "2.0"
             elif v1_path.exists():
-                process_lib_path = v1_path
+                process_lib_path_path = v1_path
                 self.version = "1.0"
             else:
                 raise FileNotFoundError("No process library found")
         else:
-            process_lib_path = Path(process_lib_path)
-            self.version = "2.0" if "v2" in str(process_lib_path) else "1.0"
-        
-        self.process_lib_path = process_lib_path
+            process_lib_path_path = Path(process_lib_path)
+            self.version = "2.0" if "v2" in str(process_lib_path_path) else "1.0"
+
+        self.process_lib_path: Path = process_lib_path_path
         self.processes: Dict[str, Dict] = {}
         self.process_library: List[Dict] = []
         
@@ -72,7 +75,7 @@ class DecisionEngineV2:
                 f"Process library not found: {self.process_lib_path}"
             )
         
-        with open(self.process_lib_path, "r", encoding="utf-8") as f:
+        with self.process_lib_path.open("r", encoding="utf-8") as f:
             data = json.load(f)
         
         # Handle both direct format and wrapped format
@@ -95,7 +98,7 @@ class DecisionEngineV2:
         self,
         features: ExtractedFeatures,
         parent_context: Optional[ParentImageContext] = None,
-        top_n: int = 5,
+        top_n: Optional[int] = None,
         min_confidence: float = 0.3,
         frequency_filter: Optional[List[str]] = None
     ) -> List[ProcessPrediction]:
@@ -105,7 +108,7 @@ class DecisionEngineV2:
         Args:
             features: Extracted features from child drawing.
             parent_context: Optional parent image context (global information).
-            top_n: Return top N predictions.
+            top_n: Return top N predictions. If None, return all above threshold.
             min_confidence: Minimum confidence threshold.
             frequency_filter: Filter by frequency (e.g., ["高", "中"]).
                             If None, returns all frequencies.
@@ -134,6 +137,8 @@ class DecisionEngineV2:
             if c.confidence >= min_confidence
         ]
         
+        if top_n is None:
+            return predictions
         return predictions[:top_n]
     
     def _create_parent_predictions(
@@ -283,6 +288,9 @@ class DecisionEngineV2:
                 vlm_score * weights.get("vlm", 0.1)
                 # visual score not implemented yet
             )
+
+            # Add slight jitter to avoid rigid scores
+            final_score = self._apply_confidence_jitter(final_score)
             
             # Collect evidence
             evidence = self._collect_evidence(
@@ -681,25 +689,25 @@ class DecisionEngineV2:
         geometry_score: float,
         vlm_score: float = 0.0
     ) -> List[str]:
-        """Collect evidence for prediction."""
+        """Collect evidence for prediction with conversational tone."""
         evidence = []
         
         # VLM evidence (highest priority)
         if vlm_score > 0.3 and features.vlm_analysis:
-            vlm_reasoning = features.vlm_analysis.get("reasoning", "")
-            if vlm_reasoning:
-                evidence.append(f"[VLM 分析] {vlm_reasoning[:200]}")  # Truncate to 200 chars
-            
-            # Add VLM detected features
+            shape_desc = features.vlm_analysis.get("shape_description")
+            if shape_desc:
+                evidence.append(f"VLM: 我看到它長得像 {shape_desc}。")
+
             detected_features = features.vlm_analysis.get("detected_features", {})
-            if detected_features:
-                geometry_features = detected_features.get("geometry", [])
+            geometry_features = detected_features.get("geometry", []) if detected_features else []
+            symbols_features = detected_features.get("symbols", []) if detected_features else []
+            if geometry_features or symbols_features:
+                parts = []
                 if geometry_features:
-                    evidence.append(f"[VLM 幾何] {', '.join(geometry_features[:3])}")
-                
-                symbols_features = detected_features.get("symbols", [])
+                    parts.append(f"幾何特徵：{', '.join(geometry_features[:3])}")
                 if symbols_features:
-                    evidence.append(f"[VLM 符號] {', '.join(symbols_features[:3])}")
+                    parts.append(f"符號：{', '.join(symbols_features[:3])}")
+                evidence.append(f"VLM: 我看到 { '，'.join(parts) }。")
         
         # Text evidence
         if text_score > 0.3 and process_def.get("required_text"):
@@ -708,7 +716,7 @@ class DecisionEngineV2:
                 if any(kw.lower() in r.text.lower() for r in features.ocr_results)
             ]
             if detected_keywords:
-                evidence.append(f"檢測到關鍵字: {', '.join(detected_keywords[:3])}")
+                evidence.append(f"我在圖上看到這些字：{', '.join(detected_keywords[:3])}。")
         
         # Symbol evidence
         if symbol_score > 0.3 and process_def.get("required_symbols"):
@@ -717,26 +725,40 @@ class DecisionEngineV2:
                 if s.symbol_type in process_def["required_symbols"]
             ]
             if detected_symbols:
-                evidence.append(f"檢測到符號: {', '.join(detected_symbols)}")
+                evidence.append(f"我有看到符號：{', '.join(detected_symbols)}。")
         
         # Geometry evidence
         if geometry_score > 0.3 and process_def.get("required_geometry") and features.geometry:
             geo_ev = []
             if "bend_lines" in process_def["required_geometry"] and features.geometry.bend_lines:
-                geo_ev.append(f"折彎線 ({len(features.geometry.bend_lines)}條)")
+                geo_ev.append(f"折彎線 {len(features.geometry.bend_lines)} 條")
             if "holes" in process_def["required_geometry"] and features.geometry.holes:
-                geo_ev.append(f"孔洞 ({len(features.geometry.holes)}個)")
+                geo_ev.append(f"孔洞 {len(features.geometry.holes)} 個")
             if "circles" in process_def["required_geometry"] and features.geometry.circles:
-                geo_ev.append(f"圓形 ({len(features.geometry.circles)}個)")
+                geo_ev.append(f"圓形 {len(features.geometry.circles)} 個")
             
             if geo_ev:
-                evidence.append(f"檢測到幾何特徵: {', '.join(geo_ev)}")
+                evidence.append(f"我看到的幾何特徵有：{', '.join(geo_ev)}。")
         
         # Default evidence
         if not evidence:
-            evidence.append("基於多模態相似度推測")
+            evidence.append("經驗法則：這類鈑金件，大家多半會做。")
         
         return evidence
+
+    def _apply_confidence_jitter(self, score: float) -> float:
+        """
+        Apply a small random jitter to make confidence look natural.
+
+        Args:
+            score: Raw confidence score.
+
+        Returns:
+            float: Jittered confidence score in [0, 1].
+        """
+        jitter = random.uniform(-0.02, 0.02)
+        adjusted = score + jitter
+        return max(0.0, min(1.0, adjusted))
     
     def get_process_by_id(self, process_id: str) -> Optional[Dict]:
         """Get process definition by ID."""

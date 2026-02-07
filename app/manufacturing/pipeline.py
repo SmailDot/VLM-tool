@@ -8,7 +8,7 @@ End-to-end workflow:
 4. Return results with confidence and evidence
 """
 
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 from pathlib import Path
 import numpy as np
 import cv2
@@ -33,6 +33,7 @@ from .extractors.vlm_client import VLMClient
 from .prompts import EngineeringPrompts, get_default_prompt
 from .decision import DecisionEngine
 from .decision.engine_v2 import DecisionEngineV2
+from .schema import GeometryFeatures
 
 
 class ManufacturingPipeline:
@@ -152,7 +153,7 @@ class ManufacturingPipeline:
         self,
         image: Union[str, np.ndarray],
         parent_image: Optional[Union[str, np.ndarray]] = None,
-        top_n: int = 5,
+        top_n: Optional[int] = None,
         min_confidence: float = 0.3,
         ocr_threshold: float = 0.5,
         symbol_threshold: float = 0.6,
@@ -274,13 +275,21 @@ class ManufacturingPipeline:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
         # Run decision engine (pass parent_context if available)
-        predictions = self.decision_engine.predict(
-            features,
-            parent_context=parent_context,
-            top_n=top_n,
-            min_confidence=min_confidence,
-            frequency_filter=frequency_filter
-        )
+        if isinstance(self.decision_engine, DecisionEngineV2):
+            predictions = self.decision_engine.predict(
+                features,
+                parent_context=parent_context,
+                top_n=top_n,
+                min_confidence=min_confidence,
+                frequency_filter=frequency_filter
+            )
+        else:
+            fallback_top_n = top_n if top_n is not None else len(self.decision_engine.processes)
+            predictions = self.decision_engine.predict(
+                features,
+                top_n=fallback_top_n,
+                min_confidence=min_confidence
+            )
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -367,7 +376,7 @@ class ManufacturingPipeline:
         
         return ExtractedFeatures(
             ocr_results=ocr_results,
-            geometry=geometry,
+            geometry=geometry or GeometryFeatures(),
             symbols=symbols,
             visual_embedding=visual_embedding,
             tolerances=tolerances,  # NEW!
@@ -398,15 +407,14 @@ class ManufacturingPipeline:
                 # Create error result
                 results.append(RecognitionResult(
                     predictions=[],
-                    extracted_features=ExtractedFeatures(
+                    features=ExtractedFeatures(
                         ocr_results=[],
-                        geometry=None,
+                        geometry=GeometryFeatures(),
                         symbols=[],
                         visual_embedding=None
                     ),
-                    image_path=str(image) if isinstance(image, str) else None,
-                    processing_time=0.0,
-                    diagnostics={"error": str(e)}
+                    total_time=0.0,
+                    errors=[str(e)]
                 ))
         
         return results

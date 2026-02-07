@@ -1,6 +1,9 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
+from typing import List
+
+from app.manufacturing.schema import RecognitionResult
 
 # Try importing Pyvis
 try:
@@ -86,3 +89,57 @@ def render_pipeline_graph(pipeline):
     else:
         st.warning("無法載入流程圖模組 (pyvis)。請確認已安裝：pip install pyvis")
 
+
+def render_predictions(result: RecognitionResult, min_confidence: float) -> None:
+    """
+    Render prediction list with collapsed expanders.
+
+    Args:
+        result: RecognitionResult to display.
+        min_confidence: Confidence threshold for display.
+    """
+    predictions = [p for p in result.predictions if p.confidence >= min_confidence]
+
+    if not predictions:
+        st.warning("⚠️ 未找到符合條件的製程")
+        st.info("💡 **建議**:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
+        return
+
+    for i, pred in enumerate(predictions, 1):
+        confidence_pct = pred.confidence * 100
+
+        if confidence_pct >= 70:
+            color_emoji = "🟢"
+            color_text = "高"
+            color_style = "color: #28a745; font-weight: bold;"
+        elif confidence_pct >= 50:
+            color_emoji = "🟡"
+            color_text = "中"
+            color_style = "color: #ffc107; font-weight: bold;"
+        else:
+            color_emoji = "🔴"
+            color_text = "低"
+            color_style = "color: #dc3545; font-weight: bold;"
+
+        with st.expander(
+            f"{color_emoji} **{i}. {pred.name}** ({confidence_pct:.1f}%) - {color_text}信心度",
+            expanded=False
+        ):
+            col_prog1, col_prog2 = st.columns([3, 1])
+            with col_prog1:
+                st.progress(pred.confidence)
+            with col_prog2:
+                st.markdown(
+                    f"<span style='{color_style}'>{confidence_pct:.1f}%</span>",
+                    unsafe_allow_html=True
+                )
+
+            if pred.reasoning:
+                st.markdown("**辨識依據:**")
+                for evidence_item in pred.reasoning.split("\n"):
+                    if evidence_item.strip():
+                        st.markdown(f"- {evidence_item}")
+            else:
+                st.caption("(依據經驗判斷)")
+
+            st.caption(f"製程 ID: {pred.process_id}")

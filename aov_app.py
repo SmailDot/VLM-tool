@@ -29,6 +29,8 @@ from components.style import apply_custom_style
 
 # 製程管理界面
 from components.process_manager import render_process_manager
+from components.sidebar import render_recognition_sidebar
+from components.visualizer import render_predictions
 
 # ==================== Page Config ====================
 
@@ -59,6 +61,12 @@ if 'recognition_result' not in st.session_state:
 
 if 'use_rag' not in st.session_state:
     st.session_state.use_rag = False
+
+if 'use_vlm' not in st.session_state:
+    st.session_state.use_vlm = False
+
+if 'min_confidence' not in st.session_state:
+    st.session_state.min_confidence = 0.25
 
 if 'temp_file_path' not in st.session_state:
     st.session_state.temp_file_path = None
@@ -268,12 +276,8 @@ with col_left:
                     help="辨識焊接符號、表面處理標記等"
                 )
                 
-                use_vlm = st.checkbox(
-                    "🤖 VLM 視覺語言模型分析 (實驗功能)",
-                    value=False,
-                    help="使用 AI 視覺語言模型進行製程辨識 (需要 LM Studio 運行中)"
-                )
-                
+                use_vlm = st.session_state.use_vlm
+
                 # VLM 狀態檢查
                 if use_vlm:
                     from app.manufacturing.extractors.vlm_client import VLMClient
@@ -287,23 +291,6 @@ with col_left:
                         st.error(f"❌ VLM 初始化失敗: {str(e)}")
             
             with st.expander("進階選項", expanded=False):
-                top_n = st.slider(
-                    "顯示前 N 個預測結果",
-                    min_value=3,
-                    max_value=15,
-                    value=8,
-                    step=1
-                )
-                
-                min_confidence = st.slider(
-                    "最低信心度門檻",
-                    min_value=0.1,
-                    max_value=0.9,
-                    value=0.25,
-                    step=0.05,
-                    help="低於此門檻的預測結果將被過濾"
-                )
-                
                 st.markdown("**頻率過濾** (選擇要顯示的製程頻率)")
                 freq_options = st.multiselect(
                     "製程頻率",
@@ -354,8 +341,8 @@ with col_left:
                         result = st.session_state.mfg_pipeline.recognize(
                             drawing_image,
                             parent_image=parent_img,  # 傳遞父圖
-                            top_n=top_n,
-                            min_confidence=min_confidence,
+                            top_n=None,
+                            min_confidence=st.session_state.min_confidence,
                             frequency_filter=freq_options if freq_options else None,
                             use_rag=st.session_state.use_rag
                         )
@@ -536,49 +523,7 @@ with col_right:
         # 顯示預測結果
         if result.predictions:
             st.markdown("#### 製程預測結果")
-            
-            for i, pred in enumerate(result.predictions, 1):
-                confidence_pct = pred.confidence * 100
-                
-                # 信心度顏色標記
-                if confidence_pct >= 70:
-                    color_emoji = "🟢"
-                    color_text = "高"
-                    color_style = "color: #28a745; font-weight: bold;"  # 綠色
-                elif confidence_pct >= 50:
-                    color_emoji = "🟡"
-                    color_text = "中"
-                    color_style = "color: #ffc107; font-weight: bold;"  # 黃色
-                else:
-                    color_emoji = "🔴"
-                    color_text = "低"
-                    color_style = "color: #dc3545; font-weight: bold;"  # 紅色
-                
-                with st.expander(
-                    f"{color_emoji} **{i}. {pred.name}** ({confidence_pct:.1f}%) - {color_text}信心度",
-                    expanded=(i <= 3)  # 展開前3個結果
-                ):
-                    # 信心度進度條（帶顏色）
-                    col_prog1, col_prog2 = st.columns([3, 1])
-                    with col_prog1:
-                        st.progress(pred.confidence)
-                    with col_prog2:
-                        st.markdown(
-                            f"<span style='{color_style}'>{confidence_pct:.1f}%</span>",
-                            unsafe_allow_html=True
-                        )
-                    
-                    # 辨識依據
-                    if pred.reasoning:
-                        st.markdown("**辨識依據:**")
-                        for evidence_item in pred.reasoning.split("\n"):
-                            if evidence_item.strip():
-                                st.markdown(f"- {evidence_item}")
-                    else:
-                        st.caption("(基於視覺相似度推測)")
-                    
-                    # 製程資訊 (如果有的話)
-                    st.caption(f"製程 ID: {pred.process_id}")
+            render_predictions(result, st.session_state.min_confidence)
         else:
             st.warning("⚠️ 未找到符合條件的製程")
             st.info("💡 **建議**:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
@@ -720,7 +665,7 @@ with col_right:
             - 支援製程: {process_count}
             - 製程類別: 8 大類
             - 特徵提取: OCR + 幾何 + 符號 + 視覺 + VLM
-            - 決策引擎: 多模態融合評分
+            - 決策引擎: 綜合特徵評分
             
             **技術架構:**
             - OCR: PaddleOCR (多語言支援)
@@ -728,7 +673,7 @@ with col_right:
             - 符號: Template Matching
             - 視覺: DINOv2 (可選)
             - VLM: Vision Language Model (實驗功能, 需 LM Studio)
-            - 決策: 規則基礎 + 加權融合
+            - 決策: 規則基礎 + 綜合特徵評分
             """)
 
 # ==================== Footer ====================
@@ -789,12 +734,7 @@ with tab3:
 # ==================== Sidebar (Optional) ====================
 
 with st.sidebar:
-    st.title("🔧 系統設定")
-
-    st.session_state.use_rag = st.checkbox(
-        "✅ 啟用 Multi-modal RAG (知識庫輔助)",
-        value=st.session_state.use_rag
-    )
+    render_recognition_sidebar()
     
     # 系統狀態
     with st.expander("系統狀態", expanded=False):
@@ -841,7 +781,7 @@ with st.sidebar:
     **核心功能:**
     - 工程圖紙自動分析
     - {sidebar_process_count}製程自動辨識
-    - 多模態特徵融合
+    - 綜合特徵融合
     - 信心度評分與依據
     
     **Version**: 2.1.0 (Enhanced)  
