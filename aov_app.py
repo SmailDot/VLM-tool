@@ -18,6 +18,7 @@ import streamlit as st
 import cv2
 import numpy as np
 import time
+import tempfile
 from PIL import Image
 
 # 製程辨識核心模組
@@ -56,6 +57,12 @@ if 'parent_drawing' not in st.session_state:
 if 'recognition_result' not in st.session_state:
     st.session_state.recognition_result = None
 
+if 'use_rag' not in st.session_state:
+    st.session_state.use_rag = False
+
+if 'temp_file_path' not in st.session_state:
+    st.session_state.temp_file_path = None
+
 # 儲存上次的設定 (用於特徵視覺化)
 if 'last_settings' not in st.session_state:
     st.session_state.last_settings = {
@@ -81,7 +88,7 @@ st.divider()
 
 # ==================== Main Tabs ====================
 
-tab1, tab2 = st.tabs(["製程辨識", "製程管理"])
+tab1, tab2, tab3 = st.tabs(["製程辨識", "知識庫管理", "製程管理"])
 
 # ==================== Tab 1: 製程辨識 ====================
 
@@ -220,6 +227,11 @@ with col_left:
         
         if drawing_image is not None:
             st.session_state.uploaded_drawing = drawing_image
+
+            # Save temp image for knowledge base
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
+                cv2.imwrite(tmp_image.name, drawing_image)
+                st.session_state.temp_file_path = tmp_image.name
             
             # 顯示圖紙預覽
             st.image(
@@ -344,7 +356,8 @@ with col_left:
                             parent_image=parent_img,  # 傳遞父圖
                             top_n=top_n,
                             min_confidence=min_confidence,
-                            frequency_filter=freq_options if freq_options else None
+                            frequency_filter=freq_options if freq_options else None,
+                            use_rag=st.session_state.use_rag
                         )
                         elapsed = time.time() - start_time
                         
@@ -426,6 +439,54 @@ with col_right:
                 )
         
         st.divider()
+
+        # === [新增] 人工校正區塊 ===
+        st.markdown("### 製程預測與人工校正")
+
+        predicted_ids = [p.process_id for p in result.predictions]
+        pipeline = st.session_state.mfg_pipeline
+        if pipeline is not None:
+            all_process_ids = list(pipeline.decision_engine.processes.keys())
+        else:
+            all_process_ids = predicted_ids
+
+        corrected_ids = st.multiselect(
+            "校正製程 (可手動增減)",
+            options=all_process_ids,
+            default=predicted_ids
+        )
+
+        original_reasoning = "\n".join([p.reasoning for p in result.predictions if p.reasoning])
+        corrected_reasoning = st.text_area(
+            "校正判斷依據 (這將成為未來 AI 的學習教材)",
+            value=original_reasoning,
+            height=150
+        )
+
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("保存至知識庫"):
+                if not st.session_state.temp_file_path:
+                    st.error("找不到暫存圖片，請重新上傳圖檔")
+                else:
+                    from app.knowledge.manager import KnowledgeBaseManager
+
+                    kb_manager = KnowledgeBaseManager()
+                    kb_manager.add_entry(
+                        image_path=st.session_state.temp_file_path,
+                        features=result.features.vlm_analysis or {},
+                        correct_processes=corrected_ids,
+                        reasoning=corrected_reasoning
+                    )
+                    st.toast("已保存至知識庫")
+
+        if st.session_state.use_rag and result.rag_references:
+            with st.expander("本次推論參考的歷史案例 (RAG Context)"):
+                for ref in result.rag_references:
+                    st.info(
+                        f"參考案例：{ref['features'].get('shape_description')}\n"
+                        f"正確製程：{ref['correct_processes']}"
+                    )
         
         # 顯示父圖注意事項（如果有的話）
         if result.parent_context and result.parent_context.important_notes:
@@ -685,15 +746,55 @@ with col_footer2:
 with col_footer3:
     st.caption("[查看文件](MANUFACTURING_USER_GUIDE.md)")
 
-# ==================== Tab 2: 製程管理 ====================
+# ==================== Tab 2: 知識庫管理 ====================
 
 with tab2:
+    st.header("知識庫維護 (修正過去的錯誤)")
+
+    from app.knowledge.manager import KnowledgeBaseManager
+
+    kb_manager = KnowledgeBaseManager()
+    entries = kb_manager.db
+
+    pipeline = st.session_state.mfg_pipeline
+    if pipeline is not None:
+        all_process_ids = list(pipeline.decision_engine.processes.keys())
+    else:
+        all_process_ids = []
+
+    if not entries:
+        st.info("目前尚無知識庫條目")
+    else:
+        for entry in entries:
+            with st.expander(f"ID: {entry['id']} - {entry['features'].get('shape_description')}"):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.image(entry['image_rel_path'], caption="原始圖檔")
+                with col_b:
+                    new_processes = st.multiselect(
+                        "修正製程",
+                        options=all_process_ids,
+                        default=entry.get('correct_processes', []),
+                        key=f"edit_{entry['id']}"
+                    )
+                    if st.button("更新此條目", key=f"btn_{entry['id']}"):
+                        kb_manager.update_entry(entry['id'], {"correct_processes": new_processes})
+                        st.success("已更新！下次 RAG 會參考這個新答案。")
+
+# ==================== Tab 3: 製程管理 ====================
+
+with tab3:
     render_process_manager()
 
 # ==================== Sidebar (Optional) ====================
 
 with st.sidebar:
-    st.markdown("### 系統設定")
+    st.title("🔧 系統設定")
+
+    st.session_state.use_rag = st.checkbox(
+        "✅ 啟用 Multi-modal RAG (知識庫輔助)",
+        value=st.session_state.use_rag
+    )
     
     # 系統狀態
     with st.expander("系統狀態", expanded=False):
