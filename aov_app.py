@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import time
 import tempfile
+from typing import Dict, List
 from PIL import Image
 
 # 製程辨識核心模組
@@ -30,7 +31,7 @@ from components.style import apply_custom_style
 # 製程管理界面
 from components.process_manager import render_process_manager
 from components.sidebar import render_recognition_sidebar
-from components.visualizer import render_predictions
+import pandas as pd
 
 # ==================== Page Config ====================
 
@@ -427,28 +428,80 @@ with col_right:
         
         st.divider()
 
-        # === [新增] 人工校正區塊 ===
+        # === [新增] 製程預測與人工校正 (整合表格) ===
         st.markdown("### 製程預測與人工校正")
 
-        predicted_ids = [p.process_id for p in result.predictions]
         pipeline = st.session_state.mfg_pipeline
+        process_defs: Dict[str, Dict] = {}
         if pipeline is not None:
-            all_process_ids = list(pipeline.decision_engine.processes.keys())
-        else:
-            all_process_ids = predicted_ids
+            process_defs = pipeline.decision_engine.processes
 
-        corrected_ids = st.multiselect(
-            "校正製程 (可手動增減)",
-            options=all_process_ids,
-            default=predicted_ids
+        def _sorted_process_options() -> List[str]:
+            def _sort_key(pid: str) -> tuple:
+                prefix = pid[0] if pid else "Z"
+                return (prefix, pid)
+
+            return [
+                f"{pid} - {process_defs[pid].get('name', '')}"
+                for pid in sorted(process_defs.keys(), key=_sort_key)
+            ]
+
+        def _display_label(process_id: str) -> str:
+            if not process_id:
+                return ""
+            name = process_defs.get(process_id, {}).get("name", "")
+            return f"{process_id} - {name}" if name else process_id
+
+        def _extract_id(label: str) -> str:
+            if not isinstance(label, str):
+                return ""
+            return label.split(" - ")[0].strip()
+
+        options = _sorted_process_options()
+
+        base_rows = []
+        for pred in result.predictions:
+            base_rows.append({
+                "啟用": True,
+                "製程代號": _display_label(pred.process_id),
+                "製程名稱": pred.name,
+                "信心度": pred.confidence,
+                "判斷依據(Reasoning)": pred.reasoning
+            })
+
+        if "prediction_editor" not in st.session_state:
+            st.session_state.prediction_editor = pd.DataFrame(base_rows)
+
+        # Sync names based on selected IDs
+        current_df = st.session_state.prediction_editor.copy()
+        if not current_df.empty:
+            current_df["製程代號"] = current_df["製程代號"].fillna("")
+            current_df["啟用"] = current_df["啟用"].fillna(False)
+            current_df["判斷依據(Reasoning)"] = current_df["判斷依據(Reasoning)"].fillna("")
+            current_df["製程名稱"] = current_df["製程代號"].apply(
+                lambda x: process_defs.get(_extract_id(x), {}).get("name", "")
+            )
+
+        edited_df = st.data_editor(
+            current_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            column_config={
+                "啟用": st.column_config.CheckboxColumn("啟用"),
+                "製程代號": st.column_config.SelectboxColumn(
+                    "製程代號",
+                    options=options
+                ),
+                "製程名稱": st.column_config.TextColumn("製程名稱", disabled=True),
+                "信心度": st.column_config.NumberColumn("信心度", format="%.2f", disabled=True),
+                "判斷依據(Reasoning)": st.column_config.TextColumn(
+                    "判斷依據(Reasoning)",
+                    help="每列獨立可編輯"
+                )
+            }
         )
 
-        original_reasoning = "\n".join([p.reasoning for p in result.predictions if p.reasoning])
-        corrected_reasoning = st.text_area(
-            "校正判斷依據 (這將成為未來 AI 的學習教材)",
-            value=original_reasoning,
-            height=150
-        )
+        st.session_state.prediction_editor = edited_df
 
         col1, col2 = st.columns([1, 4])
         with col1:
@@ -458,12 +511,32 @@ with col_right:
                 else:
                     from app.knowledge.manager import KnowledgeBaseManager
 
+                    cleaned_rows = edited_df.copy()
+                    cleaned_rows["製程代號"] = cleaned_rows["製程代號"].fillna("")
+                    cleaned_rows["啟用"] = cleaned_rows["啟用"].fillna(False)
+                    cleaned_rows["判斷依據(Reasoning)"] = cleaned_rows[
+                        "判斷依據(Reasoning)"
+                    ].fillna("")
+
+                    enabled_rows = cleaned_rows[cleaned_rows["啟用"] == True]
+                    correct_processes = [
+                        _extract_id(label)
+                        for label in enabled_rows["製程代號"].tolist()
+                        if _extract_id(label)
+                    ]
+                    reasoning_lines = []
+                    for _, row in enabled_rows.iterrows():
+                        pid = _extract_id(row["製程代號"])
+                        text = row["判斷依據(Reasoning)"]
+                        if pid:
+                            reasoning_lines.append(f"{pid}: {text}")
+
                     kb_manager = KnowledgeBaseManager()
                     kb_manager.add_entry(
                         image_path=st.session_state.temp_file_path,
                         features=result.features.vlm_analysis or {},
-                        correct_processes=corrected_ids,
-                        reasoning=corrected_reasoning
+                        correct_processes=correct_processes,
+                        reasoning="\n".join(reasoning_lines)
                     )
                     st.toast("已保存至知識庫")
 
@@ -519,16 +592,6 @@ with col_right:
                             st.text(f"  {text}")
             
             st.divider()
-        
-        # 顯示預測結果
-        if result.predictions:
-            st.markdown("#### 製程預測結果")
-            render_predictions(result, st.session_state.min_confidence)
-        else:
-            st.warning("⚠️ 未找到符合條件的製程")
-            st.info("💡 **建議**:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
-        
-        st.divider()
         
         # 診斷資訊
         with st.expander("診斷資訊 (Diagnostics)", expanded=False):
