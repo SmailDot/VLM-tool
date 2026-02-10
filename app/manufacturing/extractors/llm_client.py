@@ -101,7 +101,11 @@ class LLMClient:
                         "process_id": item.get("process_id"),
                         "process_name": item.get("process_name")
                     })
-            payload["context"] = {"predictions": minimal_predictions}
+            payload_context = {"predictions": minimal_predictions}
+            available = context.get("available_processes") if isinstance(context, dict) else None
+            if isinstance(available, list) and available:
+                payload_context["available_processes"] = available
+            payload["context"] = payload_context
 
         messages: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": LLM_SYSTEM_PROMPT},
@@ -109,7 +113,25 @@ class LLMClient:
                 "role": "user",
                 "content": (
                     "請將以下口語指令解析為 JSON。\n"
-                    "輸出格式：{\"actions\":[...],\"rag_knowledge\":\"...\"}\n\n"
+                    "你可以自由理解自然語言，不要硬套規則。\n"
+                    "使用者可能會提供一份完整的製程分析報告。\n"
+                    "請掃描文字中提到的所有製程代碼（格式如 [C01], C01, K01）。\n"
+                    "如果使用者描述了該製程存在的理由（例如『因為有板金輪廓』），請視為 add。\n"
+                    "如果使用者說『不需要』、『移除』或『錯誤』，請視為 remove。\n"
+                    "必須精準提取 reason（理由）。\n"
+                    "target_id 必須是純代碼（例如 C01），不要包含括號；若看到 [C01] 請自動去除括號。\n"
+                    "若語句是條件式或不確定，請不要產生 action，而寫入 rag_knowledge。\n"
+                    "actions 只能包含 add/remove，target_id 優先從 available_processes 選擇；若無法對應可用 target_name。\n"
+                    "輸出格式：{\"actions\":[{\"type\":\"add|remove\",\"target_id\":\"C01\",\"target_name\":\"雷射切割\",\"reason\":\"...\"}],\"rag_knowledge\":\"...\"}\n\n"
+                    "範例：\n"
+                    "User Input: 這裡看到了折彎線，所以要有 [D01] 折彎。但是 [F01] 焊接是不對的，因為沒看到符號。\n"
+                    "Output: {\n"
+                    "  \"actions\": [\n"
+                    "    {\"type\": \"add\", \"target_id\": \"D01\", \"reason\": \"看到了折彎線\"},\n"
+                    "    {\"type\": \"remove\", \"target_id\": \"F01\", \"reason\": \"沒看到符號\"}\n"
+                    "  ],\n"
+                    "  \"rag_knowledge\": \"若有折彎線則需 D01；若無焊接符號則不應有 F01。\"\n"
+                    "}\n\n"
                     f"{json.dumps(payload, ensure_ascii=False)}"
                 )
             }

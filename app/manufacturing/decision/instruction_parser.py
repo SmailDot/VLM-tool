@@ -36,4 +36,16 @@ class InstructionParser:
         if not self.llm_client.is_available():
             return None
 
-        return self.llm_client.parse_instruction(instruction, context=context)
+        parsed = self.llm_client.parse_instruction(instruction, context=context)
+        if not parsed:
+            return parsed
+
+        actions = parsed.get("actions", [])
+        if isinstance(actions, list):
+            for action in actions:
+                if isinstance(action, dict) and "target_id" in action:
+                    target_id = action.get("target_id")
+                    if isinstance(target_id, str):
+                        action["target_id"] = target_id.replace("[", "").replace("]", "").strip()
+
+        return parsed

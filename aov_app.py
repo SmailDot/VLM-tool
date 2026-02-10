@@ -545,27 +545,47 @@ with col_right:
                 parser = InstructionParser()
                 parsed = parser.parse(
                     st.session_state.teacher_last_input,
-                    context={"predictions": st.session_state.editing_predictions}
+                    context={
+                        "predictions": st.session_state.editing_predictions,
+                        "available_processes": [
+                            {
+                                "process_id": pid,
+                                "process_name": process_defs.get(pid, {}).get("name", "")
+                            }
+                            for pid in process_defs.keys()
+                        ]
+                    }
                 )
                 if parsed is None:
                     st.warning("⚠️ LLM 未啟動或解析失敗，已跳過指令處理")
                     st.session_state.teacher_pending = False
                 else:
+                    with st.expander("解析結果 (LLM JSON)", expanded=False):
+                        st.json(parsed)
                     actions = parsed.get("actions", [])
                     rag_knowledge = parsed.get("rag_knowledge", "")
                     st.session_state.teacher_actions = actions
                     st.session_state.teacher_rag_knowledge = rag_knowledge
 
                     response_parts = []
+                    applied_actions = 0
                     for action in actions:
                         action_type = action.get("type")
                         target_id = action.get("target_id")
+                        if not target_id:
+                            target_name = action.get("target_name")
+                            if isinstance(target_name, str) and target_name:
+                                for pid, proc in process_defs.items():
+                                    if proc.get("name") == target_name:
+                                        target_id = pid
+                                        break
                         if action_type == "remove" and target_id:
                             st.session_state.editing_predictions = [
                                 item for item in st.session_state.editing_predictions
                                 if item.get("process_id") != target_id
                             ]
                             response_parts.append(f"已移除 {target_id}")
+                            applied_actions += 1
                         elif action_type == "add" and target_id:
                             new_name = process_defs.get(target_id, {}).get("name", "")
                             st.session_state.editing_predictions.append({
@@ -575,11 +595,14 @@ with col_right:
                                 "reasoning": action.get("reason", "")
                             })
                             response_parts.append(f"已新增 {target_id}")
+                            applied_actions += 1
 
                     if response_parts:
                         st.session_state.teacher_response = "收到，" + " 並 ".join(response_parts) + "。"
                     else:
-                        st.session_state.teacher_response = "收到，我已記錄你的指令。"
+                        st.session_state.teacher_response = "收到，但沒有可套用的變更（請確認指令格式或 target_id）。"
+                    if not applied_actions:
+                        st.warning("⚠️ 指令已解析，但未套用任何修改。請檢查 target_id 是否存在。")
                     st.session_state.teacher_pending = False
                     st.rerun()
 
