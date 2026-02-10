@@ -310,6 +310,9 @@ class DecisionEngineV2:
                 final_score = max(final_score, 0.6)
             if has_strong_vlm_evidence:
                 final_score = max(final_score, 0.8)
+            if vlm_score > 0.8 and final_score < 0.5:
+                # VLM 高信心建議即使缺少細節證據，也要有保底
+                final_score = 0.5
 
             suppress_experience = False
             suppress_reason = None
@@ -605,6 +608,40 @@ class DecisionEngineV2:
                         matched_geometry=[],
                         reasoning="[材質邏輯] 白鐵+焊接+無烤漆 → 需除焦洗淨"
                     ))
+
+            # 白鐵/不鏽鋼焊接流程補齊 (SUS304/2B/316)
+            material_text = parent_context.material or ""
+            stainless_keys = ["白鐵", "SUS304", "SUS316", "304", "316", "2B"]
+            is_stainless = any(key in material_text for key in stainless_keys)
+            if is_stainless and has_welding:
+                # 成品全檢至少一次
+                if "I01" not in active_ids:
+                    i01_def = self.processes.get("I01")
+                    if i01_def:
+                        to_add.append(ProcessPrediction(
+                            process_id="I01",
+                            name=i01_def["name"],
+                            confidence=0.75,
+                            matched_text=[],
+                            matched_symbols=[],
+                            matched_geometry=[],
+                            reasoning="[流程補齊] 白鐵焊接後需成品全檢"
+                        ))
+
+                # 烤漆路徑 → 成品全檢2
+                has_paint = "烤漆" in parent_context.surface_treatment or "F11" in active_ids
+                if has_paint and "I02" not in active_ids:
+                    i02_def = self.processes.get("I02")
+                    if i02_def:
+                        to_add.append(ProcessPrediction(
+                            process_id="I02",
+                            name=i02_def["name"],
+                            confidence=0.72,
+                            matched_text=[],
+                            matched_symbols=[],
+                            matched_geometry=[],
+                            reasoning="[流程補齊] 烤漆後需成品全檢2"
+                        ))
         
         # Rule 6: Precision tolerance logic - Tolerance < 0.1mm → K01 (切削)
         if features.tolerances:
@@ -646,6 +683,112 @@ class DecisionEngineV2:
         if c04_pred and c05_conf - c04_pred.confidence >= 0.1:
             c04_pred.confidence = 0.0
             c04_pred.reasoning += "\n[衝突抑制] C05 明顯高於 C04，抑制 C04"
+
+        # Rule 8: 折彎/雕刻順序補齊
+        has_bend = "D01" in active_ids
+        has_deburr = "E01" in active_ids
+        has_laser_engrave = "O02" in active_ids
+
+        if has_bend and not has_deburr:
+            e01_def = self.processes.get("E01")
+            if e01_def:
+                to_add.append(ProcessPrediction(
+                    process_id="E01",
+                    name=e01_def["name"],
+                    confidence=0.65,
+                    matched_text=[],
+                    matched_symbols=[],
+                    matched_geometry=[],
+                    reasoning="[流程補齊] 折彎前需先去毛邊"
+                ))
+
+        if has_laser_engrave and not has_deburr:
+            e01_def = self.processes.get("E01")
+            if e01_def:
+                to_add.append(ProcessPrediction(
+                    process_id="E01",
+                    name=e01_def["name"],
+                    confidence=0.65,
+                    matched_text=[],
+                    matched_symbols=[],
+                    matched_geometry=[],
+                    reasoning="[流程補齊] 雷射雕刻前需先去毛邊"
+                ))
+
+        # Rule 9: 抽牙 M6 / M3-M5 邏輯
+        ocr_text = " ".join([r.text for r in features.ocr_results]) if features.ocr_results else ""
+        has_m6 = "M6" in ocr_text or "抽牙M6" in ocr_text or "抽牙 M6" in ocr_text
+        has_m3_m5 = any(k in ocr_text for k in ["M3", "M4", "M5", "M3/M4/M5"])
+
+        if has_m3_m5 and "C05" not in active_ids:
+            c05_def = self.processes.get("C05")
+            if c05_def:
+                to_add.append(ProcessPrediction(
+                    process_id="C05",
+                    name=c05_def["name"],
+                    confidence=0.70,
+                    matched_text=[],
+                    matched_symbols=[],
+                    matched_geometry=[],
+                    reasoning="[抽牙規則] M3/M4/M5 → M3048"
+                ))
+
+        if has_m6 and "C05" in active_ids:
+            # 同時存在 → M3048 → 去毛邊(手動抽牙M6)
+            if "E01" not in active_ids:
+                e01_def = self.processes.get("E01")
+                if e01_def:
+                    to_add.append(ProcessPrediction(
+                        process_id="E01",
+                        name=e01_def["name"],
+                        confidence=0.60,
+                        matched_text=[],
+                        matched_symbols=[],
+                        matched_geometry=[],
+                        reasoning="[流程補齊] M6 抽牙需去毛邊手動處理"
+                    ))
+        elif has_m6 and "C05" not in active_ids:
+            # 只有 M6 → 單機切割 + 去毛邊
+            if "C01" not in active_ids:
+                c01_def = self.processes.get("C01")
+                if c01_def:
+                    to_add.append(ProcessPrediction(
+                        process_id="C01",
+                        name=c01_def["name"],
+                        confidence=0.60,
+                        matched_text=[],
+                        matched_symbols=[],
+                        matched_geometry=[],
+                        reasoning="[流程補齊] M6 抽牙需單機切割"
+                    ))
+            if "E01" not in active_ids:
+                e01_def = self.processes.get("E01")
+                if e01_def:
+                    to_add.append(ProcessPrediction(
+                        process_id="E01",
+                        name=e01_def["name"],
+                        confidence=0.60,
+                        matched_text=[],
+                        matched_symbols=[],
+                        matched_geometry=[],
+                        reasoning="[流程補齊] M6 抽牙需去毛邊"
+                    ))
+
+        # Rule 10: 烤漆/客製包裝 → 成品全檢2
+        has_paint = "F11" in active_ids
+        has_packaging = "H02" in active_ids or "包裝" in ocr_text or "網蓋貼" in ocr_text
+        if (has_paint or has_packaging) and "I02" not in active_ids:
+            i02_def = self.processes.get("I02")
+            if i02_def:
+                to_add.append(ProcessPrediction(
+                    process_id="I02",
+                    name=i02_def["name"],
+                    confidence=0.70,
+                    matched_text=[],
+                    matched_symbols=[],
+                    matched_geometry=[],
+                    reasoning="[流程補齊] 烤漆/包裝後需成品全檢2"
+                ))
 
         return final_candidates
     
@@ -880,3 +1023,19 @@ class DecisionEngineV2:
             freq = proc.get("frequency", "中")
             frequencies.add(freq)
         return sorted(list(frequencies))
+        # Rule 11: 成品全檢至少一次 (主要加工後)
+        needs_inspection = any(pid in active_ids for pid in [
+            "C01", "C05", "D01", "O02", "F01", "F14", "E01", "F11", "H02"
+        ])
+        if needs_inspection and "I01" not in active_ids:
+            i01_def = self.processes.get("I01")
+            if i01_def:
+                to_add.append(ProcessPrediction(
+                    process_id="I01",
+                    name=i01_def["name"],
+                    confidence=0.70,
+                    matched_text=[],
+                    matched_symbols=[],
+                    matched_geometry=[],
+                    reasoning="[流程補齊] 主要加工後需成品全檢"
+                ))
