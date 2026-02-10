@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 import shutil
+import os
 
 
 class KnowledgeBaseManager:
@@ -109,6 +110,29 @@ class KnowledgeBaseManager:
             if entry.get("id") == entry_id:
                 self.db[i].update(new_data)
                 self.db[i]["updated_at"] = datetime.now().isoformat()
+                self._save_db()
+                return True
+        return False
+
+    def delete_entry(self, entry_id: str) -> bool:
+        """
+        Delete a knowledge entry by ID and remove its image file if present.
+
+        Args:
+            entry_id: Entry identifier.
+
+        Returns:
+            bool: True if deleted, False if not found.
+        """
+        for i, entry in enumerate(self.db):
+            if entry.get("id") == entry_id:
+                image_path = entry.get("image_rel_path")
+                if image_path and os.path.exists(image_path):
+                    try:
+                        os.remove(image_path)
+                    except Exception:
+                        pass
+                del self.db[i]
                 self._save_db()
                 return True
         return False

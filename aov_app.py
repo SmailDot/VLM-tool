@@ -24,6 +24,7 @@ from PIL import Image
 
 # 製程辨識核心模組
 from app.manufacturing import ManufacturingPipeline
+from app.manufacturing.decision import InstructionParser
 
 # UI 樣式
 from components.style import apply_custom_style
@@ -52,6 +53,9 @@ if 'mfg_pipeline' not in st.session_state:
 if 'uploaded_drawing' not in st.session_state:
     st.session_state.uploaded_drawing = None
 
+if 'uploaded_drawings' not in st.session_state:
+            st.session_state.uploaded_drawings = []
+
 # 新增父圖支援
 if 'parent_drawing' not in st.session_state:
     st.session_state.parent_drawing = None
@@ -70,6 +74,18 @@ if 'min_confidence' not in st.session_state:
 
 if 'temp_file_path' not in st.session_state:
     st.session_state.temp_file_path = None
+if 'teacher_actions' not in st.session_state:
+    st.session_state.teacher_actions = []
+if 'teacher_rag_knowledge' not in st.session_state:
+    st.session_state.teacher_rag_knowledge = ""
+if 'teacher_response' not in st.session_state:
+    st.session_state.teacher_response = ""
+if 'teacher_pending' not in st.session_state:
+    st.session_state.teacher_pending = False
+if 'teacher_last_input' not in st.session_state:
+    st.session_state.teacher_last_input = ""
+if 'last_kb_entry_id' not in st.session_state:
+    st.session_state.last_kb_entry_id = ""
 
 # 儲存上次的設定 (用於特徵視覺化)
 if 'last_settings' not in st.session_state:
@@ -154,7 +170,7 @@ with col_left:
                         st.image(
                             cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
                             caption=f"父圖（PDF 渲染）: {parent_file.name}",
-                            use_container_width=True
+                            width="stretch"
                         )
                         h, w = parent_image.shape[:2]
                         st.success(f"✅ PDF 已成功轉換 | 解析度: {w} × {h} px (300 DPI)")
@@ -176,7 +192,7 @@ with col_left:
                 st.image(
                     cv2.cvtColor(parent_image, cv2.COLOR_BGR2RGB),
                     caption=f"父圖: {parent_file.name}",
-                    use_container_width=True
+                    width="stretch"
                 )
                 h, w = parent_image.shape[:2]
                 st.caption(f"已載入父圖 | 尺寸: {w} × {h} px")
@@ -189,68 +205,77 @@ with col_left:
 
     # 子圖上傳（必填）
     st.markdown("#### 📄 上傳零件圖 (Child Drawing)")
-    uploaded_file = st.file_uploader(
+    uploaded_files = st.file_uploader(
         "選擇子圖檔案 *",
         type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
-        help="子圖為必要上傳，包含零件局部特徵、標註數字、符號等。支援 PDF 格式（將以 300 DPI 高解析度渲染）",
-        key="drawing_uploader"
+        help=(
+            "子圖為必要上傳，包含零件局部特徵、標註數字、符號等。"
+            "支援 PDF 格式（將以 300 DPI 高解析度渲染），可多選上傳。"
+        ),
+        key="drawing_uploader",
+        accept_multiple_files=True
     )
     
-    if uploaded_file is not None:
-        # 檢查檔案類型
-        file_extension = uploaded_file.name.lower().split('.')[-1]
-        
-        if file_extension == 'pdf':
-            # PDF 檔案 → 使用 PDFImageExtractor
-            st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
-            try:
-                from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
-                
-                if not is_pdf_available():
-                    st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")
-                    drawing_image = None
-                else:
-                    # 儲存 PDF 到臨時檔案
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                        tmp_file.write(uploaded_file.read())
-                        tmp_pdf_path = tmp_file.name
-                    
-                    # 提取高解析度圖片
-                    pdf_extractor = PDFImageExtractor(target_dpi=300)
-                    drawing_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
-                    
-                    # 清理臨時檔案
-                    import os
-                    os.unlink(tmp_pdf_path)
+    if uploaded_files:
+        drawing_images: List[np.ndarray] = []
+        drawing_names: List[str] = []
+
+        for uploaded_file in uploaded_files:
+            file_extension = uploaded_file.name.lower().split('.')[-1]
+            drawing_image = None
             
-            except Exception as e:
-                st.error(f"PDF 處理失敗: {str(e)}")
-                drawing_image = None
+            if file_extension == 'pdf':
+                st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
+                try:
+                    from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
+                    
+                    if not is_pdf_available():
+                        st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")
+                    else:
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                            tmp_file.write(uploaded_file.read())
+                            tmp_pdf_path = tmp_file.name
+                        
+                        pdf_extractor = PDFImageExtractor(target_dpi=300)
+                        drawing_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
+                        
+                        import os
+                        os.unlink(tmp_pdf_path)
+                
+                except Exception as e:
+                    st.error(f"PDF 處理失敗: {str(e)}")
+            
+            else:
+                file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+                drawing_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+            
+            if drawing_image is not None:
+                drawing_images.append(drawing_image)
+                drawing_names.append(uploaded_file.name)
         
-        else:
-            # 一般圖片檔案
-            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-            drawing_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-        
-        if drawing_image is not None:
-            st.session_state.uploaded_drawing = drawing_image
+        if drawing_images:
+            primary_image = drawing_images[0]
+            
+            st.session_state.uploaded_drawing = primary_image
+            st.session_state.uploaded_drawings = drawing_images
 
             # Save temp image for knowledge base
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
-                cv2.imwrite(tmp_image.name, drawing_image)
+                cv2.imwrite(tmp_image.name, primary_image)
                 st.session_state.temp_file_path = tmp_image.name
             
             # 顯示圖紙預覽
-            st.image(
-                cv2.cvtColor(drawing_image, cv2.COLOR_BGR2RGB),
-                caption=f"圖紙: {uploaded_file.name}",
-                use_container_width=True
-            )
-            
-            # 圖紙資訊
-            h, w = drawing_image.shape[:2]
-            st.caption(f"尺寸: {w} × {h} px | 檔案大小: {uploaded_file.size / 1024:.1f} KB")
+            for idx, drawing_image in enumerate(drawing_images):
+                st.image(
+                    cv2.cvtColor(drawing_image, cv2.COLOR_BGR2RGB),
+                    caption=f"圖紙 {idx + 1}: {drawing_names[idx]}",
+                    width="stretch"
+                )
+                h, w = drawing_image.shape[:2]
+                st.caption(
+                    f"尺寸: {w} × {h} px | 檔案大小: {uploaded_files[idx].size / 1024:.1f} KB"
+                )
             
             st.divider()
             
@@ -317,7 +342,7 @@ with col_left:
             st.divider()
             
             # ==================== 執行辨識 ====================
-            if st.button("開始辨識製程", type="primary", use_container_width=True):
+            if st.button("開始辨識製程", type="primary", width="stretch"):
                 with st.spinner("正在分析工程圖紙..."):
                     try:
                         # 初始化管線
@@ -339,12 +364,13 @@ with col_left:
                             st.info("雙圖模式: 正在解析父圖全域資訊...")
                         
                         result = st.session_state.mfg_pipeline.recognize(
-                            drawing_image,
+                            primary_image,
                             parent_image=parent_img,  # 傳遞父圖
                             top_n=None,
                             min_confidence=st.session_state.min_confidence,
                             frequency_filter=freq_options if freq_options else None,
-                            use_rag=st.session_state.use_rag
+                            use_rag=st.session_state.use_rag,
+                            child_images=st.session_state.uploaded_drawings
                         )
                         elapsed = time.time() - start_time
                         
@@ -505,63 +531,112 @@ with col_right:
                         st.session_state.editing_predictions.pop(idx)
                         st.rerun()
 
-                updated_reasoning = st.text_area(
-                    "判斷依據 (Reasoning)",
-                    value=item["reasoning"],
-                    height=100,
-                    key=f"reason_{idx}"
-                )
-                item["reasoning"] = updated_reasoning
+                st.markdown(f"**理由**: {item['reasoning']}")
 
-        st.markdown("#### 新增製程")
-        col_add1, col_add2 = st.columns([4, 1])
-        with col_add1:
-            selected_process = st.selectbox(
-                "選擇製程",
-                options=options,
-                key="add_process_select"
-            )
-        with col_add2:
-            if st.button("➕ 加入", key="add_process_button"):
-                new_id = _extract_id(selected_process)
-                if new_id:
-                    new_name = process_defs.get(new_id, {}).get("name", "")
-                    st.session_state.editing_predictions.append({
-                        "process_id": new_id,
-                        "process_name": new_name,
-                        "confidence": 0.5,
-                        "reasoning": ""
-                    })
+        st.markdown("#### 專家指令區 (Teacher Mode)")
+        teacher_input = st.chat_input("若有錯誤，請在這描述你想要的修改（例如：'移除 I01，新增 K01，理由是...')")
+        if teacher_input and not st.session_state.teacher_pending:
+            st.session_state.teacher_last_input = teacher_input
+            st.session_state.teacher_pending = True
+            st.rerun()
+
+        if st.session_state.teacher_pending:
+            with st.spinner("🧠 系統思考中，請稍候..."):
+                parser = InstructionParser()
+                parsed = parser.parse(
+                    st.session_state.teacher_last_input,
+                    context={"predictions": st.session_state.editing_predictions}
+                )
+                if parsed is None:
+                    st.warning("⚠️ LLM 未啟動或解析失敗，已跳過指令處理")
+                    st.session_state.teacher_pending = False
+                else:
+                    actions = parsed.get("actions", [])
+                    rag_knowledge = parsed.get("rag_knowledge", "")
+                    st.session_state.teacher_actions = actions
+                    st.session_state.teacher_rag_knowledge = rag_knowledge
+
+                    response_parts = []
+                    for action in actions:
+                        action_type = action.get("type")
+                        target_id = action.get("target_id")
+                        if action_type == "remove" and target_id:
+                            st.session_state.editing_predictions = [
+                                item for item in st.session_state.editing_predictions
+                                if item.get("process_id") != target_id
+                            ]
+                            response_parts.append(f"已移除 {target_id}")
+                        elif action_type == "add" and target_id:
+                            new_name = process_defs.get(target_id, {}).get("name", "")
+                            st.session_state.editing_predictions.append({
+                                "process_id": target_id,
+                                "process_name": new_name,
+                                "confidence": 0.5,
+                                "reasoning": action.get("reason", "")
+                            })
+                            response_parts.append(f"已新增 {target_id}")
+
+                    if response_parts:
+                        st.session_state.teacher_response = "收到，" + " 並 ".join(response_parts) + "。"
+                    else:
+                        st.session_state.teacher_response = "收到，我已記錄你的指令。"
+                    st.session_state.teacher_pending = False
                     st.rerun()
 
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("保存至知識庫"):
-                if not st.session_state.temp_file_path:
-                    st.error("找不到暫存圖片，請重新上傳圖檔")
+        if st.session_state.teacher_response:
+            st.info(st.session_state.teacher_response)
+
+        st.markdown("#### 定案並學習 (Save & Learn)")
+        col_learn, col_undo = st.columns([3, 1])
+        with col_learn:
+            learn_clicked = st.button("✅ 定案並學習", width="stretch")
+        with col_undo:
+            undo_clicked = st.button("↩️ 撤回", width="stretch")
+
+        if learn_clicked:
+            if not st.session_state.temp_file_path:
+                st.error("找不到暫存圖片，請重新上傳圖檔")
+            else:
+                from app.knowledge.manager import KnowledgeBaseManager
+
+                final_processes = [
+                    item["process_id"]
+                    for item in st.session_state.editing_predictions
+                    if item.get("process_id")
+                ]
+
+                reasoning_lines = [
+                    f"{item['process_id']}: {item.get('reasoning', '')}"
+                    for item in st.session_state.editing_predictions
+                    if item.get("process_id")
+                ]
+
+                rag_knowledge = st.session_state.teacher_rag_knowledge
+                if rag_knowledge:
+                    reasoning_lines.append(f"RAG: {rag_knowledge}")
+
+                kb_manager = KnowledgeBaseManager()
+                entry = kb_manager.add_entry(
+                    image_path=st.session_state.temp_file_path,
+                    features=result.features.vlm_analysis or {},
+                    correct_processes=final_processes,
+                    reasoning="\n".join(reasoning_lines)
+                )
+                st.session_state.last_kb_entry_id = entry.get("id", "")
+                st.toast("已保存並學習")
+
+        if undo_clicked:
+            last_entry_id = st.session_state.last_kb_entry_id
+            if not last_entry_id:
+                st.warning("沒有可撤回的條目")
+            else:
+                from app.knowledge.manager import KnowledgeBaseManager
+                kb_manager = KnowledgeBaseManager()
+                if kb_manager.delete_entry(last_entry_id):
+                    st.session_state.last_kb_entry_id = ""
+                    st.toast("已撤回最近一次學習")
                 else:
-                    from app.knowledge.manager import KnowledgeBaseManager
-
-                    enabled_rows = st.session_state.editing_predictions
-                    correct_processes = [
-                        item["process_id"]
-                        for item in enabled_rows
-                        if item.get("process_id")
-                    ]
-                    reasoning_lines = [
-                        f"{item['process_id']}: {item.get('reasoning', '')}"
-                        for item in enabled_rows
-                        if item.get("process_id")
-                    ]
-
-                    kb_manager = KnowledgeBaseManager()
-                    kb_manager.add_entry(
-                        image_path=st.session_state.temp_file_path,
-                        features=result.features.vlm_analysis or {},
-                        correct_processes=correct_processes,
-                        reasoning="\n".join(reasoning_lines)
-                    )
-                    st.toast("已保存至知識庫")
+                    st.warning("撤回失敗，請到知識庫管理確認")
 
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
@@ -585,8 +660,9 @@ with col_right:
                     'korean': '韓文'
                 }
                 detected_langs = [
-                    langs_display.get(lang, lang) 
+                    langs_display.get(lang, lang)
                     for lang in result.parent_context.detected_languages
+                    if isinstance(lang, str) and lang
                 ]
                 st.info(f"🌐 檢測到語言: {', '.join(detected_langs)}")
             
@@ -726,7 +802,7 @@ with col_right:
                 st.image(
                     cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB),
                     caption="特徵標註圖",
-                    use_container_width=True
+                    width="stretch"
                 )
             except Exception as e:
                 st.error(f"視覺化失敗: {str(e)}")
@@ -836,14 +912,15 @@ with st.sidebar:
     
     # 清除按鈕
     st.divider()
-    if st.button("清除所有資料", use_container_width=True):
+    if st.button("清除所有資料", width="stretch"):
         st.session_state.mfg_pipeline = None
         st.session_state.uploaded_drawing = None
+        st.session_state.uploaded_drawings = []
         st.session_state.recognition_result = None
         st.rerun()
     
     # OCR 快取清除按鈕（調試用）
-    if st.button("🔄 清除 OCR 快取", use_container_width=True):
+    if st.button("🔄 清除 OCR 快取", width="stretch"):
         st.cache_resource.clear()
         st.success("快取已清除，請重新載入頁面")
         st.rerun()
