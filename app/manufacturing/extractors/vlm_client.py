@@ -10,7 +10,7 @@ Compatible with:
 - Any OpenAI-compatible vision API endpoint
 """
 
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 import base64
 import json
 import re
@@ -24,6 +24,9 @@ except ImportError:
     raise ImportError(
         "OpenAI SDK not installed. Run: pip install openai>=1.0.0"
     )
+
+
+from ...config import VLM_BASE_URL, VLM_MODEL
 
 
 class VLMClient:
@@ -46,9 +49,9 @@ class VLMClient:
     
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = VLM_BASE_URL,
         api_key: str = "not-needed",
-        model: str = "local-model",
+        model: str = VLM_MODEL,
         timeout: int = 60,
         max_retries: int = 2
     ):
@@ -84,7 +87,7 @@ class VLMClient:
             self.client = None
     
     def _encode_image_to_base64(
-        self, 
+        self,
         image_source: Union[str, Path, np.ndarray]
     ) -> Optional[str]:
         """
@@ -145,7 +148,7 @@ class VLMClient:
     
     def analyze_image(
         self,
-        image_path: Union[str, Path, np.ndarray],
+        image_path: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]],
         prompt: str,
         response_format: str = "json",
         temperature: float = 0.0,
@@ -182,13 +185,33 @@ class VLMClient:
             print("Error: OpenAI client not initialized")
             return None
         
-        # Encode image to base64
-        base64_image = self._encode_image_to_base64(image_path)
-        if base64_image is None:
-            return None
+        # Encode image(s) to base64
+        images = image_path if isinstance(image_path, list) else [image_path]
+        base64_images: List[str] = []
+        for image in images:
+            base64_image = self._encode_image_to_base64(image)
+            if base64_image is None:
+                return None
+            base64_images.append(base64_image)
         
         try:
             # Construct message with image
+            user_content = [
+                {
+                    "type": "text",
+                    "text": prompt
+                }
+            ]
+            for base64_image in base64_images:
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}"
+                        }
+                    }
+                )
+
             messages = [
                 {
                     "role": "system",
@@ -196,18 +219,7 @@ class VLMClient:
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
-                            }
-                        }
-                    ]
+                    "content": user_content
                 }
             ]
             
