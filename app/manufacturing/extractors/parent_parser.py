@@ -9,10 +9,12 @@ Parent Image Parser - 父圖全域資訊提取器
 - 特殊要求 (Special Requirements)
 """
 
-from typing import Dict, List, Optional, Set
-import numpy as np
+import json
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set, Any
+
 import cv2
-from dataclasses import dataclass
+import numpy as np
 
 from ..schema import OCRResult
 from .vlm_client import VLMClient
@@ -29,40 +31,25 @@ class ParentImageContext:
     
     # 特殊要求
     cleanroom_level: Optional[str] = None  # 無塵室等級
-    surface_treatment: List[str] = None  # 表面處理 (烤漆、鍍鋅等)
-    special_requirements: List[str] = None  # 特殊要求
+    surface_treatment: List[str] = field(default_factory=list)  # 表面處理 (烤漆、鍍鋅等)
+    special_requirements: List[str] = field(default_factory=list)  # 特殊要求
     
     # 檢測到的關鍵字
-    detected_keywords: Set[str] = None  # 所有檢測到的關鍵字
+    detected_keywords: Set[str] = field(default_factory=set)  # 所有檢測到的關鍵字
     
     # 原始 OCR 結果
-    ocr_results: List[OCRResult] = None
+    ocr_results: List[OCRResult] = field(default_factory=list)
     
     # 預設製程 (由父圖觸發)
-    triggered_processes: List[str] = None  # 製程 ID 列表
+    triggered_processes: List[str] = field(default_factory=list)  # 製程 ID 列表
     
     # NEW: 注意事項 (從標題欄/技術要求區域提取)
-    important_notes: List[str] = None  # 重要注意事項
-    title_block_text: List[str] = None  # 標題欄所有文字
-    detected_languages: Set[str] = None  # 檢測到的語言
-    
-    def __post_init__(self):
-        if self.surface_treatment is None:
-            self.surface_treatment = []
-        if self.special_requirements is None:
-            self.special_requirements = []
-        if self.detected_keywords is None:
-            self.detected_keywords = set()
-        if self.ocr_results is None:
-            self.ocr_results = []
-        if self.triggered_processes is None:
-            self.triggered_processes = []
-        if self.important_notes is None:
-            self.important_notes = []
-        if self.title_block_text is None:
-            self.title_block_text = []
-        if self.detected_languages is None:
-            self.detected_languages = set()
+    important_notes: List[str] = field(default_factory=list)  # 重要注意事項
+    title_block_text: List[str] = field(default_factory=list)  # 標題欄所有文字
+    detected_languages: Set[str] = field(default_factory=set)  # 檢測到的語言
+
+    # NEW: VLM 全域分析（3D 結構與加工特徵）
+    vlm_context: Dict[str, Any] = field(default_factory=dict)
 
 
 class ParentImageParser:
@@ -210,23 +197,46 @@ class ParentImageParser:
 
         prompt = """
 你是一位製造工程助理。這是一張組立圖或 BOM 表。
-請不要分析製程，而是提取全域規範資訊：
+請不要分析製程，而是提取全域規範與幾何結構資訊：
 1. 材質資訊
 2. 表面處理要求（如酸洗、烤漆）
 3. 特殊註記或注意事項
+4. 幾何結構分析：請分析父圖中的三視圖 (Top/Front/Side Views)。
+   請描述此零件的 3D 立體形狀是什麼？(例如：L型板金、U型槽、圓柱體、封閉盒體)。
+5. 請找出圖面上的特殊加工特徵（如：沉頭孔、攻牙、焊接肋條）。
 
-請用精簡的條列文字回覆，不要輸出 JSON。
+請輸出 JSON 格式（僅輸出 JSON，不要包含其他文字）：
+{
+  "material_spec": "...",
+  "3d_structure": "描述零件的立體形狀...",
+  "global_features": ["特徵A", "特徵B"],
+  "bom_notes": "..."
+}
 """.strip()
 
         try:
             result = self.vlm_client.analyze_image(
                 image_path=image,
                 prompt=prompt,
-                response_format="text",
+                response_format="json",
                 temperature=0.0,
                 max_tokens=800
             )
-            return result if isinstance(result, str) else ""
+            if isinstance(result, dict):
+                global_features = result.get("global_features")
+                if isinstance(global_features, str):
+                    global_features = [global_features]
+                elif not isinstance(global_features, list):
+                    global_features = []
+
+                structured_result = {
+                    "material_spec": result.get("material_spec") or result.get("material") or "",
+                    "3d_structure": result.get("3d_structure") or "",
+                    "global_features": global_features,
+                    "bom_notes": result.get("bom_notes") or ""
+                }
+                return json.dumps(structured_result, ensure_ascii=False)
+            return ""
         except Exception as e:
             print(f"Warning: Parent VLM analysis failed: {e}")
             return ""

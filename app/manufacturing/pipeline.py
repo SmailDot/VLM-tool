@@ -8,7 +8,8 @@ End-to-end workflow:
 4. Return results with confidence and evidence
 """
 
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List, Dict, Any, Sequence
+import json
 from pathlib import Path
 import numpy as np
 import cv2
@@ -158,7 +159,8 @@ class ManufacturingPipeline:
         ocr_threshold: float = 0.5,
         symbol_threshold: float = 0.6,
         frequency_filter: Optional[List[str]] = None,
-        use_rag: bool = False
+        use_rag: bool = False,
+        child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None
     ) -> RecognitionResult:
         """
         Recognize manufacturing processes from engineering drawing.
@@ -173,6 +175,8 @@ class ManufacturingPipeline:
             symbol_threshold: Minimum confidence for symbol detections.
             frequency_filter: List of frequencies to include (e.g., ["高", "中"]).
                             If None, all frequencies are included.
+            use_rag: Enable RAG-based context augmentation.
+            child_images: Optional list of child images for VLM context.
         
         Returns:
             RecognitionResult with predictions and diagnostics.
@@ -182,6 +186,7 @@ class ManufacturingPipeline:
         # Parse parent image (optional)
         parent_context = None
         parent_context_text = ""
+        parent_context_payload: Dict[str, Any] = {}
         if parent_image is not None:
             # Load parent image (支援 PDF)
             if isinstance(parent_image, str):
@@ -205,20 +210,29 @@ class ManufacturingPipeline:
                 ocr_threshold
             )
             parent_context_text = self.parent_parser.analyze_parent_context(parent_img_array)
+            if parent_context_text:
+                parent_context_payload = self._safe_parse_parent_context(parent_context_text)
+                parent_context.vlm_context = parent_context_payload
 
             if image is None:
                 processing_time = time.time() - start_time
+                parent_report = self._build_parent_report(parent_context, parent_context_payload)
+                warnings = [
+                    f"這是父圖，已提取資訊：{parent_context_text}" if parent_context_text else "這是父圖，已提取資訊。"
+                ]
+                if parent_report:
+                    warnings.append(f"父圖全域分析報告：{parent_report}")
                 return RecognitionResult(
                     predictions=[],
                     features=ExtractedFeatures(),
                     parent_context=parent_context,
                     total_time=processing_time,
-                    warnings=[
-                        f"這是父圖，已提取資訊：{parent_context_text}" if parent_context_text else "這是父圖，已提取資訊。"
-                    ]
+                    warnings=warnings
                 )
         
         # Load child image (required)
+        if image is None:
+            raise ValueError("Child image is required for recognition.")
         # 支援 PDF 檔案自動轉換
         if isinstance(image, str):
             image_path = image
@@ -240,16 +254,36 @@ class ManufacturingPipeline:
         # Extract features from child image
         parent_prompt = ""
         if parent_context_text:
+            parent_report = self._build_parent_report(parent_context, parent_context_payload)
             parent_prompt = get_default_prompt(parent_context=parent_context_text).replace(
                 "{rag_examples}", ""
             )
+            structure = parent_context_payload.get("3d_structure")
+            if structure:
+                parent_prompt = (
+                    f"【全域幾何背景】 此零件為一個 {structure}。"
+                    "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                    f"{parent_prompt}"
+                )
+            if parent_report:
+                parent_prompt = f"【父圖全域分析報告】{parent_report}\n\n{parent_prompt}"
+
+        vlm_images: List[Union[str, Path, np.ndarray]] = []
+        if child_images:
+            vlm_images = [img for img in child_images if img is not None]
+        if not vlm_images:
+            if image_path is not None:
+                vlm_images = [image_path]
+            else:
+                vlm_images = [img_array]
 
         features = self._extract_features(
             img_array,
             ocr_threshold,
             symbol_threshold,
             image_path=image_path,
-            prompt_override=parent_prompt
+            prompt_override=parent_prompt,
+            vlm_images=vlm_images
         )
 
         rag_references: List[Dict[str, Any]] = []
@@ -281,12 +315,19 @@ class ManufacturingPipeline:
         # If RAG context exists, re-run VLM with injected prompt
         if rag_context_text and self.vlm_client:
             try:
-                input_image = image_path if image_path else img_array
+                input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
                 prompt = get_default_prompt(parent_context=parent_context_text).replace(
                     "{rag_examples}", rag_context_text
                 )
+                structure = parent_context_payload.get("3d_structure")
+                if structure:
+                    prompt = (
+                        f"【全域幾何背景】 此零件為一個 {structure}。"
+                        "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                        f"{prompt}"
+                    )
                 vlm_result = self.vlm_client.analyze_image(
-                    image_path=input_image,
+                    image_path=input_images,
                     prompt=prompt,
                     response_format="json",
                     temperature=0.0,
@@ -327,6 +368,64 @@ class ManufacturingPipeline:
         )
         
         return result
+
+    def _safe_parse_parent_context(self, context_text: str) -> Dict[str, Any]:
+        """
+        Parse parent VLM context JSON safely.
+
+        Args:
+            context_text: Raw context text from VLM.
+
+        Returns:
+            Parsed dictionary if JSON, otherwise empty dict.
+        """
+        try:
+            parsed = json.loads(context_text)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    def _build_parent_report(
+        self,
+        parent_context: Optional[ParentImageContext],
+        parent_context_payload: Dict[str, Any]
+    ) -> str:
+        """
+        Build a child-usable global report from parent context.
+
+        Args:
+            parent_context: Parsed parent context (OCR-derived).
+            parent_context_payload: VLM JSON payload (3d structure, features).
+
+        Returns:
+            str: Concise report string for prompts/UI.
+        """
+        if not parent_context and not parent_context_payload:
+            return ""
+
+        name = ""
+        if parent_context and parent_context.title_block_text:
+            name = parent_context.title_block_text[0].strip()
+
+        material_spec = parent_context_payload.get("material_spec")
+        structure = parent_context_payload.get("3d_structure")
+        global_features = parent_context_payload.get("global_features", [])
+
+        if not material_spec and parent_context and parent_context.material:
+            material_spec = parent_context.material
+
+        parts = []
+        if name:
+            parts.append(f"零件名稱：{name}")
+        if material_spec:
+            parts.append(f"材質：{material_spec}")
+        if structure:
+            parts.append(f"結構：{structure}")
+        if global_features:
+            features_text = ", ".join(global_features) if isinstance(global_features, list) else str(global_features)
+            parts.append(f"特徵：{features_text}")
+
+        return " / ".join(parts)
     
     def _extract_features(
         self,
@@ -334,7 +433,8 @@ class ManufacturingPipeline:
         ocr_threshold: float,
         symbol_threshold: float,
         image_path: Optional[str] = None,
-        prompt_override: str = ""
+        prompt_override: str = "",
+        vlm_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None
     ) -> ExtractedFeatures:
         """
         Extract all features from image.
@@ -379,7 +479,13 @@ class ManufacturingPipeline:
         if self.use_vlm and self.vlm_client and self.vlm_prompt_template:
             try:
                 # Use image_path if available, otherwise use numpy array
-                input_image = image_path if image_path else image
+                input_image: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]]
+                if vlm_images:
+                    input_image = list(vlm_images)
+                elif image_path is not None:
+                    input_image = image_path
+                else:
+                    input_image = image
                 prompt = prompt_override or self.vlm_prompt_template.user_prompt
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,

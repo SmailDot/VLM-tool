@@ -532,11 +532,13 @@ def get_default_prompt(parent_context: str = "") -> str:
         parent_section = (
             "【全域規範 (來自父圖/BOM)】\n"
             f"{parent_context}\n"
-            "(請注意：子圖的材質與後處理必須遵循上述規範)\n\n"
+            "(請注意：子圖的材質與後處理必須遵循上述規範)\n"
+            "(重要：分析子圖時，若看到圓形或圓柱外觀，請參考『全域幾何背景』判斷是孔洞還是圓柱，"
+            "不要只看單張子圖猜測。)\n\n"
         )
 
     return f"""
-{parent_section}你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
+ {parent_section}你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
 請嚴格遵守代碼表，禁止自行新增或改寫代碼含義。
 
 代碼表 (Knowledge Base)：
@@ -546,40 +548,51 @@ def get_default_prompt(parent_context: str = "") -> str:
 
 輔助線規則：
 - 細線、虛線、帶有數字的引線（如「110」、「30」）是尺寸標註，不是折彎線。**請忽略**。
+- 若看到圓形或圓柱外觀，請先查看【全域幾何背景】判斷是孔洞或圓柱，禁止單張圖猜測。
 
 思維鏈 (CoT) 要求：輸出 JSON 之前，請在 reasoning 欄位中進行「視覺過濾」。
 Step 1: 掃描所有線條，區分實線（輪廓）與細線（尺寸）。
 Step 2: 尋找特殊符號（三角形、R角）。
 Step 3: 根據代碼表匹配製程。
 
-【參考案例庫 (Reference Cases)】以下是過去類似工件的處理經驗。請注意：
-- 這些案例僅供參考，請勿盲目照抄。
-- 請比較「當前圖片」與「參考案例」的差異。
-- 若當前圖片的特徵與參考案例高度一致（例如都有焊接符號），可採用相同的製程邏輯。
-- 若當前圖片缺少參考案例中的關鍵特徵（例如參考案例有孔但這張圖沒孔），則不應採用該製程。
-{rag_examples}
+請輸出如下 JSON 格式：
+{{
+  "shape_description": "描述零件形狀 (如 L型支架)",
+  "detected_features": {{
+    "geometry": ["特徵1", "特徵2"],
+    "symbols": ["看到的符號文字"],
+    "text_annotations": ["看到的文字標註"],
+    "material_info": "材質資訊或null"
+  }},
+  "suggested_process_ids": ["F01", "D01"],
+  "confidence_scores": {{
+    "F01": 0.95
+  }},
+  "reasoning": "你的判斷理由 (Step 1... Step 2...)",
+  "process_sequence": ["F01", "D01"]
+}}
 
 輸出格式：保持原本的 JSON 結構，**不要包含任何其他文字**。
 
 ```json
-{
+{{
   "shape_description": "零件形狀的簡要描述",
   "overall_complexity": "簡單/中等/複雜",
-  "detected_features": {
+  "detected_features": {{
     "geometry": ["特徵1", "特徵2"],
     "symbols": ["符號1", "符號2"],
     "text_annotations": ["標註1", "標註2"],
     "material_info": "材質資訊或null"
-  },
+  }},
   "suggested_process_ids": ["C05", "D01", "F01"],
-  "confidence_scores": {
+  "confidence_scores": {{
     "C05": 0.95,
     "D01": 0.85,
     "F01": 0.10
-  },
-  "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據",
+  }},
+   "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據",
   "process_sequence": ["C05", "D01", "F01"]
-}
+}}
 ```
 """.strip()
 
