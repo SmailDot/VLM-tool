@@ -171,7 +171,7 @@ def render_sidebar(engine):
                 final_model_name = selected_model_option
 
             # Connection Test Button
-            if st.button("Test Connection", use_container_width=True):
+            if st.button("Test Connection", width="stretch"):
                 with st.spinner("Testing connection..."):
                     is_ok, msg = engine.prompt_master.test_connection(api_key, base_url, final_model_name)
                     if is_ok:

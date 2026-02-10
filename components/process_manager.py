@@ -330,13 +330,13 @@ def render_manage_tab(manager: ProcessLibraryManager):
                             col1, col2, col3 = st.columns([2, 1, 1])
                             
                             with col1:
-                                save_btn = st.form_submit_button("儲存", use_container_width=True, type="primary")
+                                save_btn = st.form_submit_button("儲存", width="stretch", type="primary")
                             
                             with col2:
-                                delete_btn = st.form_submit_button("刪除", use_container_width=True, type="secondary")
+                                delete_btn = st.form_submit_button("刪除", width="stretch", type="secondary")
                             
                             with col3:
-                                st.form_submit_button("取消", use_container_width=True)
+                                st.form_submit_button("取消", width="stretch")
                             
                             # 處理儲存
                             if save_btn:
@@ -442,7 +442,7 @@ def render_add_tab(manager: ProcessLibraryManager):
             )
         
         # 提交按鈕
-        submitted = st.form_submit_button("新增", use_container_width=True)
+        submitted = st.form_submit_button("新增", width="stretch")
         
         if submitted:
             # 驗證必填欄位

@@ -28,8 +28,8 @@ class GeometryExtractor:
     def __init__(
         self,
         line_threshold: int = 100,
-        min_line_length: int = 50,
-        max_line_gap: int = 10,
+        min_line_length: int = 100,
+        max_line_gap: int = 20,
         circle_param1: int = 50,
         circle_param2: int = 30
     ):
