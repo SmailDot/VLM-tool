@@ -194,23 +194,28 @@ class DecisionEngineV2:
         
         If a process appears in both:
         - Use parent's high confidence
-        - Append child's evidence to reasoning
+        - Append child's evidence ONLY if it has meaningful confidence
         """
         merged = {}
         
-        # Add all parent predictions first
+        # 1. 先加入所有父圖預測 (這些通常是全域規範，如材質、後處理)
         for pred in parent_predictions:
             merged[pred.process_id] = pred
         
-        # Add child predictions
+        # 2. 加入子圖預測
         for child_pred in child_predictions:
             if child_pred.process_id in merged:
-                # Process exists from parent - merge evidence
+                # 狀況：父圖已經說要做這個了 (例如 I01)
                 parent_pred = merged[child_pred.process_id]
-                parent_pred.reasoning += f"\n\n[子圖證據]\n{child_pred.reasoning}"
-                # Keep parent's higher confidence
+                
+                # [修正]：只有當子圖也很有信心 (>0.3) 時，才把子圖的證據加進去
+                # 這樣可以避免 "經驗法則..." 這種廢話污染了父圖的判斷
+                if child_pred.confidence > 0.3:
+                    parent_pred.reasoning += f"\n\n[子圖證據]\n{child_pred.reasoning}"
+                
+                # 這裡我們保持父圖的高信心度 (通常是 0.85)
             else:
-                # New process from child
+                # 狀況：這是子圖新發現的製程 (例如 K01 切削)
                 merged[child_pred.process_id] = child_pred
         
         return list(merged.values())
@@ -233,6 +238,15 @@ class DecisionEngineV2:
             suggested_ids = features.vlm_analysis.get("suggested_process_ids", [])
             confidence_scores = features.vlm_analysis.get("confidence_scores", {})
             vlm_suggestions = {pid: confidence_scores.get(pid, 0.7) for pid in suggested_ids}
+
+        has_precision_tolerance = False
+        if features.tolerances:
+            try:
+                has_precision_tolerance = any(
+                    tol.get_max_tolerance() < 0.1 for tol in features.tolerances
+                )
+            except Exception:
+                has_precision_tolerance = False
         
         for process_id, process_def in self.processes.items():
             # Apply frequency filter
@@ -259,6 +273,8 @@ class DecisionEngineV2:
             
             # Check if VLM suggested this process
             vlm_score = vlm_suggestions.get(process_id, 0.0)
+            has_vlm_evidence = self._has_vlm_evidence(features) if vlm_score > 0 else False
+            has_strong_vlm_evidence = self._has_strong_vlm_evidence(features) if vlm_score > 0 else False
             
             # Get weights (default or from process definition)
             weights = process_def.get("confidence_weights", {
@@ -289,8 +305,27 @@ class DecisionEngineV2:
                 # visual score not implemented yet
             )
 
+            # Visual primacy: if VLM provides clear evidence, keep base confidence >= 0.6
+            if has_vlm_evidence:
+                final_score = max(final_score, 0.6)
+            if has_strong_vlm_evidence:
+                final_score = max(final_score, 0.8)
+
+            suppress_experience = False
+            suppress_reason = None
+            if process_id.startswith("K") and not has_precision_tolerance and not has_vlm_evidence:
+                # K 類製程必須有公差或 VLM 證據
+                final_score = 0.0
+                suppress_experience = True
+                suppress_reason = "K 類製程需公差或 VLM 證據，未符合條件。"
+
             # Add slight jitter to avoid rigid scores
-            final_score = self._apply_confidence_jitter(final_score)
+            if final_score > 0:
+                final_score = self._apply_confidence_jitter(final_score)
+                if has_vlm_evidence and final_score < 0.6:
+                    final_score = 0.6
+                if has_strong_vlm_evidence and final_score < 0.8:
+                    final_score = 0.8
             
             # Collect evidence
             evidence = self._collect_evidence(
@@ -299,7 +334,9 @@ class DecisionEngineV2:
                 text_score,
                 symbol_score,
                 geometry_score,
-                vlm_score
+                vlm_score,
+                allow_experience=not suppress_experience,
+                suppressed_reason=suppress_reason
             )
             
             # Create prediction
@@ -492,19 +529,27 @@ class DecisionEngineV2:
         to_add = []
         to_remove = set()
         
-        # Rule 1: Auto-fill F01 (焊接) → F14 (焊接研磨)
-        if "F01" in active_ids and "F14" not in active_ids:
+        # Rule 1: Welding chain - F01 > 0.6 → F14 = F01 * 0.9
+        f01_conf = next((c.confidence for c in final_candidates if c.process_id == "F01"), 0)
+        if f01_conf > 0.6:
             f14_def = self.processes.get("F14")
             if f14_def:
-                to_add.append(ProcessPrediction(
-                    process_id="F14",
-                    name=f14_def["name"],
-                    confidence=0.75,
-                    matched_text=[],
-                    matched_symbols=[],
-                    matched_geometry=[],
-                    reasoning="[自動補全] 由 F01 (焊接) 自動觸發"
-                ))
+                f14_target = round(f01_conf * 0.9, 4)
+                f14_pred = next((c for c in final_candidates if c.process_id == "F14"), None)
+                if f14_pred:
+                    if f14_pred.confidence < f14_target:
+                        f14_pred.confidence = f14_target
+                        f14_pred.reasoning += "\n[連動] F01 信心度高 → 提升 F14"
+                else:
+                    to_add.append(ProcessPrediction(
+                        process_id="F14",
+                        name=f14_def["name"],
+                        confidence=f14_target,
+                        matched_text=[],
+                        matched_symbols=[],
+                        matched_geometry=[],
+                        reasoning="[連動] F01 信心度高 → 補全 F14"
+                    ))
         
         # Rule 2: Auto-fill F16 → F20
         if "F16" in active_ids and "F20" not in active_ids:
@@ -591,10 +636,17 @@ class DecisionEngineV2:
         
         # Apply removals
         final_candidates = [c for c in final_candidates if c.process_id not in to_remove]
-        
+
         # Apply additions
         final_candidates.extend(to_add)
-        
+
+        # Rule 7: Conflict suppression - C05 >> C04
+        c05_conf = next((c.confidence for c in final_candidates if c.process_id == "C05"), 0)
+        c04_pred = next((c for c in final_candidates if c.process_id == "C04"), None)
+        if c04_pred and c05_conf - c04_pred.confidence >= 0.1:
+            c04_pred.confidence = 0.0
+            c04_pred.reasoning += "\n[衝突抑制] C05 明顯高於 C04，抑制 C04"
+
         return final_candidates
     
     # ==================================================================
@@ -687,7 +739,9 @@ class DecisionEngineV2:
         text_score: float,
         symbol_score: float,
         geometry_score: float,
-        vlm_score: float = 0.0
+        vlm_score: float = 0.0,
+        allow_experience: bool = True,
+        suppressed_reason: Optional[str] = None
     ) -> List[str]:
         """Collect evidence for prediction with conversational tone."""
         evidence = []
@@ -704,9 +758,11 @@ class DecisionEngineV2:
             if geometry_features or symbols_features:
                 parts = []
                 if geometry_features:
-                    parts.append(f"幾何特徵：{', '.join(geometry_features[:3])}")
+                    translated_geo = [self._translate_term(t) for t in geometry_features[:3]]
+                    parts.append(f"幾何特徵：{', '.join(translated_geo)}")
                 if symbols_features:
-                    parts.append(f"符號：{', '.join(symbols_features[:3])}")
+                    translated_sym = [self._translate_term(t) for t in symbols_features[:3]]
+                    parts.append(f"符號：{', '.join(translated_sym)}")
                 evidence.append(f"VLM: 我看到 { '，'.join(parts) }。")
         
         # Text evidence
@@ -742,9 +798,58 @@ class DecisionEngineV2:
         
         # Default evidence
         if not evidence:
-            evidence.append("經驗法則：這類鈑金件，大家多半會做。")
-        
+            if allow_experience:
+                evidence.append("經驗法則：這類鈑金件，大家多半會做。")
+            else:
+                evidence.append(suppressed_reason or "未偵測到有效證據。")
+
         return evidence
+
+    def _has_vlm_evidence(self, features: ExtractedFeatures) -> bool:
+        """Check whether VLM provides explicit visual evidence."""
+        if not features.vlm_analysis:
+            return False
+        detected = features.vlm_analysis.get("detected_features", {})
+        geometry_features = detected.get("geometry", []) if detected else []
+        symbol_features = detected.get("symbols", []) if detected else []
+        return bool(geometry_features or symbol_features)
+
+    def _has_strong_vlm_evidence(self, features: ExtractedFeatures) -> bool:
+        """Check whether VLM mentions strong visual evidence keywords."""
+        if not features.vlm_analysis:
+            return False
+        detected = features.vlm_analysis.get("detected_features", {})
+        geometry_features = detected.get("geometry", []) if detected else []
+        symbol_features = detected.get("symbols", []) if detected else []
+        keywords = {"welding", "oval hole"}
+        for item in geometry_features + symbol_features:
+            if isinstance(item, str):
+                lowered = item.lower()
+                if any(keyword in lowered for keyword in keywords):
+                    return True
+        return False
+
+    def _translate_term(self, term: str) -> str:
+        """Translate common professional terms to Chinese."""
+        if not isinstance(term, str):
+            return str(term)
+        mapping = {
+            "welding": "焊接",
+            "weld": "焊接",
+            "oval hole": "橢圓孔",
+            "countersink": "沉頭孔",
+            "counterbore": "沉孔",
+            "rib": "肋條",
+            "hole": "孔",
+            "holes": "孔洞",
+            "bend": "折彎",
+            "bend lines": "折彎線"
+        }
+        lower = term.lower()
+        for key, value in mapping.items():
+            if key in lower:
+                return lower.replace(key, value)
+        return term
 
     def _apply_confidence_jitter(self, score: float) -> float:
         """
