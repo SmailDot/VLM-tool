@@ -756,6 +756,29 @@ with col_right:
             # VLM 分析結果 (NEW!)
             if result.features.vlm_analysis:
                 st.markdown("**🤖 VLM 視覺語言模型分析:**")
+
+                if "diagnostics_image_index" not in st.session_state:
+                    st.session_state.diagnostics_image_index = 0
+
+                image_count = len(st.session_state.uploaded_drawings) if st.session_state.uploaded_drawings else 1
+                image_count = max(image_count, 1)
+
+                nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+                with nav_col1:
+                    if st.button("←", key="diag_prev"):
+                        st.session_state.diagnostics_image_index = max(
+                            0, st.session_state.diagnostics_image_index - 1
+                        )
+                with nav_col3:
+                    if st.button("→", key="diag_next"):
+                        st.session_state.diagnostics_image_index = min(
+                            image_count - 1, st.session_state.diagnostics_image_index + 1
+                        )
+                with nav_col2:
+                    st.caption(
+                        f"查看第 {st.session_state.diagnostics_image_index + 1} / {image_count} 張圖的推理結果"
+                    )
+
                 vlm = result.features.vlm_analysis
                 
                 # 形狀描述
