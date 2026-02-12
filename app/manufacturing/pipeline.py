@@ -552,6 +552,7 @@ class ManufacturingPipeline:
     def visualize_features(
         self,
         image: Union[str, np.ndarray],
+        features: Optional[ExtractedFeatures] = None,
         show_ocr: bool = True,
         show_geometry: bool = True,
         show_symbols: bool = True
@@ -561,6 +562,7 @@ class ManufacturingPipeline:
         
         Args:
             image: Input image path or numpy array.
+            features: Pre-extracted features (if available, skip re-extraction).
             show_ocr: Draw OCR bounding boxes.
             show_geometry: Draw geometry features.
             show_symbols: Draw symbol detections.
@@ -576,13 +578,14 @@ class ManufacturingPipeline:
         else:
             img_array = image.copy()
         
-        # Extract features
-        features = self._extract_features(
-            img_array, 
-            0.5, 
-            0.6,
-            image_path=image if isinstance(image, str) else None
-        )
+        # Extract features only if not provided
+        if features is None:
+            features = self._extract_features(
+                img_array, 
+                0.5, 
+                0.6,
+                image_path=image if isinstance(image, str) else None
+            )
         
         # Draw features
         vis_image = img_array.copy()

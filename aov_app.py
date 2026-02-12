@@ -21,6 +21,7 @@ import time
 import tempfile
 from typing import Dict, List
 from PIL import Image
+from pathlib import Path
 
 # 製程辨識核心模組
 from app.manufacturing import ManufacturingPipeline
@@ -639,14 +640,91 @@ with col_right:
                     reasoning_lines.append(f"RAG: {rag_knowledge}")
 
                 kb_manager = KnowledgeBaseManager()
-                entry = kb_manager.add_entry(
+                result_data = kb_manager.add_entry(
                     image_path=st.session_state.temp_file_path,
                     features=result.features.vlm_analysis or {},
                     correct_processes=final_processes,
                     reasoning="\n".join(reasoning_lines)
                 )
-                st.session_state.last_kb_entry_id = entry.get("id", "")
-                st.toast("已保存並學習")
+                
+                # Handle duplicate detection
+                if result_data.get("status") == "duplicate_found":
+                    similar_entries = result_data.get("similar", [])
+                    
+                    st.warning("⚠️ 發現相似的圖片條目")
+                    st.info(f"找到 {len(similar_entries)} 個相似條目 (相似度門檻: Hamming distance ≤ 5)")
+                    
+                    # Display similar entries
+                    for idx, sim in enumerate(similar_entries, 1):
+                        entry = sim["entry"]
+                        similarity = sim["similarity_percent"]
+                        distance = sim["distance"]
+                        
+                        with st.expander(f"相似條目 #{idx} - 相似度 {similarity}% (距離: {distance})"):
+                            col1, col2 = st.columns([1, 2])
+                            
+                            with col1:
+                                # Display thumbnail if image exists
+                                img_path = entry.get("image_rel_path")
+                                if img_path and Path(img_path).exists():
+                                    st.image(img_path, caption=f"ID: {entry.get('id', 'N/A')}")
+                                else:
+                                    st.text("圖片不存在")
+                            
+                            with col2:
+                                st.markdown(f"**條目 ID:** {entry.get('id', 'N/A')}")
+                                st.markdown(f"**時間:** {entry.get('timestamp', 'N/A')}")
+                                st.markdown(f"**製程:** {', '.join(entry.get('correct_processes', []))}")
+                                st.markdown(f"**備註:** {entry.get('reasoning', 'N/A')[:100]}...")
+                    
+                    # Action buttons
+                    st.markdown("**請選擇處理方式：**")
+                    col_btn1, col_btn2, col_btn3 = st.columns(3)
+                    
+                    with col_btn1:
+                        if st.button("✅ 覆蓋最相似的", key="overwrite_duplicate"):
+                            # Delete most similar entry and add new one
+                            most_similar = similar_entries[0]["entry"]
+                            kb_manager.delete_entry(most_similar["id"])
+                            
+                            # Force add without duplicate check
+                            entry = kb_manager.add_entry(
+                                image_path=st.session_state.temp_file_path,
+                                features=result.features.vlm_analysis or {},
+                                correct_processes=final_processes,
+                                reasoning="\n".join(reasoning_lines),
+                                similarity_threshold=-1  # Disable duplicate check
+                            )
+                            st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
+                            st.success("✅ 已覆蓋舊條目並保存")
+                            st.rerun()
+                    
+                    with col_btn2:
+                        if st.button("➕ 並存保留", key="keep_both_duplicate"):
+                            # Force add without duplicate check
+                            entry = kb_manager.add_entry(
+                                image_path=st.session_state.temp_file_path,
+                                features=result.features.vlm_analysis or {},
+                                correct_processes=final_processes,
+                                reasoning="\n".join(reasoning_lines),
+                                similarity_threshold=-1  # Disable duplicate check
+                            )
+                            st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
+                            st.success("✅ 已保存為新條目（並存）")
+                            st.rerun()
+                    
+                    with col_btn3:
+                        if st.button("❌ 取消", key="cancel_duplicate"):
+                            st.info("已取消保存")
+                
+                elif result_data.get("status") == "ok":
+                    # Successfully added without duplicates
+                    entry = result_data.get("entry", {})
+                    st.session_state.last_kb_entry_id = entry.get("id", "")
+                    st.toast("✅ 已保存並學習")
+                
+                else:
+                    st.error("保存失敗，請稍後再試")
 
         if undo_clicked:
             last_entry_id = st.session_state.last_kb_entry_id
@@ -838,8 +916,10 @@ with col_right:
             
             try:
                 settings = st.session_state.last_settings
+                # 傳入已提取的 features，避免重複提取（效能優化）
                 vis_image = st.session_state.mfg_pipeline.visualize_features(
                     st.session_state.uploaded_drawing,
+                    features=result.features,  # 使用已提取的特徵
                     show_ocr=settings.get('use_ocr', False),
                     show_geometry=settings.get('use_geometry', True),
                     show_symbols=settings.get('use_symbols', True)
@@ -909,11 +989,22 @@ with tab2:
     kb_manager = KnowledgeBaseManager()
     entries = kb_manager.db
 
+    # 取得製程 ID 清單（優先從 pipeline，否則直接從 JSON 載入）
     pipeline = st.session_state.mfg_pipeline
     if pipeline is not None:
         all_process_ids = list(pipeline.decision_engine.processes.keys())
     else:
-        all_process_ids = []
+        # Pipeline 未初始化時，直接從 JSON 載入製程 ID
+        try:
+            import json
+            from pathlib import Path
+            process_lib_path = Path(__file__).parent / "app" / "manufacturing" / "process_lib.json"
+            with open(process_lib_path, 'r', encoding='utf-8') as f:
+                process_data = json.load(f)
+                all_process_ids = list(process_data.get('processes', {}).keys())
+        except Exception as e:
+            st.error(f"無法載入製程清單: {e}")
+            all_process_ids = []
 
     if not entries:
         st.info("目前尚無知識庫條目")
@@ -924,10 +1015,18 @@ with tab2:
                 with col_a:
                     st.image(entry['image_rel_path'], caption="原始圖檔")
                 with col_b:
+                    # 過濾掉不存在的製程 ID（防禦性編程）
+                    stored_processes = entry.get('correct_processes', [])
+                    valid_defaults = [pid for pid in stored_processes if pid in all_process_ids]
+                    
+                    if len(valid_defaults) < len(stored_processes):
+                        invalid_ids = set(stored_processes) - set(valid_defaults)
+                        st.warning(f"⚠️ 部分製程 ID 已不存在: {', '.join(invalid_ids)}")
+                    
                     new_processes = st.multiselect(
                         "修正製程",
                         options=all_process_ids,
-                        default=entry.get('correct_processes', []),
+                        default=valid_defaults,
                         key=f"edit_{entry['id']}"
                     )
                     if st.button("更新此條目", key=f"btn_{entry['id']}"):
