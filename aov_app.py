@@ -77,6 +77,13 @@ if 'temp_file_path' not in st.session_state:
 if 'last_kb_entry_id' not in st.session_state:
     st.session_state.last_kb_entry_id = ""
 
+# 暫存區機制 (Batch Editing)
+if 'pending_changes' not in st.session_state:
+    st.session_state.pending_changes = []  # List[Dict]: [{"action": "add/remove", "process_id": str, "process_name": str, "reasoning": str, "confidence": float}]
+
+if 'reasoning_input_key' not in st.session_state:
+    st.session_state.reasoning_input_key = 0  # 用於清空理由欄位
+
 # 儲存上次的設定 (用於特徵視覺化)
 if 'last_settings' not in st.session_state:
     st.session_state.last_settings = {
@@ -545,11 +552,12 @@ with col_right:
                 )
             
             with col_c:
-                # 理由輸入
+                # 理由輸入 (使用 key 來控制清空)
                 reasoning_input = st.text_input(
                     "C - 理由（RAG關鍵數據）",
                     placeholder="例如：BOM表分開列出，故非折彎...",
-                    help="這段理由會記錄到知識庫，供 RAG 檢索使用"
+                    help="這段理由會記錄到知識庫，供 RAG 檢索使用",
+                    key=f"reasoning_input_{st.session_state.reasoning_input_key}"
                 )
             
             with col_submit:
@@ -557,7 +565,7 @@ with col_right:
                 st.write("")  # 對齊用
                 form_submitted = st.form_submit_button("▶️ 執行", use_container_width=True)
         
-        # 處理表單提交
+        # 處理表單提交 - 改為暫存操作
         if form_submitted:
             # 決定製程代碼
             target_process_id = None
@@ -578,53 +586,78 @@ with col_right:
                     target_process_id = None
             
             if target_process_id:
-                if "新增" in action_type:
-                    # 檢查是否已存在
-                    existing_ids = [item["process_id"] for item in st.session_state.editing_predictions]
-                    if target_process_id in existing_ids:
-                        st.warning(f"⚠️ {target_process_id} 已存在於清單中")
-                    else:
-                        st.session_state.editing_predictions.append({
-                            "process_id": target_process_id,
-                            "process_name": target_process_name,
-                            "confidence": 1.0,  # 預設 100%
-                            "reasoning": reasoning_input if reasoning_input else "(人工新增)"
-                        })
-                        st.success(f"✅ 已新增 {target_process_id}")
-                        
-                        # 記錄到 RAG 佇列
-                        st.session_state.rag_feedback_queue.append({
-                            "action": "add",
-                            "process_id": target_process_id,
-                            "reasoning": reasoning_input
-                        })
-                        st.session_state.is_corrected = True
-                        st.rerun()
+                action = "add" if "新增" in action_type else "remove"
                 
-                elif "移除" in action_type:
-                    # 移除製程
-                    original_len = len(st.session_state.editing_predictions)
-                    st.session_state.editing_predictions = [
-                        item for item in st.session_state.editing_predictions
-                        if item.get("process_id") != target_process_id
-                    ]
-                    new_len = len(st.session_state.editing_predictions)
+                # 檢查是否已在暫存區
+                existing_pending = [p for p in st.session_state.pending_changes if p["process_id"] == target_process_id and p["action"] == action]
+                
+                if existing_pending:
+                    st.warning(f"⚠️ {target_process_id} 的 {action} 操作已在待確認區")
+                else:
+                    # 新增到暫存區
+                    st.session_state.pending_changes.append({
+                        "action": action,
+                        "process_id": target_process_id,
+                        "process_name": target_process_name,
+                        "reasoning": reasoning_input if reasoning_input else "",
+                        "confidence": 1.0  # 新增時預設 100%
+                    })
                     
-                    if new_len < original_len:
-                        st.success(f"✅ 已移除 {target_process_id}")
-                        
-                        # 記錄到 RAG 佇列
-                        st.session_state.rag_feedback_queue.append({
-                            "action": "remove",
-                            "process_id": target_process_id,
-                            "reasoning": reasoning_input
-                        })
-                        st.session_state.is_corrected = True
-                        st.rerun()
-                    else:
-                        st.warning(f"⚠️ {target_process_id} 不在清單中，無法移除")
+                    # 清空理由欄位 (遞增 key)
+                    st.session_state.reasoning_input_key += 1
+                    
+                    # 不顯示 success，避免混亂，在待確認區會顯示
+                    st.rerun()
         
-        # ========== 目前製程清單（可編輯信心度） ==========
+        # ========== 待確認區 (Pending Changes) ==========
+        if st.session_state.pending_changes:
+            st.markdown("---")
+            st.markdown("#### ⏳ 待確認操作")
+            
+            with st.container():
+                st.warning(f"📝 共有 {len(st.session_state.pending_changes)} 個待處理操作，點擊「保存並學習」後將一次性套用")
+                
+                for idx, change in enumerate(st.session_state.pending_changes):
+                    action = change["action"]
+                    pid = change["process_id"]
+                    pname = change["process_name"]
+                    reason = change.get("reasoning", "")
+                    
+                    # 根據動作類型選擇顏色和圖標
+                    if action == "add":
+                        icon = "➕"
+                        color = "#e8f5e9"
+                        text_color = "#2e7d32"
+                        action_text = "新增"
+                    else:  # remove
+                        icon = "➖"
+                        color = "#ffebee"
+                        text_color = "#c62828"
+                        action_text = "移除"
+                    
+                    # 顯示待確認項目
+                    col_badge, col_remove = st.columns([10, 1])
+                    
+                    with col_badge:
+                        badge_html = f"""
+                        <div style='background-color:{color}; padding:8px 12px; border-radius:8px; margin:4px 0; 
+                                    border-left:4px solid {text_color};'>
+                            <span style='font-size:16px;'>{icon}</span>
+                            <strong style='color:{text_color};'>{action_text}</strong>
+                            <span style='background-color:white; color:{text_color}; padding:2px 8px; 
+                                         border-radius:12px; margin:0 8px; font-weight:bold;'>[{pid}]</span>
+                            <span style='color:#333;'>{pname}</span>
+                            {f"<span style='color:#666; font-size:0.9em; margin-left:8px;'>({reason})</span>" if reason else ""}
+                        </div>
+                        """
+                        st.markdown(badge_html, unsafe_allow_html=True)
+                    
+                    with col_remove:
+                        if st.button("❌", key=f"remove_pending_{idx}", help="撤銷此操作"):
+                            st.session_state.pending_changes.pop(idx)
+                            st.rerun()
+        
+        # ========== 目前製程清單（彩色標籤顯示） ==========
         st.markdown("---")
         if st.session_state.is_corrected:
             st.markdown("#### 📋 人工校正所需製程為以下")
@@ -632,46 +665,55 @@ with col_right:
             st.markdown("#### 📋 製程預測與人工校正")
         
         if st.session_state.editing_predictions:
-            # 使用 st.data_editor 讓使用者可以調整信心度
-            import pandas as pd
+            # 渲染彩色標籤
+            st.markdown("##### 當前製程清單")
             
-            # 轉換為 DataFrame
-            df_data = []
-            for item in st.session_state.editing_predictions:
-                df_data.append({
-                    "製程代碼": item["process_id"],
-                    "製程名稱": item["process_name"],
-                    "信心度 (%)": int(item["confidence"] * 100),
-                    "理由": item["reasoning"]
-                })
-            
-            df = pd.DataFrame(df_data)
-            
-            # 可編輯的 DataFrame
-            edited_df = st.data_editor(
-                df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "製程代碼": st.column_config.TextColumn("製程代碼", width="small", disabled=True),
-                    "製程名稱": st.column_config.TextColumn("製程名稱", width="medium", disabled=True),
-                    "信心度 (%)": st.column_config.NumberColumn(
-                        "信心度 (%)",
-                        width="small",
+            for idx, item in enumerate(st.session_state.editing_predictions):
+                pid = item["process_id"]
+                pname = item["process_name"]
+                confidence = item["confidence"]
+                reasoning = item.get("reasoning", "")
+                
+                # 根據信心度決定顏色
+                if confidence >= 0.7:
+                    bg_color = "#e0f2f1"
+                    text_color = "#00695c"
+                elif confidence >= 0.5:
+                    bg_color = "#fff3e0"
+                    text_color = "#e65100"
+                else:
+                    bg_color = "#ffebee"
+                    text_color = "#c62828"
+                
+                # 顯示標籤與信心度調整
+                col_badge, col_conf, col_actions = st.columns([6, 2, 2])
+                
+                with col_badge:
+                    badge_html = f"""
+                    <div style='background-color:{bg_color}; color:{text_color}; padding:8px 12px; 
+                                border-radius:12px; margin:4px 0; display:inline-block; 
+                                border:2px solid {text_color};'>
+                        <strong>[{pid}]</strong> {pname}
+                        {f"<span style='font-size:0.85em; opacity:0.8; margin-left:8px;'>({reasoning[:30]}...)</span>" if len(reasoning) > 30 else f"<span style='font-size:0.85em; opacity:0.8; margin-left:8px;'>({reasoning})</span>" if reasoning else ""}
+                    </div>
+                    """
+                    st.markdown(badge_html, unsafe_allow_html=True)
+                
+                with col_conf:
+                    # 信心度調整滑桿
+                    new_conf = st.slider(
+                        "信心度",
                         min_value=0,
                         max_value=100,
-                        step=1,
-                        help="點擊可編輯"
-                    ),
-                    "理由": st.column_config.TextColumn("理由", width="large", disabled=True)
-                },
-                key="process_list_editor"
-            )
-            
-            # 同步回 session_state  
-            for idx in range(len(edited_df)):
-                confidence_pct = edited_df.iloc[idx]["信心度 (%)"]  # type: ignore[index]
-                st.session_state.editing_predictions[idx]["confidence"] = float(confidence_pct) / 100.0
+                        value=int(confidence * 100),
+                        step=5,
+                        key=f"conf_{pid}_{idx}",
+                        label_visibility="collapsed"
+                    )
+                    st.session_state.editing_predictions[idx]["confidence"] = new_conf / 100.0
+                
+                with col_actions:
+                    st.caption(f"{int(confidence * 100)}%")
         else:
             st.info("目前清單為空，請使用上方表單新增製程")
 
@@ -688,6 +730,26 @@ with col_right:
             else:
                 from app.knowledge.manager import KnowledgeBaseManager
 
+                # ========== STEP 1: 套用所有 pending_changes 到 editing_predictions ==========
+                for change in st.session_state.pending_changes:
+                    if change["action"] == "add":
+                        # 新增製程到清單（如果不存在）
+                        existing_ids = [p["process_id"] for p in st.session_state.editing_predictions]
+                        if change["process_id"] not in existing_ids:
+                            st.session_state.editing_predictions.append({
+                                "process_id": change["process_id"],
+                                "process_name": change["process_name"],
+                                "confidence": change["confidence"],
+                                "reasoning": change["reasoning"] or "(人工新增)"
+                            })
+                    elif change["action"] == "remove":
+                        # 從清單移除製程
+                        st.session_state.editing_predictions = [
+                            p for p in st.session_state.editing_predictions
+                            if p["process_id"] != change["process_id"]
+                        ]
+
+                # ========== STEP 2: 建立最終製程清單與理由 ==========
                 final_processes = [
                     item["process_id"]
                     for item in st.session_state.editing_predictions
@@ -700,18 +762,14 @@ with col_right:
                     if item.get("process_id")
                 ]
 
-                # 合併 RAG feedback queue
-                if st.session_state.rag_feedback_queue:
-                    for feedback in st.session_state.rag_feedback_queue:
-                        action = feedback["action"]
-                        pid = feedback["process_id"]
-                        reason = feedback["reasoning"]
-                        if reason:
-                            reasoning_lines.append(f"[{action.upper()}] {pid}: {reason}")
-                    
-                    # 清空佇列
-                    st.session_state.rag_feedback_queue = []
-
+                # 合併 pending_changes 中的理由（顯示操作歷程）
+                for change in st.session_state.pending_changes:
+                    if change["reasoning"]:
+                        reasoning_lines.append(
+                            f"[{change['action'].upper()}] {change['process_id']}: {change['reasoning']}"
+                        )
+                
+                # ========== STEP 3: 保存到知識庫 ==========
                 kb_manager = KnowledgeBaseManager()
                 result_data = kb_manager.add_entry(
                     image_path=st.session_state.temp_file_path,
@@ -769,8 +827,12 @@ with col_right:
                                 similarity_threshold=-1  # Disable duplicate check
                             )
                             st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
-                            st.session_state.is_corrected = True  # Mark as corrected permanently
-                            st.success("✅ 已覆蓋舊條目並保存")
+                            st.session_state.is_corrected = True
+                            
+                            # ========== STEP 4: 清空 pending_changes ==========
+                            st.session_state.pending_changes = []
+                            
+                            st.success("✅ 已覆蓋舊條目並批量保存")
                             st.rerun()
                     
                     with col_btn2:
@@ -784,8 +846,12 @@ with col_right:
                                 similarity_threshold=-1  # Disable duplicate check
                             )
                             st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
-                            st.session_state.is_corrected = True  # Mark as corrected permanently
-                            st.success("✅ 已保存為新條目（並存）")
+                            st.session_state.is_corrected = True
+                            
+                            # ========== STEP 4: 清空 pending_changes ==========
+                            st.session_state.pending_changes = []
+                            
+                            st.success("✅ 已批量保存為新條目（並存）")
                             st.rerun()
                     
                     with col_btn3:
@@ -796,8 +862,12 @@ with col_right:
                     # Successfully added without duplicates
                     entry = result_data.get("entry", {})
                     st.session_state.last_kb_entry_id = entry.get("id", "")
-                    st.session_state.is_corrected = True  # Mark as corrected permanently
-                    st.toast("✅ 已保存並學習")
+                    st.session_state.is_corrected = True
+                    
+                    # ========== STEP 4: 清空 pending_changes ==========
+                    st.session_state.pending_changes = []
+                    
+                    st.toast("✅ 已批量保存並學習")
                 
                 else:
                     st.error("保存失敗，請稍後再試")
