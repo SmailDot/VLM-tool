@@ -25,7 +25,6 @@ from pathlib import Path
 
 # 製程辨識核心模組
 from app.manufacturing import ManufacturingPipeline
-from app.manufacturing.decision import InstructionParser
 
 # UI 樣式
 from components.style import apply_custom_style
@@ -75,16 +74,6 @@ if 'min_confidence' not in st.session_state:
 
 if 'temp_file_path' not in st.session_state:
     st.session_state.temp_file_path = None
-if 'teacher_actions' not in st.session_state:
-    st.session_state.teacher_actions = []
-if 'teacher_rag_knowledge' not in st.session_state:
-    st.session_state.teacher_rag_knowledge = ""
-if 'teacher_response' not in st.session_state:
-    st.session_state.teacher_response = ""
-if 'teacher_pending' not in st.session_state:
-    st.session_state.teacher_pending = False
-if 'teacher_last_input' not in st.session_state:
-    st.session_state.teacher_last_input = ""
 if 'last_kb_entry_id' not in st.session_state:
     st.session_state.last_kb_entry_id = ""
 
@@ -514,101 +503,177 @@ with col_right:
             ]
             st.session_state.editing_source_signature = signature
 
-        for idx, item in enumerate(st.session_state.editing_predictions):
-            with st.container(border=True):
-                col_title, col_conf, col_action = st.columns([4, 3, 1])
+        # 初始化 RAG 暫存佇列
+        if "rag_feedback_queue" not in st.session_state:
+            st.session_state.rag_feedback_queue = []
+        
+        if "is_corrected" not in st.session_state:
+            st.session_state.is_corrected = False
 
-                with col_title:
-                    st.markdown(
-                        f"**{item['process_id']} - {item['process_name']}**"
-                    )
-
-                with col_conf:
-                    st.progress(item["confidence"])
-                    st.caption(f"信心度: {item['confidence'] * 100:.1f}%")
-
-                with col_action:
-                    if st.button("🗑️ 刪除", key=f"del_{idx}"):
-                        st.session_state.editing_predictions.pop(idx)
-                        st.rerun()
-
-                st.markdown(f"**理由**: {item['reasoning']}")
-
-        st.markdown("#### 專家指令區 (Teacher Mode)")
-        teacher_input = st.chat_input("若有錯誤，請在這描述你想要的修改（例如：'移除 I01，新增 K01，理由是...')")
-        if teacher_input and not st.session_state.teacher_pending:
-            st.session_state.teacher_last_input = teacher_input
-            st.session_state.teacher_pending = True
-            st.rerun()
-
-        if st.session_state.teacher_pending:
-            with st.spinner("🧠 系統思考中，請稍候..."):
-                parser = InstructionParser()
-                parsed = parser.parse(
-                    st.session_state.teacher_last_input,
-                    context={
-                        "predictions": st.session_state.editing_predictions,
-                        "available_processes": [
-                            {
-                                "process_id": pid,
-                                "process_name": process_defs.get(pid, {}).get("name", "")
-                            }
-                            for pid in process_defs.keys()
-                        ]
-                    }
+        # ========== A-B-C 單列修正表單 ==========
+        st.markdown("#### 製程修正區 (A-B-C Correction)")
+        
+        with st.form(key="correction_form", clear_on_submit=True):
+            col_a, col_b, col_c, col_submit = st.columns([3, 2, 4, 1])
+            
+            with col_a:
+                # 製程選單 - 格式: [代碼] 名稱
+                process_options_formatted = [
+                    f"[{pid}] {process_defs[pid].get('name', '')}"
+                    for pid in sorted(process_defs.keys())
+                ]
+                selected_process_label = st.selectbox(
+                    "A - 製程",
+                    options=process_options_formatted,
+                    help="支援搜尋代碼或名稱"
                 )
-                if parsed is None:
-                    st.warning("⚠️ LLM 未啟動或解析失敗，已跳過指令處理")
-                    st.session_state.teacher_pending = False
+                
+                # 手動輸入代碼（選填）
+                manual_code = st.text_input(
+                    "手動輸入代碼（選填）",
+                    placeholder="如：X99",
+                    help="若清單中沒有要的代碼，可手動輸入"
+                )
+            
+            with col_b:
+                # 動作選擇
+                action_type = st.radio(
+                    "B - 動作",
+                    options=["新增 (Add)", "移除 (Remove)"],
+                    index=0,
+                    horizontal=True
+                )
+            
+            with col_c:
+                # 理由輸入
+                reasoning_input = st.text_input(
+                    "C - 理由（RAG關鍵數據）",
+                    placeholder="例如：BOM表分開列出，故非折彎...",
+                    help="這段理由會記錄到知識庫，供 RAG 檢索使用"
+                )
+            
+            with col_submit:
+                st.write("")  # 對齊用
+                st.write("")  # 對齊用
+                form_submitted = st.form_submit_button("▶️ 執行", use_container_width=True)
+        
+        # 處理表單提交
+        if form_submitted:
+            # 決定製程代碼
+            target_process_id = None
+            target_process_name = "(未知製程)"
+            
+            if manual_code.strip():
+                target_process_id = manual_code.strip().upper()
+                target_process_name = process_defs.get(target_process_id, {}).get("name", "(未知製程)")
+            else:
+                # 從選單提取代碼 [I01] 雷射切割 -> I01
+                import re
+                match = re.match(r"\[([^\]]+)\]", selected_process_label)
+                if match:
+                    target_process_id = match.group(1)
+                    target_process_name = process_defs.get(target_process_id, {}).get("name", "(未知製程)")
                 else:
-                    with st.expander("解析結果 (LLM JSON)", expanded=False):
-                        st.json(parsed)
-                    actions = parsed.get("actions", [])
-                    rag_knowledge = parsed.get("rag_knowledge", "")
-                    st.session_state.teacher_actions = actions
-                    st.session_state.teacher_rag_knowledge = rag_knowledge
-
-                    response_parts = []
-                    applied_actions = 0
-                    for action in actions:
-                        action_type = action.get("type")
-                        target_id = action.get("target_id")
-                        if not target_id:
-                            target_name = action.get("target_name")
-                            if isinstance(target_name, str) and target_name:
-                                for pid, proc in process_defs.items():
-                                    if proc.get("name") == target_name:
-                                        target_id = pid
-                                        break
-                        if action_type == "remove" and target_id:
-                            st.session_state.editing_predictions = [
-                                item for item in st.session_state.editing_predictions
-                                if item.get("process_id") != target_id
-                            ]
-                            response_parts.append(f"已移除 {target_id}")
-                            applied_actions += 1
-                        elif action_type == "add" and target_id:
-                            new_name = process_defs.get(target_id, {}).get("name", "")
-                            st.session_state.editing_predictions.append({
-                                "process_id": target_id,
-                                "process_name": new_name,
-                                "confidence": 0.5,
-                                "reasoning": action.get("reason", "")
-                            })
-                            response_parts.append(f"已新增 {target_id}")
-                            applied_actions += 1
-
-                    if response_parts:
-                        st.session_state.teacher_response = "收到，" + " 並 ".join(response_parts) + "。"
+                    st.error("無法解析選擇的製程")
+                    target_process_id = None
+            
+            if target_process_id:
+                if "新增" in action_type:
+                    # 檢查是否已存在
+                    existing_ids = [item["process_id"] for item in st.session_state.editing_predictions]
+                    if target_process_id in existing_ids:
+                        st.warning(f"⚠️ {target_process_id} 已存在於清單中")
                     else:
-                        st.session_state.teacher_response = "收到，但沒有可套用的變更（請確認指令格式或 target_id）。"
-                    if not applied_actions:
-                        st.warning("⚠️ 指令已解析，但未套用任何修改。請檢查 target_id 是否存在。")
-                    st.session_state.teacher_pending = False
-                    st.rerun()
-
-        if st.session_state.teacher_response:
-            st.info(st.session_state.teacher_response)
+                        st.session_state.editing_predictions.append({
+                            "process_id": target_process_id,
+                            "process_name": target_process_name,
+                            "confidence": 1.0,  # 預設 100%
+                            "reasoning": reasoning_input if reasoning_input else "(人工新增)"
+                        })
+                        st.success(f"✅ 已新增 {target_process_id}")
+                        
+                        # 記錄到 RAG 佇列
+                        st.session_state.rag_feedback_queue.append({
+                            "action": "add",
+                            "process_id": target_process_id,
+                            "reasoning": reasoning_input
+                        })
+                        st.session_state.is_corrected = True
+                        st.rerun()
+                
+                elif "移除" in action_type:
+                    # 移除製程
+                    original_len = len(st.session_state.editing_predictions)
+                    st.session_state.editing_predictions = [
+                        item for item in st.session_state.editing_predictions
+                        if item.get("process_id") != target_process_id
+                    ]
+                    new_len = len(st.session_state.editing_predictions)
+                    
+                    if new_len < original_len:
+                        st.success(f"✅ 已移除 {target_process_id}")
+                        
+                        # 記錄到 RAG 佇列
+                        st.session_state.rag_feedback_queue.append({
+                            "action": "remove",
+                            "process_id": target_process_id,
+                            "reasoning": reasoning_input
+                        })
+                        st.session_state.is_corrected = True
+                        st.rerun()
+                    else:
+                        st.warning(f"⚠️ {target_process_id} 不在清單中，無法移除")
+        
+        # ========== 目前製程清單（可編輯信心度） ==========
+        st.markdown("---")
+        if st.session_state.is_corrected:
+            st.markdown("#### 📋 人工校正所需製程為以下")
+        else:
+            st.markdown("#### 📋 製程預測與人工校正")
+        
+        if st.session_state.editing_predictions:
+            # 使用 st.data_editor 讓使用者可以調整信心度
+            import pandas as pd
+            
+            # 轉換為 DataFrame
+            df_data = []
+            for item in st.session_state.editing_predictions:
+                df_data.append({
+                    "製程代碼": item["process_id"],
+                    "製程名稱": item["process_name"],
+                    "信心度 (%)": int(item["confidence"] * 100),
+                    "理由": item["reasoning"]
+                })
+            
+            df = pd.DataFrame(df_data)
+            
+            # 可編輯的 DataFrame
+            edited_df = st.data_editor(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "製程代碼": st.column_config.TextColumn("製程代碼", width="small", disabled=True),
+                    "製程名稱": st.column_config.TextColumn("製程名稱", width="medium", disabled=True),
+                    "信心度 (%)": st.column_config.NumberColumn(
+                        "信心度 (%)",
+                        width="small",
+                        min_value=0,
+                        max_value=100,
+                        step=1,
+                        help="點擊可編輯"
+                    ),
+                    "理由": st.column_config.TextColumn("理由", width="large", disabled=True)
+                },
+                key="process_list_editor"
+            )
+            
+            # 同步回 session_state  
+            for idx in range(len(edited_df)):
+                confidence_pct = edited_df.iloc[idx]["信心度 (%)"]  # type: ignore[index]
+                st.session_state.editing_predictions[idx]["confidence"] = float(confidence_pct) / 100.0
+        else:
+            st.info("目前清單為空，請使用上方表單新增製程")
 
         st.markdown("#### 定案並學習 (Save & Learn)")
         col_learn, col_undo = st.columns([3, 1])
@@ -635,9 +700,17 @@ with col_right:
                     if item.get("process_id")
                 ]
 
-                rag_knowledge = st.session_state.teacher_rag_knowledge
-                if rag_knowledge:
-                    reasoning_lines.append(f"RAG: {rag_knowledge}")
+                # 合併 RAG feedback queue
+                if st.session_state.rag_feedback_queue:
+                    for feedback in st.session_state.rag_feedback_queue:
+                        action = feedback["action"]
+                        pid = feedback["process_id"]
+                        reason = feedback["reasoning"]
+                        if reason:
+                            reasoning_lines.append(f"[{action.upper()}] {pid}: {reason}")
+                    
+                    # 清空佇列
+                    st.session_state.rag_feedback_queue = []
 
                 kb_manager = KnowledgeBaseManager()
                 result_data = kb_manager.add_entry(
@@ -696,6 +769,7 @@ with col_right:
                                 similarity_threshold=-1  # Disable duplicate check
                             )
                             st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
+                            st.session_state.is_corrected = True  # Mark as corrected permanently
                             st.success("✅ 已覆蓋舊條目並保存")
                             st.rerun()
                     
@@ -710,6 +784,7 @@ with col_right:
                                 similarity_threshold=-1  # Disable duplicate check
                             )
                             st.session_state.last_kb_entry_id = entry.get("entry", {}).get("id", "")
+                            st.session_state.is_corrected = True  # Mark as corrected permanently
                             st.success("✅ 已保存為新條目（並存）")
                             st.rerun()
                     
@@ -721,6 +796,7 @@ with col_right:
                     # Successfully added without duplicates
                     entry = result_data.get("entry", {})
                     st.session_state.last_kb_entry_id = entry.get("id", "")
+                    st.session_state.is_corrected = True  # Mark as corrected permanently
                     st.toast("✅ 已保存並學習")
                 
                 else:
@@ -872,8 +948,9 @@ with col_right:
                     st.caption(f"VLM 建議製程: {', '.join(vlm['suggested_process_ids'][:5])}")
                 
                 # 檢測特徵
+                # Note: .get() ensures key exists before access (LSP false positive)
                 if vlm.get("detected_features"):
-                    det_feat = vlm["detected_features"]
+                    det_feat = vlm["detected_features"]  # type: ignore[typeddict-item]
                     features_summary = []
                     if det_feat.get("geometry"):
                         features_summary.append(f"幾何 ({len(det_feat['geometry'])})")

@@ -13,7 +13,6 @@ from .ocr import OCRExtractor
 from .geometry import GeometryExtractor
 from .symbols import SymbolDetector
 from .embeddings import VisualEmbedder
-from .llm_client import LLMClient
 from .pdf_extractor import PDFImageExtractor, is_pdf_available, extract_from_pdf
 
 __all__ = [
@@ -24,5 +23,4 @@ __all__ = [
     'PDFImageExtractor',
     'is_pdf_available',
     'extract_from_pdf',
-    'LLMClient'
 ]

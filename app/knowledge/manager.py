@@ -14,7 +14,7 @@ import shutil
 import os
 import cv2
 import hashlib
-
+import numpy as np
 
 class KnowledgeBaseManager:
     """
@@ -89,7 +89,10 @@ class KnowledgeBaseManager:
             str: 64-character hash string (empty if error).
         """
         try:
-            img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            # [修正] 使用 numpy 讀取二進制流，解決 Windows 中文路徑 cv2.imread 失敗的問題
+            img_data = np.fromfile(str(image_path), dtype=np.uint8)
+            img = cv2.imdecode(img_data, cv2.IMREAD_GRAYSCALE)
+            
             if img is None:
                 print(f"[Hash] Failed to load image: {image_path}")
                 return ""
