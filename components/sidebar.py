@@ -36,7 +36,12 @@ def render_recognition_sidebar(
         use_rag = st.checkbox(
             "開啟知識庫輔助 (RAG)",
             value=st.session_state.use_rag,
-            help="從過去修正的案例中檢索相似圖紙，輔助製程預測"
+            help=(
+                "從過去修正的案例中檢索相似圖紙，輔助製程預測。\n\n"
+                "⚠️ 重要：RAG 目前僅在啟用 VLM 時有效。"
+                "若未啟用 VLM，則決策引擎會使用 OCR/幾何/符號特徵進行評分，"
+                "檢索到的案例不會直接影響信心度分數。"
+            )
         )
         st.session_state.use_rag = use_rag
 

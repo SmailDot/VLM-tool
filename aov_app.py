@@ -47,7 +47,15 @@ apply_custom_style()
 
 # 初始化製程辨識管線 (延遲載入)
 if 'mfg_pipeline' not in st.session_state:
-    st.session_state.mfg_pipeline = None
+    # Initialize pipeline early to make process_defs available for smart matching
+    # This lightweight initialization only loads process library, no heavy extractors yet
+    st.session_state.mfg_pipeline = ManufacturingPipeline(
+        use_ocr=False,  # Will be reconfigured on first recognition
+        use_geometry=False,
+        use_symbols=False,
+        use_visual=False,
+        use_vlm=False
+    )
 
 if 'uploaded_drawing' not in st.session_state:
     st.session_state.uploaded_drawing = None
@@ -343,18 +351,18 @@ with col_left:
             st.divider()
             
             # ==================== 執行辨識 ====================
-            if st.button("開始辨識製程", type="primary", width="stretch"):
+            if st.button("🚀 開始辨識製程", type="primary", use_container_width=True):
                 with st.spinner("正在分析工程圖紙..."):
                     try:
-                        # 初始化管線
-                        if st.session_state.mfg_pipeline is None:
-                            st.session_state.mfg_pipeline = ManufacturingPipeline(
-                                use_ocr=use_ocr,
-                                use_geometry=use_geometry,
-                                use_symbols=use_symbols,
-                                use_visual=False,  # DINOv2 可選 (耗時)
-                                use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
-                            )
+                        # Reconfigure pipeline with user's selected options
+                        # Pipeline was initialized early with defaults, now apply actual settings
+                        st.session_state.mfg_pipeline = ManufacturingPipeline(
+                            use_ocr=use_ocr,
+                            use_geometry=use_geometry,
+                            use_symbols=use_symbols,
+                            use_visual=False,  # DINOv2 可選 (耗時)
+                            use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
+                        )
                         
                         # 執行辨識（支援雙圖模式）
                         start_time = time.time()
@@ -517,7 +525,7 @@ with col_right:
         # ========== A-B-C 單列表單 (Single-Row Form) ==========
         st.markdown("#### ⚙️ 製程修正表單")
         
-        with st.form(key="correction_form", clear_on_submit=True):
+        with st.form(key="correction_form", clear_on_submit=True, enter_to_submit=False):
             col_a, col_b, col_c, col_submit = st.columns([3, 2, 4, 1])
             
             with col_a:
@@ -536,7 +544,8 @@ with col_right:
                 manual_code = st.text_input(
                     "手動輸入代碼或名稱（選填）",
                     placeholder="如：X99 或 鑽孔",
-                    help="若清單中沒有要的製程，可手動輸入代碼或名稱"
+                    help="若清單中沒有要的製程，可手動輸入代碼或名稱",
+                    key="manual_code_input"
                 )
             
             with col_b:
@@ -707,10 +716,10 @@ with col_right:
                                     border-left:4px solid {text_color};'>
                             <span style='font-size:16px;'>{icon}</span>
                             <strong style='color:{text_color};'>{action_text}</strong>
-                            <span style='background-color:white; color:{text_color}; padding:2px 8px; 
+                            <span style='background-color:rgba(0,0,0,0.6); color:#fff; padding:2px 8px; 
                                          border-radius:12px; margin:0 8px; font-weight:bold;'>[{pid}]</span>
-                            <span style='color:#333;'>{pname}</span>
-                            {f"<span style='color:#666; font-size:0.9em; margin-left:8px;'>({reason})</span>" if reason else ""}
+                            <span style='color:#ddd;'>{pname}</span>
+                            {f"<span style='color:#aaa; font-size:0.9em; margin-left:8px;'>({reason})</span>" if reason else ""}
                         </div>
                         """
                         st.markdown(badge_html, unsafe_allow_html=True)
