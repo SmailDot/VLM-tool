@@ -1188,7 +1188,14 @@ with tab2:
             with st.expander(f"ID: {entry['id']} - {entry['features'].get('shape_description')}"):
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    st.image(entry['image_rel_path'], caption="原始圖檔")
+                    # 檢查圖片檔案是否存在
+                    img_path = entry.get('image_rel_path', '')
+                    if img_path and os.path.exists(img_path):
+                        st.image(img_path, caption="原始圖檔")
+                    else:
+                        st.warning("⚠️ 原始圖檔已被刪除或移動")
+                        if img_path:
+                            st.caption(f"原路徑: {img_path}")
                 with col_b:
                     new_processes = st.multiselect(
                         "修正製程",
