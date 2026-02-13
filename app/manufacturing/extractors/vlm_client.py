@@ -26,9 +26,6 @@ except ImportError:
     )
 
 
-from ...config import VLM_BASE_URL, VLM_MODEL
-
-
 class VLMClient:
     """
     Client for Vision-Language Model inference via OpenAI-compatible API.
@@ -49,9 +46,9 @@ class VLMClient:
     
     def __init__(
         self,
-        base_url: str = VLM_BASE_URL,
+        base_url: str = "http://localhost:1234/v1",
         api_key: str = "not-needed",
-        model: str = VLM_MODEL,
+        model: str = "local-model",
         timeout: int = 60,
         max_retries: int = 2
     ):

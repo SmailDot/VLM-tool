@@ -22,5 +22,5 @@ __all__ = [
     'VisualEmbedder',
     'PDFImageExtractor',
     'is_pdf_available',
-    'extract_from_pdf',
+    'extract_from_pdf'
 ]

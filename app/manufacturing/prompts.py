@@ -557,7 +557,7 @@ Step 3: 根據代碼表匹配製程。
 
 請輸出如下 JSON 格式：
 {{
-  "shape_description": "描述零件形狀 (如 L型支架) (必須使用繁體中文)",
+  "shape_description": "描述零件形狀 (如 L型支架)",
   "detected_features": {{
     "geometry": ["特徵1", "特徵2"],
     "symbols": ["看到的符號文字"],
@@ -568,7 +568,7 @@ Step 3: 根據代碼表匹配製程。
   "confidence_scores": {{
     "F01": 0.95
   }},
-  "reasoning": "你的判斷理由 (Step 1... Step 2...) (必須使用繁體中文)",
+  "reasoning": "你的判斷理由 (Step 1... Step 2...)",
   "process_sequence": ["F01", "D01"]
 }}
 
@@ -576,7 +576,7 @@ Step 3: 根據代碼表匹配製程。
 
 ```json
 {{
-  "shape_description": "零件形狀的簡要描述 (必須使用繁體中文)",
+  "shape_description": "零件形狀的簡要描述",
   "overall_complexity": "簡單/中等/複雜",
   "detected_features": {{
     "geometry": ["特徵1", "特徵2"],
@@ -590,7 +590,7 @@ Step 3: 根據代碼表匹配製程。
     "D01": 0.85,
     "F01": 0.10
   }},
-   "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據 (必須使用繁體中文)",
+   "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據",
   "process_sequence": ["C05", "D01", "F01"]
 }}
 ```

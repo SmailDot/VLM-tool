@@ -34,11 +34,11 @@ def render_recognition_sidebar(
         st.session_state.use_vlm = use_vlm
 
         use_rag = st.checkbox(
-            "└─ 開啟知識庫輔助 (RAG)",
-            value=st.session_state.use_rag if use_vlm else False,
-            disabled=not use_vlm
+            "開啟知識庫輔助 (RAG)",
+            value=st.session_state.use_rag,
+            help="從過去修正的案例中檢索相似圖紙，輔助製程預測"
         )
-        st.session_state.use_rag = use_rag if use_vlm else False
+        st.session_state.use_rag = use_rag
 
         min_confidence = st.slider(
             "信心度門檻",

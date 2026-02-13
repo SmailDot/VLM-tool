@@ -47,8 +47,8 @@ class ManufacturingPipeline:
         
         # Access predictions
         for pred in result.predictions:
-            print(f"{pred.process_name}: {pred.confidence:.2f}")
-            print(f"  Evidence: {pred.evidence}")
+            print(f"{pred.name}: {pred.confidence:.2f}")
+            print(f"  Evidence: {pred.reasoning}")
     """
     
     def __init__(
@@ -289,19 +289,57 @@ class ManufacturingPipeline:
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
 
-        # RAG retrieval based on initial VLM analysis
-        if use_rag and features.vlm_analysis:
+        # RAG retrieval (works with or without VLM)
+        if use_rag:
             try:
                 from app.knowledge.manager import KnowledgeBaseManager
 
                 kb = KnowledgeBaseManager()
-                similar_cases = kb.retrieve_similar(features.vlm_analysis, top_k=3)
+                
+                # Build retrieval features from available sources
+                retrieval_features = {}
+                if features.vlm_analysis:
+                    # Prefer VLM analysis if available
+                    retrieval_features = features.vlm_analysis
+                else:
+                    # Fallback: Build features from basic extractors
+                    retrieval_features = {
+                        "shape_description": "",  # No shape description without VLM
+                        "detected_features": {
+                            "geometry": [],
+                            "symbols": [],
+                            "text_annotations": []
+                        }
+                    }
+                    
+                    # Add geometry features
+                    if features.geometry:
+                        geo_list = []
+                        if features.geometry.bend_lines and len(features.geometry.bend_lines) > 0:
+                            geo_list.append(f"折彎線 {len(features.geometry.bend_lines)} 條")
+                        if features.geometry.circles and len(features.geometry.circles) > 0:
+                            geo_list.append(f"圓形/孔洞 {len(features.geometry.circles)} 個")
+                        retrieval_features["detected_features"]["geometry"] = geo_list
+                    
+                    # Add symbol features
+                    if features.symbols:
+                        retrieval_features["detected_features"]["symbols"] = [
+                            s.symbol_type for s in features.symbols
+                        ]
+                    
+                    # Add OCR text
+                    if features.ocr_text:
+                        retrieval_features["detected_features"]["text_annotations"] = [
+                            features.ocr_text[:200]  # Limit text length
+                        ]
+                
+                similar_cases = kb.retrieve_similar(retrieval_features, top_k=3)
                 if similar_cases:
                     rag_references = similar_cases
                     rag_context_text = "\n".join(
                         [
                             (
-                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description')}]，"
+                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description', '未知')}]，"
                                 f"特徵{case['features'].get('detected_features', {}).get('geometry')}，"
                                 f"正確製程{case['correct_processes']}，"
                                 f"理由：{case['reasoning']}"
@@ -552,7 +590,6 @@ class ManufacturingPipeline:
     def visualize_features(
         self,
         image: Union[str, np.ndarray],
-        features: Optional[ExtractedFeatures] = None,
         show_ocr: bool = True,
         show_geometry: bool = True,
         show_symbols: bool = True
@@ -562,7 +599,6 @@ class ManufacturingPipeline:
         
         Args:
             image: Input image path or numpy array.
-            features: Pre-extracted features (if available, skip re-extraction).
             show_ocr: Draw OCR bounding boxes.
             show_geometry: Draw geometry features.
             show_symbols: Draw symbol detections.
@@ -578,14 +614,13 @@ class ManufacturingPipeline:
         else:
             img_array = image.copy()
         
-        # Extract features only if not provided
-        if features is None:
-            features = self._extract_features(
-                img_array, 
-                0.5, 
-                0.6,
-                image_path=image if isinstance(image, str) else None
-            )
+        # Extract features
+        features = self._extract_features(
+            img_array, 
+            0.5, 
+            0.6,
+            image_path=image if isinstance(image, str) else None
+        )
         
         # Draw features
         vis_image = img_array.copy()

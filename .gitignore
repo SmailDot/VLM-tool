@@ -14,7 +14,3 @@ pip-delete-this-directory.txt
 temp_*
 uploads/
 response_debug.json
-
-# Test files
-test_*.py
-*_test.py

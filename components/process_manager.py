@@ -278,17 +278,10 @@ def render_manage_tab(manager: ProcessLibraryManager):
                                 edit_description = st.text_area("描述", value=pdata.get('description', ''), height=80, key=f"desc_{pid}")
                             
                             with col2:
-                                # 安全取得 category index（處理編碼問題或無效值）
+                                # 安全取得 category index
                                 categories_list = ["切割", "折彎成型", "焊接", "表面處理", "組裝", "檢驗", "清潔", "其他"]
                                 current_cat = pdata.get('category', '其他')
-                                
-                                # 檢查 category 是否有效，無效則使用「其他」
-                                if current_cat not in categories_list:
-                                    current_cat = '其他'
-                                    # 自動修正資料庫中的錯誤值
-                                    pdata['category'] = '其他'
-                                
-                                cat_index = categories_list.index(current_cat)
+                                cat_index = categories_list.index(current_cat) if current_cat in categories_list else 7
                                 
                                 edit_category = st.selectbox(
                                     "分類",
@@ -297,17 +290,10 @@ def render_manage_tab(manager: ProcessLibraryManager):
                                     key=f"cat_{pid}"
                                 )
                                 
-                                # 安全取得 frequency index（處理編碼問題或無效值）
+                                # 安全取得 frequency index
                                 frequencies_list = ["高", "中", "低"]
                                 current_freq = pdata.get('frequency', '中')
-                                
-                                # 檢查 frequency 是否有效，無效則使用「中」
-                                if current_freq not in frequencies_list:
-                                    current_freq = '中'
-                                    # 自動修正資料庫中的錯誤值
-                                    pdata['frequency'] = '中'
-                                
-                                freq_index = frequencies_list.index(current_freq)
+                                freq_index = frequencies_list.index(current_freq) if current_freq in frequencies_list else 1
                                 
                                 edit_frequency = st.selectbox(
                                     "優先級",
