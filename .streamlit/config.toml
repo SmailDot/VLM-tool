@@ -1,4 +1,5 @@
 [theme]
+base = "light"  # 強制使用淺色主題
 primaryColor = "#2563EB"
 backgroundColor = "#F8FAFC"
 secondaryBackgroundColor = "#F1F5F9"
