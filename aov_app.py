@@ -716,10 +716,10 @@ with col_right:
                                     border-left:4px solid {text_color};'>
                             <span style='font-size:16px;'>{icon}</span>
                             <strong style='color:{text_color};'>{action_text}</strong>
-                            <span style='background-color:rgba(0,0,0,0.6); color:#fff; padding:2px 8px; 
+                            <span style='background-color:rgba(0,0,0,0.7); color:#fff; padding:2px 8px; 
                                          border-radius:12px; margin:0 8px; font-weight:bold;'>[{pid}]</span>
-                            <span style='color:#ddd;'>{pname}</span>
-                            {f"<span style='color:#aaa; font-size:0.9em; margin-left:8px;'>({reason})</span>" if reason else ""}
+                            <span style='color:{text_color}; font-weight:500;'>{pname}</span>
+                            {f"<span style='color:{text_color}; font-size:0.9em; margin-left:8px; opacity:0.8;'>({reason})</span>" if reason else ""}
                         </div>
                         """
                         st.markdown(badge_html, unsafe_allow_html=True)
@@ -766,7 +766,7 @@ with col_right:
                                 border-radius:12px; margin:4px 0; display:inline-block; 
                                 border:2px solid {text_color};'>
                         <strong>[{pid}]</strong> {pname}
-                        {f"<span style='font-size:0.85em; opacity:0.8; margin-left:8px;'>({reasoning[:30]}...)</span>" if len(reasoning) > 30 else f"<span style='font-size:0.85em; opacity:0.8; margin-left:8px;'>({reasoning})</span>" if reasoning else ""}
+                        {f"<span style='font-size:0.85em; color:{text_color}; margin-left:8px; opacity:0.7;'>({reasoning[:30]}...)</span>" if len(reasoning) > 30 else f"<span style='font-size:0.85em; color:{text_color}; margin-left:8px; opacity:0.7;'>({reasoning})</span>" if reasoning else ""}
                     </div>
                     """
                     st.markdown(badge_html, unsafe_allow_html=True)
