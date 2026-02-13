@@ -684,10 +684,10 @@ with col_right:
         # ========== 待確認區 (Pending Changes) ==========
         if st.session_state.pending_changes:
             st.markdown("---")
-            st.markdown("#### ⏳ 待確認操作")
+            st.markdown("#### 待確認操作")
             
             with st.container():
-                st.warning(f"📝 共有 {len(st.session_state.pending_changes)} 個待處理操作，點擊「定案並學習」後將一次性套用")
+                st.warning(f"📝 共有 {len(st.session_state.pending_changes)} 個待處理操作")
                 
                 for idx, change in enumerate(st.session_state.pending_changes):
                     action = change["action"]
@@ -728,13 +728,47 @@ with col_right:
                         if st.button("❌", key=f"remove_pending_{idx}", help="撤銷此操作"):
                             st.session_state.pending_changes.pop(idx)
                             st.rerun()
+                
+                # 新增：將待確認操作套用至當前製程清單（不儲存知識庫）
+                st.markdown("---")
+                col_apply, col_clear = st.columns([3, 1])
+                with col_apply:
+                    if st.button("📋 將以上製程套用至當前清單", use_container_width=True, type="primary"):
+                        # 套用所有 pending_changes 到 editing_predictions
+                        for change in st.session_state.pending_changes:
+                            if change["action"] == "add":
+                                # 新增製程到清單（如果不存在）
+                                existing_ids = [p["process_id"] for p in st.session_state.editing_predictions]
+                                if change["process_id"] not in existing_ids:
+                                    st.session_state.editing_predictions.append({
+                                        "process_id": change["process_id"],
+                                        "process_name": change["process_name"],
+                                        "confidence": change["confidence"],
+                                        "reasoning": change["reasoning"] or "(人工新增)"
+                                    })
+                            elif change["action"] == "remove":
+                                # 從清單移除製程
+                                st.session_state.editing_predictions = [
+                                    p for p in st.session_state.editing_predictions
+                                    if p["process_id"] != change["process_id"]
+                                ]
+                        
+                        # 清空待確認清單
+                        st.session_state.pending_changes = []
+                        st.toast("✅ 已套用至當前製程清單")
+                        st.rerun()
+                
+                with col_clear:
+                    if st.button("🗑️ 清空", use_container_width=True):
+                        st.session_state.pending_changes = []
+                        st.rerun()
         
         # ========== 目前製程清單（彩色標籤顯示） ==========
         st.markdown("---")
         if st.session_state.is_corrected:
-            st.markdown("#### 📋 人工校正所需製程為以下")
+            st.markdown("#### 人工校正所需製程為以下")
         else:
-            st.markdown("#### 📋 製程預測與人工校正")
+            st.markdown("#### 製程預測與人工校正")
         
         if st.session_state.editing_predictions:
             # 渲染彩色標籤
@@ -792,9 +826,9 @@ with col_right:
         st.markdown("#### 定案並學習 (Save & Learn)")
         col_learn, col_undo = st.columns([3, 1])
         with col_learn:
-            learn_clicked = st.button("✅ 定案並學習", use_container_width=True)
+            learn_clicked = st.button("定案並學習", use_container_width=True)
         with col_undo:
-            undo_clicked = st.button("↩️ 撤回", use_container_width=True)
+            undo_clicked = st.button("撤回", use_container_width=True)
 
         if learn_clicked:
             if not st.session_state.temp_file_path:
