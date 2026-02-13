@@ -695,16 +695,16 @@ with col_right:
                     pname = change["process_name"]
                     reason = change.get("reasoning", "")
                     
-                    # 根據動作類型選擇顏色和圖標
+                    # 根據動作類型選擇顏色和圖標（使用更深的顏色對比）
                     if action == "add":
                         icon = "➕"
-                        color = "#e8f5e9"
-                        text_color = "#2e7d32"
+                        color = "#c8e6c9"  # 更深的綠色背景
+                        text_color = "#1b5e20"  # 更深的綠色文字
                         action_text = "新增"
                     else:  # remove
                         icon = "➖"
-                        color = "#ffebee"
-                        text_color = "#c62828"
+                        color = "#ffcdd2"  # 更深的紅色背景
+                        text_color = "#b71c1c"  # 更深的紅色文字
                         action_text = "移除"
                     
                     # 顯示待確認項目
@@ -746,16 +746,16 @@ with col_right:
                 confidence = item["confidence"]
                 reasoning = item.get("reasoning", "")
                 
-                # 根據信心度決定顏色
+                # 根據信心度決定顏色（使用更深的顏色對比）
                 if confidence >= 0.7:
-                    bg_color = "#e0f2f1"
-                    text_color = "#00695c"
+                    bg_color = "#b2dfdb"  # 更深的青色背景
+                    text_color = "#004d40"  # 更深的青色文字
                 elif confidence >= 0.5:
-                    bg_color = "#fff3e0"
-                    text_color = "#e65100"
+                    bg_color = "#ffe0b2"  # 更深的橘色背景
+                    text_color = "#e65100"  # 深橘色文字（保持）
                 else:
-                    bg_color = "#ffebee"
-                    text_color = "#c62828"
+                    bg_color = "#ffcdd2"  # 更深的紅色背景
+                    text_color = "#b71c1c"  # 更深的紅色文字
                 
                 # 顯示標籤與信心度調整
                 col_badge, col_conf, col_actions = st.columns([6, 2, 2])
