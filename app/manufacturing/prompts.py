@@ -60,6 +60,11 @@ class EngineeringPrompts:
         "- 理解製程間的依賴關係與順序\n\n"
         "**重要：請務必使用繁體中文（Traditional Chinese）回答所有問題。**\n"
         "所有分析結果、形狀描述、推理依據都必須用繁體中文輸出。\n"
+        "**專業術語格式**：若涉及專業術語，請使用「中文(英文)」格式，例如：\n"
+        "  - 折彎線(bend line)\n"
+        "  - 焊接符號(welding symbol)\n"
+        "  - 表面處理(surface treatment)\n"
+        "  - 去毛邊(deburring)\n"
         "請以專業、準確、結構化的方式回答問題，**只輸出 JSON 格式**。"
     )
     
@@ -150,6 +155,11 @@ class EngineeringPrompts:
             "你是一位工程圖紙特徵識別專家。"
             "請仔細觀察圖紙，識別所有可見的幾何特徵、符號和文字標註，圖紙中會有輔助標線，請不要把輔助標線納入特徵識別。"
             "**重要：請務必使用繁體中文（Traditional Chinese）描述所有特徵。**\n"
+            "**專業術語格式**：若涉及專業術語，請使用「中文(英文)」格式，例如：\n"
+            "  - 折彎線(bend line)\n"
+            "  - 孔洞(hole)\n"
+            "  - 焊接符號(welding symbol)\n"
+            "  - 點焊(spot welding)\n"
             "**只輸出 JSON 格式**。"
         )
         
@@ -268,6 +278,15 @@ def _build_standard_prompt(language: str = "zh-TW") -> str:
     return """
 請分析這張鈑金工程圖，識別所需的製造製程。
 
+**重要：語言與術語格式要求**
+- 所有輸出必須使用繁體中文(Traditional Chinese)
+- 專業術語請使用「中文(英文)」格式，例如：
+  * 折彎線(bend line)
+  * 焊接符號(welding symbol)  
+  * 孔洞(hole)
+  * 表面處理(surface treatment)
+- 在 reasoning 欄位中詳細說明推理依據時，也請使用此格式
+
 **分析步驟**：
 
 **步驟 1：觀察整體形狀**
@@ -346,7 +365,7 @@ def _build_standard_prompt(language: str = "zh-TW") -> str:
     "D01": 0.85,
     "E01": 0.90
   },
-  "reasoning": "根據檢測到折彎線(2條)和角度標註(90°)，判斷需要切割(C01)和折彎(D01)製程。所有金屬件預設需要去毛邊(E01)。",
+  "reasoning": "根據檢測到折彎線(bend line, 2條)和角度標註(90°)，判斷需要切割(cutting, C01)和折彎(bending, D01)製程。所有金屬件預設需要去毛邊(deburring, E01)。",
   "process_sequence": ["C01", "D01", "E01"]
 }
 ```
@@ -544,26 +563,35 @@ def get_default_prompt(parent_context: str = "") -> str:
  {parent_section}你是由 AIIA 訓練的專用 AI，只能根據以下代碼表判斷製程，**不可使用外部知識**。
 請嚴格遵守代碼表，禁止自行新增或改寫代碼含義。
 
+**重要：語言與術語格式要求**
+- 所有輸出必須使用繁體中文(Traditional Chinese)
+- 專業術語請使用「中文(英文)」格式，例如：
+  * 折彎線(bend line)
+  * 焊接符號(welding symbol)
+  * 孔洞(hole)
+  * 沖孔(punching)
+- 在 reasoning 和 shape_description 欄位中也請使用此格式
+
 代碼表 (Knowledge Base)：
-- C05: 必須是「沖孔/M3048」。特徵：圖面上有密集的圓孔、方孔。**絕對不是焊接**。
-- F01: 焊接。特徵：必須看到「△」、「4|4△」符號，或是有箭頭指向兩零件接合處。
-- D01: 折彎。特徵：實線標示的 L 型/U 型結構。
+- C05: 必須是「沖孔(punching)/M3048」。特徵：圖面上有密集的圓孔、方孔。**絕對不是焊接**。
+- F01: 焊接(welding)。特徵：必須看到「△」、「4|4△」符號，或是有箭頭指向兩零件接合處。
+- D01: 折彎(bending)。特徵：實線標示的 L 型/U 型結構。
 
 輔助線規則：
-- 細線、虛線、帶有數字的引線（如「110」、「30」）是尺寸標註，不是折彎線。**請忽略**。
-- 若看到圓形或圓柱外觀，請先查看【全域幾何背景】判斷是孔洞或圓柱，禁止單張圖猜測。
+- 細線、虛線、帶有數字的引線（如「110」、「30」）是尺寸標註(dimension line)，不是折彎線。**請忽略**。
+- 若看到圓形或圓柱外觀，請先查看【全域幾何背景】判斷是孔洞(hole)或圓柱(cylinder)，禁止單張圖猜測。
 
-思維鏈 (CoT) 要求：輸出 JSON 之前，請在 reasoning 欄位中進行「視覺過濾」。
-Step 1: 掃描所有線條，區分實線（輪廓）與細線（尺寸）。
-Step 2: 尋找特殊符號（三角形、R角）。
+思維鏈 (CoT) 要求：輸出 JSON 之前，請在 reasoning 欄位中進行「視覺過濾」，並使用中英對照格式描述特徵。
+Step 1: 掃描所有線條，區分實線（輪廓, contour）與細線（尺寸標註, dimension line）。
+Step 2: 尋找特殊符號（三角形, triangle / R角, radius）。
 Step 3: 根據代碼表匹配製程。
 
 請輸出如下 JSON 格式：
 {{
-  "shape_description": "描述零件形狀 (如 L型支架)",
+  "shape_description": "描述零件形狀 (如 L型支架(L-shaped bracket))",
   "detected_features": {{
-    "geometry": ["特徵1", "特徵2"],
-    "symbols": ["看到的符號文字"],
+    "geometry": ["使用中英對照格式，如：折彎線(bend line)"],
+    "symbols": ["看到的符號文字，如：焊接符號(welding symbol)"],
     "text_annotations": ["看到的文字標註"],
     "material_info": "材質資訊或null"
   }},
@@ -571,7 +599,7 @@ Step 3: 根據代碼表匹配製程。
   "confidence_scores": {{
     "F01": 0.95
   }},
-  "reasoning": "你的判斷理由 (Step 1... Step 2...)",
+  "reasoning": "你的判斷理由 (Step 1... Step 2...)，請使用中英對照格式描述特徵",
   "process_sequence": ["F01", "D01"]
 }}
 
