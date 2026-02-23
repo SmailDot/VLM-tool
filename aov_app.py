@@ -217,58 +217,56 @@ with col_left:
     st.caption("上傳含有 BOM 表或技術要求的父圖，讓 OCR 自動擷取材質/厚度資訊，再由您刪除雜訊後注入 VLM")
 
     # Session state 初始化
-    if "bom_ocr_path" not in st.session_state:
-        st.session_state.bom_ocr_path = None
+    if "bom_ocr_paths" not in st.session_state:
+        st.session_state.bom_ocr_paths = []
     if "extracted_bom" not in st.session_state:
         st.session_state.extracted_bom = ""
     if "bom_context" not in st.session_state:
         st.session_state.bom_context = ""
-
-    bom_file = st.file_uploader(
-        "選擇父圖/BOM 圖片 (JPG/PNG/PDF)",
-        type=['jpg', 'jpeg', 'png', 'pdf'],
+    bom_files = st.file_uploader(
+        "選擇父圖/BOM 圖片 (JPG/PNG，可多選)",
+        type=['jpg', 'jpeg', 'png'],
         key="bom_ocr_uploader",
-        help="支援 JPG/PNG 直接掃描；PDF 將自動以 300 DPI 轉換後掃描"
+        accept_multiple_files=True,
+        help="可同時選取多張 BOM 表圖片，擷取結果將以分隔線區隔"
     )
 
-    if bom_file is not None:
+    if bom_files:
         import tempfile as _tmpmod
-        _suffix = '.' + bom_file.name.lower().split('.')[-1]
-        with _tmpmod.NamedTemporaryFile(delete=False, suffix=_suffix) as _tmp:
-            _tmp.write(bom_file.read())
-            st.session_state.bom_ocr_path = _tmp.name
-        st.success(f"已上傳：{bom_file.name}")
-
+        _saved_paths = []
+        for _bf in bom_files:
+            _suffix = '.' + _bf.name.lower().split('.')[-1]
+            with _tmpmod.NamedTemporaryFile(delete=False, suffix=_suffix) as _tmp:
+                _tmp.write(_bf.read())
+                _saved_paths.append(_tmp.name)
+        st.session_state.bom_ocr_paths = _saved_paths
+        st.success(f"已上傳 {len(_saved_paths)} 張：{', '.join(f.name for f in bom_files)}")
+    elif not st.session_state.bom_ocr_paths:
+        st.session_state.bom_ocr_paths = []
     if st.button("🔍 自動擷取 BOM 資訊", use_container_width=True,
-                 disabled=(st.session_state.bom_ocr_path is None)):
+                 disabled=(not st.session_state.bom_ocr_paths)):
         try:
             from app.manufacturing.extractors.ocr import OCRExtractor as _OCRExtractor
             with st.spinner("PaddleOCR 正在掃描圖面文字... 請稍候"):
                 _ocr_inst = _OCRExtractor(lang='ch')
-                _scan_path = st.session_state.bom_ocr_path
-                # PDF → convert to PNG first
-                if _scan_path.lower().endswith('.pdf'):
-                    from app.manufacturing.extractors import PDFImageExtractor as _PDFExt
-                    import tempfile as _t2
-                    _pdf_img = _PDFExt(target_dpi=300).extract_full_page(_scan_path, page_num=0)
-                    with _t2.NamedTemporaryFile(delete=False, suffix='.png') as _ptmp:
-                        cv2.imwrite(_ptmp.name, _pdf_img)
-                        _scan_path = _ptmp.name
-                _bom_text = _ocr_inst.extract_bom_text_only(_scan_path)
-                st.session_state.extracted_bom = _bom_text if _bom_text else "(OCR 未偵測到文字，請手動輸入)"
+                _results = []
+                for _idx, _scan_path in enumerate(st.session_state.bom_ocr_paths):
+                    _bom_text = _ocr_inst.extract_bom_text_only(_scan_path)
+                    _results.append(_bom_text if _bom_text else f"(第 {_idx+1} 張：OCR 未偵測到文字)")
+                _separator = "\n" + "=" * 18 + "\n"
+                st.session_state.extracted_bom = _separator.join(_results)
         except Exception as _e:
             st.error(f"OCR 擷取失敗：{_e}")
             st.session_state.extracted_bom = ""
 
-    # HITL 可編輯 text_area
-    st.session_state.extracted_bom = st.text_area(
+    # HITL 可編輯 text_area — 不綁 key，直接用 value + 回寫 session_state
+    _edited = st.text_area(
         "📝 擷取結果 (請手動刪除無關雜訊，保留材質、厚度 t=、零件名稱等)",
         value=st.session_state.extracted_bom,
-        height=180,
-        key="bom_text_area",
+        height=220,
         placeholder="例如：\nSUS304 t=1.5\n品名：ブラケット\n員数：2"
     )
-
+    st.session_state.extracted_bom = _edited
     # Step 4: 確認並啟動 VLM 分析
     _vlm_btn_disabled = (
         not st.session_state.extracted_bom.strip()
@@ -294,8 +292,6 @@ with col_left:
                     st.success("✅ VLM 已完成分析，請見下方描述報告")
                 else:
                     st.error("VLM 未回傳結果，請確認模型已載入")
-
-    st.divider()
 
     # --- 多視角圖片上傳區 (替換原本的 file_uploader) ---
     st.markdown("### 👁️ 多視角零件圖上傳 (VLM 視覺重建)")
