@@ -628,34 +628,52 @@ Step 3: 根據代碼表匹配製程。
 """.strip()
 
 
-def get_vlm_descriptive_prompt() -> str:
+def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     """
     Return a VLM prompt that instructs the model to produce a structured
     geometry-only description from multi-view orthographic images.
+    When ``bom_context`` is provided (text extracted from the parent BOM drawing
+    via OCR and reviewed by the operator), a **KNOWN FACTS** preamble is
+    prepended.  The VLM is instructed to treat these facts as authoritative
+    ground truth and incorporate them into every section of the report,
+    overriding any conflicting visual inference.
 
+    Args:
+        bom_context: Plain-text BOM / material info extracted by OCR and
+            confirmed by the user.  Pass an empty string (default) to omit.
     Returns:
         str: The prompt string.
     """
-    return """You are an expert mechanical draftsperson and 3D CAD modeler.
-I am providing you with multiple 2D orthographic views (Top, Front, Side) of a SINGLE sheet metal part.
+    # ---- Build optional KNOWN FACTS preamble ----
+    known_facts_block = ""
+    if bom_context.strip():
+        known_facts_block = f"""### 0. KNOWN FACTS FROM OCR (BOM/Material) \u2014 HIGHEST PRIORITY
+{bom_context.strip()}
 
+**CRITICAL INSTRUCTIONS FOR KNOWN FACTS:**
+- You MUST incorporate these facts into your report.
+- If multiple thicknesses (e.g., t=1.5 and t=3.0) or multiple part names are
+  listed, this is a WELDED / ASSEMBLED part made of SEPARATE PIECES.
+- The material stated here is AUTHORITATIVE \u2014 do NOT contradict it.
+- If a part name (\u54c1\u540d/\u4ef6\u540d) is listed, use it as the component identity.
+
+
+"""
+
+    return known_facts_block + """You are an expert mechanical draftsperson and 3D CAD modeler.
+I am providing you with multiple 2D orthographic views (Top, Front, Side) of a SINGLE sheet metal part.
 YOUR TASK:
 Mentally construct the 3D shape of this part from the 2D views and write a highly detailed engineering visual report.
 DO NOT guess or recommend manufacturing processes (like C01, D01). ONLY describe the geometry and text you see.
-
 Structure your report EXACTLY using the following headings in English:
-
 ### 1. OVERALL 3D SHAPE
 (Describe the assembled 3D shape. e.g., "This is an L-shaped bracket", "This is a rectangular base with two vertical flanges")
-
 ### 2. COMPONENT STRUCTURE
 (Is this a single piece of bent metal, or multiple separate plates assembled together? Look closely for thickness differences, overlapping lines, or weld symbols)
-
 ### 3. VIEW-BY-VIEW GEOMETRY BREAKDOWN
 - **Top View Features**: (Count the exact number of holes, describe their shapes, describe corner treatments like chamfers/fillets)
 - **Front View Features**: (Describe the profile, vertical elements, bends, or structural ribs)
 - **Side/Detail View Features**: (Describe any additional visible geometry or zoomed-in details)
-
 ### 4. CRITICAL TEXT & SYMBOLS
 (List all exact text, dimensions, and symbols you can read. Look specifically for "M3", "M4", "Burring", "Tap", "t=...", or triangle welding symbols. If none, say "None detected".)
 """
