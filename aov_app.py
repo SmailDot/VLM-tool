@@ -89,6 +89,9 @@ if 'pending_changes' not in st.session_state:
 if 'reasoning_input_key' not in st.session_state:
     st.session_state.reasoning_input_key = 0  # 用於清空理由欄位
 
+if 'pending_unknown_process' not in st.session_state:
+    st.session_state.pending_unknown_process = None  # Dict or None: {"input", "looks_like_id", "action", "reasoning"}
+
 if 'is_corrected' not in st.session_state:
     st.session_state.is_corrected = False  # 標記是否已進行人工校正
 
@@ -208,18 +211,31 @@ with col_left:
         st.session_state.parent_drawing = None
         st.caption("未上傳父圖（將僅依子圖特徵判定）")
 
-    # 子圖上傳（必填）
-    st.markdown("#### 📄 上傳零件圖 (Child Drawing)")
-    uploaded_files = st.file_uploader(
-        "選擇子圖檔案 *",
-        type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
-        help=(
-            "子圖為必要上傳，包含零件局部特徵、標註數字、符號等。"
-            "支援 PDF 格式（將以 300 DPI 高解析度渲染），可多選上傳。"
-        ),
-        key="drawing_uploader",
-        accept_multiple_files=True
-    )
+    # --- 多視角圖片上傳區 (替換原本的 file_uploader) ---
+    st.markdown("### 👁️ 多視角零件圖上傳 (VLM 視覺重建)")
+    st.caption("請上傳此零件的不同視角，幫助 VLM 建立 3D 空間認知 (可只上傳部分視角)")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    vlm_images = {}  # 收集多視角圖片
+    
+    with col1:
+        top_view = st.file_uploader("1. 俯視圖 (Top View)", type=['png', 'jpg', 'jpeg'], key="top_view")
+        if top_view: vlm_images["Top View"] = top_view
+    with col2:
+        front_view = st.file_uploader("2. 前視圖 (Front View)", type=['png', 'jpg', 'jpeg'], key="front_view")
+        if front_view: vlm_images["Front View"] = front_view
+    with col3:
+        side_view = st.file_uploader("3. 側視圖 (Side View)", type=['png', 'jpg', 'jpeg'], key="side_view")
+        if side_view: vlm_images["Side View"] = side_view
+    with col4:
+        iso_view = st.file_uploader("4. 立體/細部圖 (Detail/Iso)", type=['png', 'jpg', 'jpeg'], key="iso_view")
+        if iso_view: vlm_images["Detail/Iso View"] = iso_view
+    
+    # 為了相容原本管線，將第一張上傳的圖設為主力分析圖
+    if vlm_images:
+        uploaded_files = list(vlm_images.values())  # 所有視角的圖片
+    else:
+        uploaded_files = []
     
     if uploaded_files:
         drawing_images: List[np.ndarray] = []
@@ -286,6 +302,34 @@ with col_left:
                     f"尺寸: {w} × {h} px | 檔案大小: {uploaded_files[idx].size / 1024:.1f} KB"
                 )
             
+            # ==================== VLM 形狀描述 ====================
+            st.markdown("### 🔍 VLM 零件幾何描述")
+            st.caption("讓 VLM 根據上傳的多視角圖，描述它所『看到』並『組合』出來的零件形狀")
+
+            # 初始化 session_state key
+            if "vlm_shape_description" not in st.session_state:
+                st.session_state.vlm_shape_description = None
+
+            if st.button("🧠 請 VLM 描述零件形狀", use_container_width=True):
+                from app.manufacturing.extractors.vlm_client import VLMClient
+                from app.manufacturing.prompts import get_vlm_descriptive_prompt
+                _vlm = VLMClient()
+                if not _vlm.is_available():
+                    st.warning("⚠️ VLM 服務未運行 — 請確認 LM Studio 已啟動 (http://localhost:1234)")
+                else:
+                    with st.spinner("VLM 正在分析並組合多視角圖形... 請稍候"):
+                        _images = list(st.session_state.temp_file_paths)
+                        _prompt = get_vlm_descriptive_prompt()
+                        _desc = _vlm.analyze_image(_images, _prompt, response_format="text", temperature=0.1, max_tokens=1500)
+                        if _desc:
+                            st.session_state.vlm_shape_description = _desc
+                        else:
+                            st.session_state.vlm_shape_description = None
+                            st.error("VLM 未回傳結果，請確認模型已載入")
+
+            if st.session_state.vlm_shape_description:
+                with st.expander("📋 VLM 零件形狀描述報告", expanded=True):
+                    st.markdown(st.session_state.vlm_shape_description)
             st.divider()
             
             # ==================== 辨識設定 ====================
@@ -571,6 +615,71 @@ with col_right:
                 st.write("")  # 對齊用
                 form_submitted = st.form_submit_button("▶️ 執行", use_container_width=True)
         
+        # Enter-hook JS: 在手動輸入欄按 Enter 時，跳到理由欄
+        import streamlit.components.v1 as components
+        components.html("""
+        <script>
+        (function() {
+            function hookEnterOnManualCode() {
+                // Find all text inputs in the parent frame
+                var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
+                allInputs.forEach(function(inp) {
+                    var placeholder = inp.getAttribute('placeholder') || '';
+                    var label = '';
+                    // Try to find associated label
+                    var wrapper = inp.closest('[data-testid="stTextInput"]');
+                    if (wrapper) {
+                        var labelEl = wrapper.querySelector('label');
+                        if (labelEl) label = labelEl.textContent || '';
+                    }
+                    // Match the manual code input:
+                    // by placeholder 'X99' OR label containing '手動輸入'
+                    var isManualCodeInput = (
+                        placeholder.indexOf('X99') !== -1 ||
+                        label.indexOf('\u624b\u52d5\u8f38\u5165') !== -1
+                    );
+                    if (isManualCodeInput) {
+                        if (!inp.__enterHooked) {
+                            inp.__enterHooked = true;
+                            inp.addEventListener('keydown', function(e) {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    // Find the reasoning input (C column) and focus it
+                                    // Match by placeholder OR label text for robustness
+                                    var allInputs2 = window.parent.document.querySelectorAll('input[type="text"]');
+                                    for (var i = 0; i < allInputs2.length; i++) {
+                                        var ph2 = allInputs2[i].getAttribute('placeholder') || '';
+                                        var lbl2 = '';
+                                        var w2 = allInputs2[i].closest('[data-testid="stTextInput"]');
+                                        if (w2) {
+                                            var lEl2 = w2.querySelector('label');
+                                            if (lEl2) lbl2 = lEl2.textContent || '';
+                                        }
+                                        var isReasoningInput = (
+                                            ph2.indexOf('BOM') !== -1 ||
+                                            ph2.indexOf('\u975e\u6298\u5f4e') !== -1 ||
+                                            lbl2.indexOf('C - \u7406\u7531') !== -1 ||
+                                            lbl2.indexOf('RAG') !== -1
+                                        );
+                                        if (isReasoningInput) {
+                                            allInputs2[i].focus();
+                                            break;
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+            // Run after DOM is ready, and retry to handle dynamic rendering
+            setTimeout(hookEnterOnManualCode, 800);
+            setTimeout(hookEnterOnManualCode, 1600);
+            setTimeout(hookEnterOnManualCode, 3000);
+        })();
+        </script>
+        """, height=0)
         # 處理表單提交 - Task 4 Smart Matching Logic
         if form_submitted:
             # 決定製程代碼 - 優先使用手動輸入
@@ -584,69 +693,35 @@ with col_right:
                 matched_id = None
                 matched_name = None
                 
-                # Try to match by ID first (case-insensitive)
-                if manual_input.upper() in process_defs:
-                    matched_id = manual_input.upper()
+                # Try to match by ID first (normalized, case-insensitive)
+                manual_normalized = manual_input.strip().upper()
+                norm_id_map = {k.strip().upper(): k for k in process_defs.keys()}
+                if manual_normalized in norm_id_map:
+                    matched_id = norm_id_map[manual_normalized]
                     matched_name = process_defs[matched_id].get("name", "")
                 else:
-                    # Check if input matches a process name
+                    # Check if input matches a process name (strip + case-insensitive)
+                    manual_lower = manual_input.strip().lower()
                     for pid, pdata in process_defs.items():
                         pname = pdata.get("name", "")
-                        if isinstance(pname, str) and pname.lower() == manual_input.lower():
+                        if isinstance(pname, str) and pname.strip().lower() == manual_lower:
                             matched_id = pid
                             matched_name = pname
                             break
-                
                 if matched_id:
                     # Found existing process
                     target_process_id = matched_id
                     target_process_name = matched_name
                 else:
-                    # Unknown process - need registration
+                    # Unknown process - store in session_state for persistent UI outside form
                     is_new_process = True
-                    # Determine if input looks like ID or name
-                    looks_like_id = len(manual_input) <= 4 and any(c.isdigit() for c in manual_input)
-                    
-                    if looks_like_id:
-                        # User entered ID, need to ask for name
-                        target_process_id = manual_input.upper()
-                        st.warning(f"⚠️ 未知製程代碼: {target_process_id}")
-                        st.info("📝 請在下方輸入製程名稱以完成註冊")
-                        
-                        # Show registration form
-                        new_name_input = st.text_input(
-                            f"請輸入製程 {target_process_id} 的中文名稱",
-                            key="new_process_name_input",
-                            placeholder="例如: 鑽孔"
-                        )
-                        if st.button("✅ 確認註冊並加入待確認區", key="confirm_new_process_from_id"):
-                            if new_name_input:
-                                target_process_name = new_name_input
-                                is_new_process = False  # Registration complete
-                                st.success(f"✅ 新製程已註冊: {target_process_id} - {target_process_name}")
-                            else:
-                                st.error("請輸入製程名稱")
-                                target_process_id = None
-                    else:
-                        # User entered name, need to ask for ID
-                        target_process_name = manual_input
-                        st.warning(f"⚠️ 未知製程名稱: {target_process_name}")
-                        st.info("📝 請在下方輸入製程代碼以完成註冊")
-                        
-                        # Show registration form
-                        new_id_input = st.text_input(
-                            f"請輸入製程 '{target_process_name}' 的代碼",
-                            key="new_process_id_input",
-                            placeholder="例如: F01"
-                        )
-                        if st.button("✅ 確認註冊並加入待確認區", key="confirm_new_process_from_name"):
-                            if new_id_input:
-                                target_process_id = new_id_input.upper()
-                                is_new_process = False  # Registration complete
-                                st.success(f"✅ 新製程已註冊: {target_process_id} - {target_process_name}")
-                            else:
-                                st.error("請輸入製程代碼")
-                                target_process_id = None
+                    looks_like_id = len(manual_input.strip()) <= 5 and any(c.isdigit() for c in manual_input)
+                    st.session_state.pending_unknown_process = {
+                        "input": manual_input.strip(),
+                        "looks_like_id": looks_like_id,
+                        "action": "add" if "新增" in action_type else "remove",
+                        "reasoning": reasoning_input if reasoning_input else ""
+                    }
             else:
                 # 從選單提取代碼 [I01] 雷射切割 -> I01
                 import re
@@ -681,6 +756,68 @@ with col_right:
                     
                     # Task 3: No st.rerun() - let Streamlit naturally refresh
         
+        # ========== 未知製程補充 UI（持久顯示，不受 form 提交影響） ==========
+        if st.session_state.pending_unknown_process:
+            pup = st.session_state.pending_unknown_process
+            st.markdown("---")
+            st.warning(f"⚠️ 未知製程：請補充資料後加入待確認區")
+            if pup["looks_like_id"]:
+                new_name_val = st.text_input(
+                    f"請輸入製程代碼 **{pup['input']}** 的中文名稱",
+                    key="unknown_process_name_supplement",
+                    placeholder="例如: 鑽孔"
+                )
+                col_uk1, col_uk2 = st.columns([2, 1])
+                with col_uk1:
+                    if st.button("確認並加入待確認區", key="confirm_unknown_from_id", type="primary"):
+                        if new_name_val.strip():
+                            action_uk = pup["action"]
+                            existing_uk = [p for p in st.session_state.pending_changes if p["process_id"] == pup["input"].upper() and p["action"] == action_uk]
+                            if not existing_uk:
+                                st.session_state.pending_changes.append({
+                                    "action": action_uk,
+                                    "process_id": pup["input"].upper(),
+                                    "process_name": new_name_val.strip(),
+                                    "reasoning": pup["reasoning"],
+                                    "confidence": 1.0
+                                })
+                            st.session_state.pending_unknown_process = None
+                            st.session_state.reasoning_input_key += 1
+                            st.toast(f"已加入待確認區：{pup['input'].upper()} - {new_name_val.strip()}")
+                        else:
+                            st.error("請輸入製程名稱")
+                with col_uk2:
+                    if st.button("取消", key="cancel_unknown_process_id"):
+                        st.session_state.pending_unknown_process = None
+            else:
+                new_id_val = st.text_input(
+                    f"請輸入製程名稱 **{pup['input']}** 的代碼",
+                    key="unknown_process_id_supplement",
+                    placeholder="例如: F01"
+                )
+                col_uk3, col_uk4 = st.columns([2, 1])
+                with col_uk3:
+                    if st.button("確認並加入待確認區", key="confirm_unknown_from_name", type="primary"):
+                        if new_id_val.strip():
+                            action_uk = pup["action"]
+                            existing_uk = [p for p in st.session_state.pending_changes if p["process_id"] == new_id_val.strip().upper() and p["action"] == action_uk]
+                            if not existing_uk:
+                                st.session_state.pending_changes.append({
+                                    "action": action_uk,
+                                    "process_id": new_id_val.strip().upper(),
+                                    "process_name": pup["input"],
+                                    "reasoning": pup["reasoning"],
+                                    "confidence": 1.0
+                                })
+                            st.session_state.pending_unknown_process = None
+                            st.session_state.reasoning_input_key += 1
+                            st.toast(f"已加入待確認區：{new_id_val.strip().upper()} - {pup['input']}")
+                        else:
+                            st.error("請輸入製程代碼")
+                with col_uk4:
+                    if st.button("取消", key="cancel_unknown_process_name"):
+                        st.session_state.pending_unknown_process = None
+
         # ========== 待確認區 (Pending Changes) ==========
         if st.session_state.pending_changes:
             st.markdown("---")
@@ -727,7 +864,7 @@ with col_right:
                     with col_remove:
                         if st.button("❌", key=f"remove_pending_{idx}", help="撤銷此操作"):
                             st.session_state.pending_changes.pop(idx)
-                            st.rerun()
+                            pass  # No rerun needed - Streamlit will naturally refresh
                 
                 # 新增：將待確認操作套用至當前製程清單（不儲存知識庫）
                 st.markdown("---")
@@ -756,12 +893,12 @@ with col_right:
                         # 清空待確認清單
                         st.session_state.pending_changes = []
                         st.toast("✅ 已套用至當前製程清單")
-                        st.rerun()
+                        pass  # No rerun needed - Streamlit will naturally refresh
                 
                 with col_clear:
                     if st.button("🗑️ 清空", use_container_width=True):
                         st.session_state.pending_changes = []
-                        st.rerun()
+                        pass  # No rerun needed
         
         # ========== 目前製程清單（彩色標籤顯示） ==========
         st.markdown("---")
@@ -895,7 +1032,7 @@ with col_right:
         if undo_clicked:
             # Clear all pending changes
             st.session_state.pending_changes = []
-            st.rerun()
+            pass  # No rerun needed - Streamlit will naturally refresh
         
         # Task 5: Post-learning confirmation dialog
         if st.session_state.get('kb_save_success', False):
@@ -972,7 +1109,7 @@ with col_right:
                 if st.button("❌ 不需要", use_container_width=True):
                     # Clear the flag without re-running
                     st.session_state.kb_save_success = False
-                    st.rerun()
+                    pass  # No rerun needed - Streamlit will naturally refresh
 
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):

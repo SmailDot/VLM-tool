@@ -13,7 +13,7 @@ Compatible with:
 from typing import Optional, Dict, Any, Union, List
 import base64
 import json
-import re
+
 from pathlib import Path
 import numpy as np
 import cv2
@@ -38,10 +38,14 @@ class VLMClient:
     - Sheet metal engineering domain expertise via system prompt
     """
     
-    # System prompt optimized for sheet metal manufacturing
+    # System prompt optimized for sheet metal manufacturing - 強制繁體中文輸出
     SYSTEM_PROMPT = (
-        "你是一個資深的鈑金加工工程師，請根據工程圖視覺特徵回答問題，"
-        "只輸出 JSON 格式。"
+        "你是一個資深的鈑金加工工程師，請根據工程圖視覺特徵回答問題。\n"
+        "重要規則：\n"
+        "1. 所有回答必須使用繁體中文，包括 shape_description、detected_features 中的所有描述。\n"
+        "2. 幾何特徵（geometry）請用中文描述，例如：折彎線、圓孔、橢圓孔、肋條、沉頭孔。\n"
+        "3. 禁止輸出英文的形狀或特徵描述（如 oval hole、bend lines、countersink 等均需翻譯為中文）。\n"
+        "4. 只輸出 JSON 格式。"
     )
     
     def __init__(
@@ -150,7 +154,7 @@ class VLMClient:
         response_format: str = "json",
         temperature: float = 0.0,
         max_tokens: int = 2000
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[str]:
         """
         Analyze engineering drawing using vision-language model.
         
@@ -236,26 +240,8 @@ class VLMClient:
                 print("Warning: Model returned empty response")
                 return None
             
-            # Parse JSON response if requested
-            if response_format == "json":
-                try:
-                    # content is guaranteed to be str here (None check above)
-                    match = re.search(r"\{.*\}", content, re.DOTALL)
-                    if match:
-                        json_str = match.group(0)
-                        return json.loads(json_str)
-
-                    if "```json" in content:
-                        content = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    print(f"Warning: Failed to parse response as JSON: {e}")
-                    print(f"Raw response: {content}")
-                    # Return raw text wrapped in dict
-                    return {"raw_response": content, "parse_error": str(e)}
-            else:
-                # Return raw text response (content is str here)
-                return {"response": content}
+            # 直接回傳純文字，不做任何 JSON 解析
+            return content
         
         except Exception as e:
             print(f"Error during VLM API request: {e}")
@@ -394,7 +380,7 @@ if __name__ == "__main__":
         
         if result:
             print("\n✅ Analysis successful!")
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(result)
         else:
             print("\n❌ Analysis failed.")
     else:
