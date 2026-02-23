@@ -26,6 +26,36 @@ except ImportError:
 from ..schema import OCRResult
 
 
+def get_ocr_engine(lang: str = 'ch') -> 'PaddleOCR':
+    """
+    取得指定語言的 PaddleOCR 實例，利用 Streamlit cache_resource 快取，
+    避免每次按下擷取按鈕都重新載入模型。
+
+    在非 Streamlit 環境（如測試腳本）下自動降級為單例字典快取。
+
+    Args:
+        lang: PaddleOCR 語言代碼，如 'ch', 'chinese_cht', 'japan', 'en', 'korean'。
+
+    Returns:
+        PaddleOCR: 對應語言的 OCR 實例。
+    """
+    try:
+        import streamlit as st
+        @st.cache_resource
+        def _cached_engine(lang_key: str) -> 'PaddleOCR':
+            return PaddleOCR(use_angle_cls=True, lang=lang_key, use_gpu=False)
+        return _cached_engine(lang)
+    except Exception:
+        # 非 Streamlit 環境：使用模組層級單例字典
+        if not hasattr(get_ocr_engine, '_cache'):
+            get_ocr_engine._cache: Dict[str, Any] = {}
+        if lang not in get_ocr_engine._cache:
+            get_ocr_engine._cache[lang] = PaddleOCR(
+                use_angle_cls=True, lang=lang, use_gpu=False
+            )
+        return get_ocr_engine._cache[lang]
+
+
 class OCRExtractor:
     """
     Wrapper for PaddleOCR optimized for engineering drawings.
@@ -365,43 +395,49 @@ class OCRExtractor:
     def extract_bom_text_only(
         self,
         image_path: str,
-        confidence_threshold: float = 0.4
+        confidence_threshold: float = 0.4,
+        lang: str = 'ch'
     ) -> str:
         """
-        Scan an image with PaddleOCR and return BOM-related text lines as a
-        plain string for HITL (Human-in-the-Loop) review.
+        以 PaddleOCR 掃描指定圖片，回傳 BOM 相關文字行（純字串），供 HITL 人工確認。
 
-        Priority filtering keeps lines that contain engineering-domain
-        keywords (material codes, thickness annotations, part names, etc.).
-        If fewer than 3 priority lines are found the full OCR output is
-        returned instead so the user can trim it manually.
+        優先保留含工程領域關鍵字的行（材料碼、板厚標注、零件名稱等）。
+        若優先行少於 3 行，則回傳全部 OCR 文字，由使用者手動刪除雜訊。
+
+        根據傳入的 lang 參數動態選擇掃描語言清單：
+        - 'japan' -> 以日文為主，追加繁中/英文
+        - 'chinese_cht' -> 以繁中為主，追加日文/英文
+        - 其他 (ch/en/korean) -> 以該語言為主，追加繁中/英文
 
         Args:
-            image_path: Absolute path to the parent drawing / BOM image.
-            confidence_threshold: Minimum OCR confidence to include a line.
-
+            image_path: 父圖/BOM 圖片的絕對路徑。
+            confidence_threshold: OCR 最低信心度（0.0-1.0）。
+            lang: 圖紙主要語言代碼（'ch', 'chinese_cht', 'japan', 'en', 'korean'）。
         Returns:
-            A newline-joined string of relevant text lines.
-            Returns empty string when OCR yields no results.
+            換行符號連接的相關文字行字串。
+            OCR 無結果時回傳空字串。
         """
         if not Path(image_path).exists():
             return "[錯誤] 找不到檔案"
-
         image = cv2.imread(image_path)
         if image is None:
             return "[錯誤] 無法讀取圖片"
-
-        # Run OCR with multilingual support (handles Chinese + Japanese on BOM tables)
+        _lang_map: Dict[str, List[str]] = {
+            'japan':       ['japan', 'chinese_cht', 'en'],
+            'chinese_cht': ['chinese_cht', 'en', 'japan'],
+            'en':          ['en', 'chinese_cht', 'ch'],
+            'korean':      ['korean', 'en', 'ch'],
+        }
+        scan_langs = _lang_map.get(lang, ['ch', 'chinese_cht', 'en', 'japan'])
         try:
             results = self.extract_multilang(
                 image,
-                languages=['ch', 'chinese_cht', 'en', 'japan'],
+                languages=scan_langs,
                 confidence_threshold=confidence_threshold,
             )
         except Exception as exc:
             print(f"[extract_bom_text_only] OCR failed: {exc}")
             return "[錯誤] OCR 執行失敗"
-
         if not results:
             return ""
 
