@@ -211,6 +211,92 @@ with col_left:
         st.session_state.parent_drawing = None
         st.caption("未上傳父圖（將僅依子圖特徵判定）")
 
+
+    # ==================== BOM/父圖 OCR 擷取區 (Steps 1+2+4) ====================
+    st.markdown("### 📄 父圖/BOM 表自動擷取 (OCR HITL)")
+    st.caption("上傳含有 BOM 表或技術要求的父圖，讓 OCR 自動擷取材質/厚度資訊，再由您刪除雜訊後注入 VLM")
+
+    # Session state 初始化
+    if "bom_ocr_path" not in st.session_state:
+        st.session_state.bom_ocr_path = None
+    if "extracted_bom" not in st.session_state:
+        st.session_state.extracted_bom = ""
+    if "bom_context" not in st.session_state:
+        st.session_state.bom_context = ""
+
+    bom_file = st.file_uploader(
+        "選擇父圖/BOM 圖片 (JPG/PNG/PDF)",
+        type=['jpg', 'jpeg', 'png', 'pdf'],
+        key="bom_ocr_uploader",
+        help="支援 JPG/PNG 直接掃描；PDF 將自動以 300 DPI 轉換後掃描"
+    )
+
+    if bom_file is not None:
+        import tempfile as _tmpmod
+        _suffix = '.' + bom_file.name.lower().split('.')[-1]
+        with _tmpmod.NamedTemporaryFile(delete=False, suffix=_suffix) as _tmp:
+            _tmp.write(bom_file.read())
+            st.session_state.bom_ocr_path = _tmp.name
+        st.success(f"已上傳：{bom_file.name}")
+
+    if st.button("🔍 自動擷取 BOM 資訊", use_container_width=True,
+                 disabled=(st.session_state.bom_ocr_path is None)):
+        try:
+            from app.manufacturing.extractors.ocr import OCRExtractor as _OCRExtractor
+            with st.spinner("PaddleOCR 正在掃描圖面文字... 請稍候"):
+                _ocr_inst = _OCRExtractor(lang='ch')
+                _scan_path = st.session_state.bom_ocr_path
+                # PDF → convert to PNG first
+                if _scan_path.lower().endswith('.pdf'):
+                    from app.manufacturing.extractors import PDFImageExtractor as _PDFExt
+                    import tempfile as _t2
+                    _pdf_img = _PDFExt(target_dpi=300).extract_full_page(_scan_path, page_num=0)
+                    with _t2.NamedTemporaryFile(delete=False, suffix='.png') as _ptmp:
+                        cv2.imwrite(_ptmp.name, _pdf_img)
+                        _scan_path = _ptmp.name
+                _bom_text = _ocr_inst.extract_bom_text_only(_scan_path)
+                st.session_state.extracted_bom = _bom_text if _bom_text else "(OCR 未偵測到文字，請手動輸入)"
+        except Exception as _e:
+            st.error(f"OCR 擷取失敗：{_e}")
+            st.session_state.extracted_bom = ""
+
+    # HITL 可編輯 text_area
+    st.session_state.extracted_bom = st.text_area(
+        "📝 擷取結果 (請手動刪除無關雜訊，保留材質、厚度 t=、零件名稱等)",
+        value=st.session_state.extracted_bom,
+        height=180,
+        key="bom_text_area",
+        placeholder="例如：\nSUS304 t=1.5\n品名：ブラケット\n員数：2"
+    )
+
+    # Step 4: 確認並啟動 VLM 分析
+    _vlm_btn_disabled = (
+        not st.session_state.extracted_bom.strip()
+        or "temp_file_paths" not in st.session_state
+        or not st.session_state.get("temp_file_paths")
+    )
+    if st.button("▶️ 確認無誤，開始 VLM 視覺重建", use_container_width=True, type="primary",
+                 disabled=_vlm_btn_disabled):
+        st.session_state.bom_context = st.session_state.extracted_bom.strip()
+        from app.manufacturing.extractors.vlm_client import VLMClient as _VLMClient
+        from app.manufacturing.prompts import get_vlm_descriptive_prompt as _get_prompt
+        _vlm = _VLMClient()
+        if not _vlm.is_available():
+            st.warning("⚠️ VLM 服務未運行 — 請確認 LM Studio 已啟動 (http://localhost:1234)")
+        else:
+            with st.spinner("VLM 正在整合 BOM 事實並分析多視角圖形... 請稍候"):
+                _images = list(st.session_state.temp_file_paths)
+                _prompt = _get_prompt(bom_context=st.session_state.bom_context)
+                _desc = _vlm.analyze_image(_images, _prompt, response_format="text",
+                                           temperature=0.1, max_tokens=1500)
+                if _desc:
+                    st.session_state.vlm_shape_description = _desc
+                    st.success("✅ VLM 已完成分析，請見下方描述報告")
+                else:
+                    st.error("VLM 未回傳結果，請確認模型已載入")
+
+    st.divider()
+
     # --- 多視角圖片上傳區 (替換原本的 file_uploader) ---
     st.markdown("### 👁️ 多視角零件圖上傳 (VLM 視覺重建)")
     st.caption("請上傳此零件的不同視角，幫助 VLM 建立 3D 空間認知 (可只上傳部分視角)")
