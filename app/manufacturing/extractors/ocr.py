@@ -361,7 +361,81 @@ class OCRExtractor:
                 continue
         
         return all_results
-    
+
+    def extract_bom_text_only(
+        self,
+        image_path: str,
+        confidence_threshold: float = 0.4
+    ) -> str:
+        """
+        Scan an image with PaddleOCR and return BOM-related text lines as a
+        plain string for HITL (Human-in-the-Loop) review.
+
+        Priority filtering keeps lines that contain engineering-domain
+        keywords (material codes, thickness annotations, part names, etc.).
+        If fewer than 3 priority lines are found the full OCR output is
+        returned instead so the user can trim it manually.
+
+        Args:
+            image_path: Absolute path to the parent drawing / BOM image.
+            confidence_threshold: Minimum OCR confidence to include a line.
+
+        Returns:
+            A newline-joined string of relevant text lines.
+            Returns empty string when OCR yields no results.
+        """
+        if not Path(image_path).exists():
+            return "[錯誤] 找不到檔案"
+
+        image = cv2.imread(image_path)
+        if image is None:
+            return "[錯誤] 無法讀取圖片"
+
+        # Run OCR with multilingual support (handles Chinese + Japanese on BOM tables)
+        try:
+            results = self.extract_multilang(
+                image,
+                languages=['ch', 'chinese_cht', 'en', 'japan'],
+                confidence_threshold=confidence_threshold,
+            )
+        except Exception as exc:
+            print(f"[extract_bom_text_only] OCR failed: {exc}")
+            return "[錯誤] OCR 執行失敗"
+
+        if not results:
+            return ""
+
+        all_lines: List[str] = [r.text for r in results if r.text.strip()]
+
+        # ---- Priority keyword filter ----
+        # Keep lines that contain BOM-relevant engineering terms
+        PRIORITY_KEYWORDS = [
+            # Material codes
+            'SUS', 'SPCC', 'SECC', 'AL', 'A5052', 'A6061', 'SS400', 'C1020',
+            'POM', 'PC', 'ABS', 'PTFE', 'FR4',
+            # Thickness / dimension annotations
+            't=', 'T=', 't =', 'T =', '厚', '板厚',
+            # Part names (Chinese)
+            '品名', '零件', '件名', '部品', '材質', '材料', '規格',
+            # Part names (Japanese)
+            'リブ', 'ベース', 'ブラケット', 'パネル', 'フレーム',
+            'プレート', 'カバー', 'ホルダ', 'サポート',
+            # Quantity / BOM fields
+            '数量', '員数', 'QTY', 'Qty', '品番',
+            # Surface finish / treatment hints
+            '烤漆', '陽極', '鍍', '處理', '噴砂',
+        ]
+
+        priority_lines: List[str] = []
+        for line in all_lines:
+            if any(kw in line for kw in PRIORITY_KEYWORDS):
+                priority_lines.append(line)
+
+        # If priority filter yields meaningful results, return those;
+        # otherwise fall back to everything so the user can trim manually.
+        if len(priority_lines) >= 3:
+            return '\n'.join(priority_lines)
+        return '\n'.join(all_lines)
     def detect_title_block_notes(
         self,
         image: np.ndarray,
