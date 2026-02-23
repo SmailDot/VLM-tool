@@ -223,6 +223,22 @@ with col_left:
         st.session_state.extracted_bom = ""
     if "bom_context" not in st.session_state:
         st.session_state.bom_context = ""
+    # Step 1: 圖紙語言選擇器
+    _LANG_OPTIONS = {
+        '繁體中文 (chinese_cht)': 'chinese_cht',
+        '日文 (japan)':           'japan',
+        '英文 (en)':              'en',
+        '簡體中文 (ch)':          'ch',
+        '韓文 (korean)':          'korean',
+    }
+    _lang_label = st.selectbox(
+        '🌐 選擇圖紙主要語言',
+        options=list(_LANG_OPTIONS.keys()),
+        index=0,
+        key='bom_ocr_lang',
+        help='選擇圖面的主要語言，系統會導向這個語言模型進行 OCR，改善其他語言圖紙的辨識結果'
+    )
+    _selected_lang = _LANG_OPTIONS[_lang_label]
     bom_files = st.file_uploader(
         "選擇父圖/BOM 圖片 (JPG/PNG，可多選)",
         type=['jpg', 'jpeg', 'png'],
@@ -251,7 +267,7 @@ with col_left:
                 _ocr_inst = _OCRExtractor(lang='ch')
                 _results = []
                 for _idx, _scan_path in enumerate(st.session_state.bom_ocr_paths):
-                    _bom_text = _ocr_inst.extract_bom_text_only(_scan_path)
+                    _bom_text = _ocr_inst.extract_bom_text_only(_scan_path, lang=_selected_lang)
                     _results.append(_bom_text if _bom_text else f"(第 {_idx+1} 張：OCR 未偵測到文字)")
                 _separator = "\n" + "=" * 18 + "\n"
                 st.session_state.extracted_bom = _separator.join(_results)
