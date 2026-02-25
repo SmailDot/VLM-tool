@@ -1,1388 +1,251 @@
 ================================================================================
-NKUST AoV Tool V2 — Error Log
+NKUST AoV Tool V2 — AI Agent Error Log
 ================================================================================
-Format: [Date] | [File] | [Error Type] | [Root Cause] | [Fix] | [Prevention]
+目的：這份文件給未來的 AI Agent（VibeCoding / Sisyphus）閱讀。
+      在動手修改前，先掃描「已知地雷」與「驗證指令」，避免重踩。
+
+結構：
+  [CHEATSHEET]   最高頻地雷速查，每次 coding 前先看
+  [ERR-001..003] 歷史錯誤詳細記錄
+  [PATTERNS]     跨錯誤共通規律總結
 ================================================================================
 
---------------------------------------------------------------------------------
-[2026-02-25] | app/manufacturing/extractors/vlm_client.py | SyntaxError
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-ERROR MESSAGE:
-  SyntaxError: invalid syntax (line 245)
-  "Expected expression" at except Exception as e:
-  "e" is not defined
 
-TRACEBACK PATH:
-  aov_app.py:26
-  → app/manufacturing/__init__.py:31
-  → app/manufacturing/pipeline.py:31
-  → app/manufacturing/extractors/parent_parser.py:20
-  → app/manufacturing/extractors/vlm_client.py:245
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CHEATSHEET — 改這個專案前必讀（30 秒速查）                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 
-ROOT CAUSE:
-  When adding the `bom_context` injection block to `analyze_image()`,
-  the `try:` keyword was accidentally omitted.
-  The code structure after editing became:
+❌ 不能做                              ✅ 應該做
+────────────────────────────────────── ─────────────────────────────────────
+刪除整個 import 區塊                   先 UNION 所有名稱再刪重複行
+假設 `ast.parse()` 能抓到所有錯誤      還要跑 `python -c "import <module>"`
+假設 pipeline 一定已初始化             讀 session state 前加 `if pipeline is not None` + JSON fallback
+在 Streamlit multiselect 傳空 options  fallback 到直接讀 process_lib_v2.json
+加 try/except 時只加一側               兩側都確認：`try:` 和 `except:` 同時存在
+提交前只看語法正確                     語法 + 實際 import + UI 三層驗證
+
+VERIFY COMMANDS（每次改完跑這三行）：
+  python -c "import ast; ast.parse(open('FILE.py', encoding='utf-8').read()); print('syntax OK')"
+  python -c "import sys; sys.path.insert(0,'.'); import app.manufacturing; print('import OK')"
+  python -c "import sys; sys.path.insert(0,'.'); from app.manufacturing.extractors.vlm_client import VLMClient; print('vlm OK')"
+
+
+================================================================================
+ERR-001 | 2026-02-25 | SyntaxError: orphan except
+================================================================================
+FILE:     app/manufacturing/extractors/vlm_client.py (line ~245)
+SYMPTOM:  SyntaxError: invalid syntax — "Expected expression" at `except Exception as e:`
+          Variable `e` reported as not defined.
+
+WHAT HAPPENED:
+  A new `try/except` block was added inside `analyze_image()`. The `except:` was
+  written correctly, but the matching `try:` was accidentally omitted. Result:
 
       for image in images:
           base64_images.append(...)
-                                        ← for loop ends here
-          # (indent = 12) — looks like inside for loop still
-          effective_prompt = prompt     ← should be INSIDE try:
-          ...
+                                      ← blank line, for-loop ends here visually
+          effective_prompt = prompt   ← this looks indented inside for, but
+          ...                           Python sees it OUTSIDE any try block
           return content
-      except Exception as e:            ← orphan except, no matching try!
-
-  Python saw `except` without a preceding `try:` → SyntaxError.
-
-FIX APPLIED:
-  Inserted `        try:` (8 spaces) on the blank line between the
-  `for` loop (line 183-187) and the effective_prompt block (line 189+).
-  The 12-space indentation of the inner block was already correct for
-  a `try:` body — only the `try:` itself was missing.
-
-  File:    app/manufacturing/extractors/vlm_client.py
-  Line:    188 (blank line after for loop)
-  Change:  blank line → blank line + `        try:`
-
-PREVENTION RULES:
-  1. When adding a try/except block to an existing function, ALWAYS verify
-     that both `try:` AND `except:` are present before saving.
-  2. After editing indentation-sensitive code, run:
-       python -c "import ast; ast.parse(open('file.py').read()); print('OK')"
-     to catch SyntaxError before running the app.
-  3. When a block ends with `except Exception as e:`, check that there is
-     a `try:` at the same indentation level above it in the same scope.
-  4. Use `lsp_diagnostics` after every code change — a SyntaxError will
-     show as "Expected expression" and undefined variable errors on the
-     except-clause variable (e.g., `"e" is not defined`).
-
---------------------------------------------------------------------------------
-
-# 任務完成總結 - 5個關鍵功能修復
-
-## 執行日期
-2026-02-13
-
-## 任務概述
-根據 `task.txt` 文件，完成了5個關鍵功能的修復與優化。
-
----
-
-## ✅ Task 1: RAG 與 VLM 解耦
-
-### 問題描述
-- RAG (知識庫輔助) 功能被硬耦合到 VLM (視覺語言模型)
-- 當 VLM 未啟用或 LM Studio 未運行時，RAG 完全無法使用
-- 即使知識庫中有有效資料，也無法進行檢索
-
-### 根本原因
-1. **UI 層面** (`components/sidebar.py` 第 36-41 行):
-   - RAG 複選框被 VLM 開關控制: `disabled=not use_vlm`
-   - RAG 值被強制為 False: `use_rag if use_vlm else False`
-
-2. **Pipeline 層面** (`app/manufacturing/pipeline.py` 第 293 行):
-   - RAG 檢索需要 `features.vlm_analysis` 存在
-   - 如果 VLM 未啟用，`vlm_analysis` 為 None，導致 RAG 跳過
-
-### 解決方案
-1. **UI 解耦**:
-   - 移除 `disabled=not use_vlm` 約束
-   - 移除強制 False 賦值
-   - 修改標籤: "└─ 開啟知識庫輔助 (RAG)" → "開啟知識庫輔助 (RAG)"
-
-2. **Pipeline 回退機制**:
-   - 當 VLM 不可用時，從基礎特徵構建檢索上下文
-   - 使用幾何特徵 (折彎線數量、圓形/孔洞數量)
-   - 使用符號檢測結果
-   - 使用 OCR 文字內容 (前 200 字元)
-   - 條件從 `if use_rag and features.vlm_analysis:` 改為 `if use_rag:`
-
-### 修改檔案
-- `components/sidebar.py` (第 30-41 行)
-- `app/manufacturing/pipeline.py` (第 289-339 行)
-
-### 驗證方式
-1. 關閉 VLM，啟用 RAG
-2. 上傳已保存到知識庫的圖片
-3. 執行辨識，檢查是否顯示「本次推論參考的歷史案例 (RAG Context)」
-
----
-
-## ✅ Task 2: 多圖保存功能
-
-### 問題描述
-- 使用者上傳多張圖片時，只有第一張被保存到知識庫
-- `st.session_state.uploaded_drawings` 包含所有圖片，但未被使用
-- 知識庫中只記錄單一圖片路徑
-
-### 根本原因
-1. **臨時檔案保存** (`aov_app.py` 第 247-254 行):
-   - 只保存 `temp_file_path` (第一張)
-   - 忽略 `uploaded_drawings` 列表
-
-2. **知識庫保存** (`app/knowledge/manager.py`):
-   - `add_entry()` 只接受單一 `image_path` 參數
-   - 沒有處理多圖片的機制
-
-### 解決方案
-1. **多圖臨時保存**:
-   - 為每張上傳的圖片創建臨時檔案
-   - 新增 `st.session_state.temp_file_paths` 列表存儲所有路徑
-   - 保持 `temp_file_path` 向後兼容 (主圖)
-
-2. **知識庫多圖支援**:
-   - 在 `add_entry()` 中新增 `additional_images` 參數
-   - 保存所有額外圖片到 `knowledge_images/` 目錄
-   - 在 JSON 條目中新增 `additional_images` 欄位記錄路徑
-
-3. **UI 反饋**:
-   - 成功訊息顯示圖片數量: "已保存至知識庫 (X 張圖片)"
-
-### 修改檔案
-- `aov_app.py` (第 247-254 行, 第 675-692 行)
-- `app/knowledge/manager.py` (第 57-99 行)
-
-### 相關 Task: 清理測試資料
-- 刪除 2/10 測試圖片: `20260210_234642_tmptqunirdr.png`, `20260210_234753_tmp45y9un3i.png`
-- 清理 `knowledge_db.json`: 移除 2/10 條目，保留 2/13 條目
-- 當前知識庫: 1 個條目，1 張圖片
-
----
-
-## ✅ Task 3: 移除頁面重新載入
-
-### 問題描述
-- 點擊「加入製程」或「刪除」後，頁面會完全重新載入
-- 使用者體驗不流暢，有明顯的閃爍和延遲
-- Streamlit 本身會在 session state 變更時自動刷新
-
-### 根本原因
-- `aov_app.py` 中明確呼叫 `st.rerun()`:
-  - 第 519 行: 刪除操作後
-  - 第 552 行: 加入操作後
-
-### 解決方案
-- 移除兩處 `st.rerun()` 呼叫
-- 添加註解: "# No st.rerun() - let Streamlit naturally refresh"
-- 依賴 Streamlit 的自然刷新機制
-
-### 修改檔案
-- `aov_app.py` (第 519 行, 第 552 行)
-
-### 驗證方式
-1. 執行辨識後，點擊「加入製程」
-2. 確認待確認清單立即更新，無明顯頁面重載
-3. 點擊「刪除」按鈕，確認製程立即移除
-
----
-
-## ✅ Task 4: 手動輸入製程代碼/名稱
-
-### 問題描述
-- 使用者只能從下拉清單選擇製程
-- 無法手動輸入已知的製程代碼 (例如 "F01") 或名稱 (例如 "鑽孔")
-- 無法註冊未知製程
-
-### 使用者需求
-1. 快速輸入已知製程代碼或名稱
-2. 當輸入未知製程時，系統應提供註冊流程
-3. 區分代碼輸入 (ID) 與名稱輸入
-
-### 解決方案
-1. **輸入方式選擇**:
-   - 新增單選按鈕: "從清單選擇" vs "手動輸入代碼或名稱"
-   - 根據選擇顯示下拉框或文字輸入框
-
-2. **智慧匹配邏輯**:
-   - **優先匹配代碼**: 不區分大小寫 (e.g., "f01" → "F01")
-   - **次要匹配名稱**: 不區分大小寫 (e.g., "鑽孔" → "鑽孔")
-   - **成功**: 直接加入到待確認清單
-
-3. **未知製程註冊流程**:
-   - **判斷輸入類型**:
-     - 看起來像代碼: ≤4 字元且包含數字 (e.g., "X99")
-     - 看起來像名稱: 其他情況 (e.g., "特殊加工")
-   
-   - **代碼輸入** (缺少名稱):
-     - 顯示文字輸入: "請輸入製程 X99 的中文名稱"
-     - 佔位符: "例如: 鑽孔"
-     - 按鈕: "確認註冊"
-   
-   - **名稱輸入** (缺少代碼):
-     - 顯示文字輸入: "請輸入製程 '特殊加工' 的代碼"
-     - 佔位符: "例如: F01"
-     - 按鈕: "確認註冊"
-   
-   - **註冊成功**:
-     - 加入到待確認清單
-     - 標記為 "手動加入 (新製程)"
-     - 信心度設為 0.5
-
-4. **類型安全**:
-   - 添加 `isinstance(pname, str)` 檢查，防止非字串類型錯誤
-
-### 修改檔案
-- `aov_app.py` (第 533-653 行)
-
-### UI 流程圖
-```
-使用者點擊「加入製程」
-    ↓
-選擇輸入方式
-    ├─ 從清單選擇 → 下拉框 (原有功能)
-    └─ 手動輸入代碼或名稱
-        ↓
-    輸入 "F01" 或 "鑽孔"
-        ↓
-    系統匹配現有製程
-        ├─ 找到 → 直接加入 ✅
-        └─ 未找到 → 判斷輸入類型
-            ├─ 像代碼 (F01) → 要求輸入名稱 → 註冊 ✅
-            └─ 像名稱 (鑽孔) → 要求輸入代碼 → 註冊 ✅
-```
-
----
-
-## ✅ Task 5: 學習後確認對話框
-
-### 問題描述
-- 使用者保存製程到知識庫後，無法立即看到知識庫的效果
-- 需要手動重新上傳圖片並重新辨識，流程繁瑣
-- 已上傳的圖片在保存後丟失
-
-### 使用者需求
-1. 保存到知識庫後，詢問是否需要重新辨識
-2. 如果確認，使用**相同的圖片**和**相同的設定**重新辨識
-3. 更新「當前製程清單」以反映知識庫的影響
-4. 無需重新上傳圖片
-
-### 解決方案
-1. **確認對話框**:
-   - 檢測 `st.session_state.kb_save_success` 旗標
-   - 顯示成功訊息: "✅ 已成功保存至知識庫！"
-   - 提示: "💡 知識庫已更新，是否需要重新辨識以使用最新的知識庫？"
-   - 兩個按鈕: "🔄 是，重新辨識" (主要) 和 "❌ 不需要"
-
-2. **重新辨識邏輯**:
-   - **讀取設定**: 從 `st.session_state.last_settings` 獲取上次的設定
-     - `use_ocr`, `use_geometry`, `use_symbols`, `use_vlm`
-   
-   - **重新初始化 Pipeline**: 使用相同設定創建新的 `ManufacturingPipeline`
-   
-   - **執行辨識**: 使用已存儲的圖片
-     - 主圖: `st.session_state.uploaded_drawing`
-     - 父圖: `st.session_state.parent_drawing` (如果有)
-     - 子圖: `st.session_state.uploaded_drawings`
-     - RAG: `st.session_state.use_rag` (重要！使用新知識庫)
-   
-   - **更新結果**:
-     - 更新 `st.session_state.recognition_result`
-     - 更新 `st.session_state.editing_predictions` (包含所有預測)
-     - 清除 `kb_save_success` 旗標
-     - 呼叫 `st.rerun()` 刷新 UI
-
-3. **錯誤處理**:
-   - 如果圖片不存在: 顯示錯誤訊息
-   - 如果辨識失敗: 顯示錯誤詳情 (expandable)
-
-### 修改檔案
-- `aov_app.py` (第 694-769 行)
-
-### UI 流程
-```
-使用者點擊「保存至知識庫」
-    ↓
-系統保存成功
-    ↓
-設定 kb_save_success = True
-    ↓
-顯示確認對話框
-「知識庫已更新，是否需要重新辨識？」
-    ├─ 🔄 是，重新辨識
-    │   ↓
-    │   讀取上次設定 (last_settings)
-    │   ↓
-    │   重新初始化 Pipeline
-    │   ↓
-    │   執行辨識 (相同圖片 + RAG 啟用)
-    │   ↓
-    │   更新「當前製程清單」
-    │   ↓
-    │   清除旗標 + 刷新 UI ✅
-    │
-    └─ ❌ 不需要
-        ↓
-        清除旗標 + 刷新 UI ✅
-```
-
-### 依賴條件
-- **Session State**:
-  - `uploaded_drawing`: 必須存在 (主圖)
-  - `last_settings`: 必須存在 (辨識設定)
-  - `use_rag`: 建議啟用 (使用新知識庫)
-
-- **知識庫**:
-  - RAG 必須啟用才能看到知識庫的效果
-  - 如果 RAG 未啟用，重新辨識將使用原始演算法
-
----
-
-## 修改檔案總覽
-
-| 檔案 | 修改內容 | 任務 |
-|------|---------|------|
-| `components/sidebar.py` | RAG 與 VLM 解耦 | Task 1 |
-| `app/manufacturing/pipeline.py` | RAG 回退機制 + 屬性名稱修正 | Task 1, Task 5 |
-| `aov_app.py` (第 247-254 行) | 多圖臨時保存 | Task 2 |
-| `aov_app.py` (第 675-692 行) | 多圖知識庫保存 + 成功訊息 | Task 2 |
-| `app/knowledge/manager.py` | `add_entry()` 多圖支援 | Task 2 |
-| `knowledge_db.json` | 清理測試資料 (2/10) | Task 2 Cleanup |
-| `aov_app.py` (第 519, 552 行) | 移除 `st.rerun()` | Task 3 |
-| `aov_app.py` (第 533-653 行) | 手動輸入 + 註冊流程 | Task 4 |
-| `aov_app.py` (第 694-769 行) | 學習後確認對話框 | Task 5 |
-
----
-
-## 測試計畫
-
-### Task 1: RAG 獨立運作
-1. 關閉 VLM (`use_vlm = False`)
-2. 啟用 RAG (`use_rag = True`)
-3. 上傳已保存到知識庫的圖片
-4. 執行辨識
-5. **驗證**: 展開「本次推論參考的歷史案例 (RAG Context)」，應該顯示參考案例
-
-### Task 2: 多圖保存
-1. 上傳 3 張不同的工程圖紙
-2. 執行辨識
-3. 調整製程清單
-4. 點擊「保存至知識庫」
-5. **驗證**: 
-   - 成功訊息: "已保存至知識庫 (3 張圖片)"
-   - 檢查 `knowledge_db.json`: 應包含 `additional_images` 欄位，有 3 個路徑
-   - 檢查 `knowledge_images/` 目錄: 應有 3 張圖片
-
-### Task 3: 無頁面重載
-1. 執行辨識
-2. 點擊「加入製程」，選擇任一製程
-3. **驗證**: 待確認清單立即更新，無明顯閃爍
-4. 點擊「刪除」按鈕
-5. **驗證**: 製程立即移除，無頁面重載
-
-### Task 4: 手動輸入
-**測試案例 1: 輸入已知代碼**
-1. 選擇「手動輸入代碼或名稱」
-2. 輸入 "f01" (小寫)
-3. **驗證**: 顯示 "已加入: F01 - 焊接" (或對應名稱)
-
-**測試案例 2: 輸入已知名稱**
-1. 選擇「手動輸入代碼或名稱」
-2. 輸入 "鑽孔"
-3. **驗證**: 顯示 "已加入: O01 - 鑽孔" (或對應代碼)
-
-**測試案例 3: 輸入未知代碼**
-1. 選擇「手動輸入代碼或名稱」
-2. 輸入 "X99"
-3. **驗證**: 顯示註冊表單，要求輸入中文名稱
-4. 輸入 "特殊加工"，點擊「確認註冊」
-5. **驗證**: 顯示 "已註冊並加入: X99 - 特殊加工"
-
-**測試案例 4: 輸入未知名稱**
-1. 選擇「手動輸入代碼或名稱」
-2. 輸入 "雷射雕刻"
-3. **驗證**: 顯示註冊表單，要求輸入代碼
-4. 輸入 "L01"，點擊「確認註冊」
-5. **驗證**: 顯示 "已註冊並加入: L01 - 雷射雕刻"
-
-### Task 5: 學習後確認
-1. 上傳圖片，執行辨識 (RAG 啟用)
-2. 調整製程清單
-3. 點擊「保存至知識庫」
-4. **驗證**: 顯示確認對話框，包含兩個按鈕
-5. 點擊「🔄 是，重新辨識」
-6. **驗證**: 
-   - 顯示 spinner: "正在使用更新後的知識庫重新辨識..."
-   - 辨識完成後顯示: "✅ 重新辨識完成！處理時間: X.XX 秒"
-   - 「當前製程清單」應更新為新的辨識結果
-   - 對話框消失
-7. 再次保存，點擊「❌ 不需要」
-8. **驗證**: 對話框消失，不執行辨識
-
----
-
-## 技術細節
-
-### Session State 變數
-```python
-# 圖片相關
-st.session_state.uploaded_drawing          # 主圖 (numpy array)
-st.session_state.uploaded_drawings         # 所有圖片 (list)
-st.session_state.parent_drawing            # 父圖 (optional)
-st.session_state.temp_file_path            # 主圖臨時路徑
-st.session_state.temp_file_paths           # 所有臨時路徑 (list) - NEW
-
-# 辨識相關
-st.session_state.recognition_result        # RecognitionResult
-st.session_state.editing_predictions       # 待確認製程清單 (list of dict)
-st.session_state.mfg_pipeline              # ManufacturingPipeline 實例
-
-# 設定相關
-st.session_state.last_settings             # 上次辨識設定 (dict) - Task 5
-st.session_state.use_rag                   # RAG 啟用旗標
-st.session_state.use_vlm                   # VLM 啟用旗標
-st.session_state.min_confidence            # 最低信心度閾值
-st.session_state.frequency_filters         # 頻率篩選
-
-# UI 狀態
-st.session_state.kb_save_success           # 知識庫保存成功旗標 - Task 5
-st.session_state.pending_new_process       # 待註冊製程資訊 - Task 4
-```
-
-### 知識庫 JSON 結構 (更新後)
-```json
-{
-  "id": "20260213_112511",
-  "image_path": "knowledge_images/20260213_112511_tmpbt2gtx_h.png",
-  "additional_images": [                    // NEW - Task 2
-    "knowledge_images/20260213_112511_image1.png",
-    "knowledge_images/20260213_112511_image2.png"
-  ],
-  "features": {
-    "shape_description": "...",
-    "bend_lines": 3,
-    "holes": 8,
-    "symbols": ["welding"],
-    "ocr_text": "..."
-  },
-  "correct_processes": ["F01", "D01"],
-  "reasoning": "F01: 手動加入\nD01: 幾何特徵匹配",
-  "timestamp": "2026-02-13T11:25:11"
-}
-```
-
----
-
-## 向後兼容性
-
-### Task 1: RAG 解耦
-- ✅ VLM 啟用時，RAG 仍可使用 `vlm_analysis`
-- ✅ VLM 未啟用時，RAG 使用基礎特徵回退
-- ✅ 不影響現有知識庫資料
-
-### Task 2: 多圖保存
-- ✅ `temp_file_path` 仍然存在 (主圖)
-- ✅ `temp_file_paths` 為新增變數，不影響現有邏輯
-- ✅ 知識庫條目的 `additional_images` 欄位為可選，舊資料仍可正常讀取
-
-### Task 4: 手動輸入
-- ✅ 下拉清單選擇仍然可用
-- ✅ 新增單選按鈕選擇輸入方式，不影響現有 UI 流程
-
-### Task 5: 學習後確認
-- ✅ 對話框只在 `kb_save_success = True` 時顯示
-- ✅ 不影響原有的保存流程
-- ✅ 重新辨識完全獨立，不影響已保存的資料
-
----
-
-## 已知限制與未來改進
-
-### Task 1: RAG 回退機制
-- **限制**: 基礎特徵的檢索精度低於 VLM 特徵
-- **建議**: 未來可整合 CLIP 或其他輕量級視覺模型
-
-### Task 2: 多圖保存
-- **限制**: 未實作多圖檢索 (RAG 只使用主圖)
-- **建議**: 未來可為每張圖片生成獨立嵌入，支援多圖檢索
-
-### Task 4: 手動輸入
-- **限制**: 註冊的新製程只存在於 session state，未持久化到 `process_lib_v2.json`
-- **建議**: 未來可添加「保存自訂製程」功能
-
-### Task 5: 學習後確認
-- **限制**: 如果辨識設定未保存 (`last_settings` 不存在)，將使用預設值
-- **建議**: 在執行辨識時強制保存設定到 `last_settings`
-
----
-
-## 提交資訊
-
-### Git 分支
-`feature/Two-Model-Agent-UI-rag`
-
-### 建議的 Commit Message
-```
-修復5個關鍵功能問題：RAG獨立運作、多圖保存、移除reload、手動輸入、學習後確認
-
-Task 1: RAG 與 VLM 解耦
-- 移除 UI 層面的硬耦合 (components/sidebar.py)
-- 新增 RAG 回退機制，當 VLM 不可用時使用基礎特徵
-
-Task 2: 多圖保存功能
-- 支援保存多張圖片到知識庫 (additional_images)
-- 清理 2/10 測試資料
-
-Task 3: 移除頁面重新載入
-- 刪除不必要的 st.rerun() 呼叫
-- 依賴 Streamlit 自然刷新機制
-
-Task 4: 手動輸入製程代碼/名稱
-- 新增手動輸入選項 (代碼或名稱)
-- 智慧匹配現有製程
-- 未知製程註冊流程
-
-Task 5: 學習後確認對話框
-- 保存後詢問是否重新辨識
-- 使用相同圖片和設定重新辨識
-- 自動更新製程清單
-
-修改檔案:
-- components/sidebar.py
-- app/manufacturing/pipeline.py
-- app/knowledge/manager.py
-- aov_app.py
-- knowledge_db.json (清理)
-```
-
----
-
-## 後續步驟
-
-1. **執行測試**: 按照測試計畫逐一驗證 5 個任務
-2. **修復 Bug**: 如果測試發現問題，立即修復
-3. **更新文件**: 更新 `README.md` 或 `MANUFACTURING_USER_GUIDE.md`，記錄新功能
-4. **Commit & Push**: 提交所有變更到 `feature/Two-Model-Agent-UI-rag` 分支
-5. **創建 PR**: 如果需要，創建 Pull Request 合併到主分支
-
----
-
-**完成日期**: 2026-02-13  
-**完成狀態**: ✅ 所有 5 個任務已實作完成，等待測試驗證  
-**下一步**: 執行完整測試計畫
--------------------------------------------------------------------------------------------
-
-# 測試指南 - 5個關鍵功能修復
-
-## 測試環境準備
-
-### 啟動應用程式
-```bash
-cd AoV_Tool_V2
-streamlit run aov_app.py
-```
-
-### 測試圖片
-- 使用 `test1.jpg` 或 `test2.jpg` (專案中已有)
-- 或準備自己的工程圖紙 (建議 300 DPI 以上)
-
----
-
-## 🧪 Task 1: RAG 獨立運作測試
-
-### 目標
-驗證 RAG 在 VLM 關閉時仍可正常工作
-
-### 步驟
-1. **設定側邊欄**:
-   - ✅ 開啟知識庫輔助 (RAG)
-   - ❌ 關閉 VLM (不勾選)
-   - ✅ 開啟幾何特徵分析
-   - ✅ 開啟符號辨識
-
-2. **上傳圖片**: 選擇一張已保存到知識庫的圖片
-   - 如果沒有，先上傳一張新圖片，執行辨識，保存到知識庫
-   - 然後重新上傳同一張圖片
-
-3. **執行辨識**: 點擊「開始辨識製程」
-
-4. **驗證結果**:
-   - ✅ 辨識應該正常完成 (無錯誤)
-   - ✅ 向下捲動，展開「本次推論參考的歷史案例 (RAG Context)」
-   - ✅ 應該顯示至少一個參考案例
-   - ✅ 參考案例包含: 形狀描述、正確製程
-
-### 預期結果
-```
-✅ 辨識完成！處理時間: 1.23 秒
-
-當前製程清單:
-- F01 - 焊接 (信心度: 75%)
-
-▼ 本次推論參考的歷史案例 (RAG Context)
-參考案例：...
-正確製程：F01, D01
-```
-
-### 失敗情況
-- ❌ 如果 RAG 區塊不顯示 → Task 1 失敗
-- ❌ 如果出現 VLM 相關錯誤 → Task 1 失敗
-
----
-
-## 🧪 Task 2: 多圖保存測試
-
-### 目標
-驗證上傳多張圖片時，所有圖片都被保存到知識庫
-
-### 步驟
-1. **上傳多張圖片**:
-   - 點擊「上傳工程圖紙」
-   - 選擇 3 張不同的圖片 (可以是 test1.jpg, test2.jpg 和其他)
-
-2. **執行辨識**: 點擊「開始辨識製程」
-
-3. **調整製程清單**:
-   - 在「待確認動作」區塊
-   - 調整製程 (加入、刪除、或保持原樣)
-
-4. **保存到知識庫**:
-   - 點擊「保存至知識庫」按鈕
-   - 觀察成功訊息
-
-5. **驗證結果**:
-   - ✅ 成功訊息應顯示: "已保存至知識庫 (3 張圖片)"
-   - ✅ 檢查 `knowledge_db.json`:
-     ```bash
-     notepad knowledge_db.json
-     ```
-     應包含最新條目，有 `additional_images` 欄位，包含 3 個路徑
-   
-   - ✅ 檢查 `knowledge_images/` 目錄:
-     ```bash
-     dir knowledge_images
-     ```
-     應該新增 3 張圖片 (檔名包含時間戳記)
-
-### 預期結果
-```json
-// knowledge_db.json (最新條目)
-{
-  "id": "20260213_123456",
-  "image_path": "knowledge_images/20260213_123456_tmp123abc.png",
-  "additional_images": [
-    "knowledge_images/20260213_123456_image1.png",
-    "knowledge_images/20260213_123456_image2.png"
-  ],
-  ...
-}
-```
-
-### 失敗情況
-- ❌ 成功訊息顯示 "(1 張圖片)" → Task 2 失敗
-- ❌ `additional_images` 欄位不存在或為空 → Task 2 失敗
-- ❌ `knowledge_images/` 只有 1 張新圖片 → Task 2 失敗
-
----
-
-## 🧪 Task 3: 無頁面重載測試
-
-### 目標
-驗證加入/刪除製程時，頁面不會完全重新載入
-
-### 步驟
-1. **執行辨識**: 上傳圖片，點擊「開始辨識製程」
-
-2. **測試加入製程**:
-   - 捲動到「待確認動作」區塊
-   - 點擊「加入製程」按鈕
-   - 從下拉清單選擇任一製程
-   - **觀察頁面行為**:
-     - ✅ 待確認清單應該**立即更新** (顯示新製程)
-     - ✅ 頁面**不應該閃爍**或完全重載
-     - ✅ 捲動位置應該保持 (不跳回頂部)
-
-3. **測試刪除製程**:
-   - 點擊任一製程旁的「刪除」按鈕
-   - **觀察頁面行為**:
-     - ✅ 該製程應該**立即消失**
-     - ✅ 頁面**不應該閃爍**
-     - ✅ 捲動位置應該保持
-
-### 預期結果
-- 流暢的 UI 更新，無明顯延遲
-- 無頁面白屏或閃爍
-- 捲動位置保持在當前區塊
-
-### 失敗情況
-- ❌ 頁面完全重載 (白屏閃爍) → Task 3 失敗
-- ❌ 捲動位置跳回頂部 → Task 3 失敗
-- ❌ 有明顯延遲 (>1 秒) → Task 3 部分失敗
-
----
-
-## 🧪 Task 4: 手動輸入測試
-
-### 目標
-驗證手動輸入製程代碼/名稱功能，包括註冊未知製程
-
-### 測試案例 1: 輸入已知代碼
-
-**步驟**:
-1. 執行辨識後，捲動到「待確認動作」
-2. 點擊「加入製程」
-3. 選擇 **「手動輸入代碼或名稱」** (單選按鈕)
-4. 在文字框輸入: `f01` (小寫)
-5. 按 Enter 或點擊旁邊的按鈕
-
-**預期結果**:
-- ✅ 顯示成功訊息: "已加入: F01 - 焊接" (或對應的製程名稱)
-- ✅ 待確認清單中出現該製程
-
----
-
-### 測試案例 2: 輸入已知名稱
-
-**步驟**:
-1. 點擊「加入製程」
-2. 選擇 **「手動輸入代碼或名稱」**
-3. 輸入: `鑽孔` (或任何已知的製程名稱)
-4. 按 Enter
-
-**預期結果**:
-- ✅ 顯示成功訊息: "已加入: O01 - 鑽孔" (或對應的製程代碼)
-- ✅ 待確認清單中出現該製程
-
----
-
-### 測試案例 3: 輸入未知代碼 (需要名稱)
-
-**步驟**:
-1. 點擊「加入製程」
-2. 選擇 **「手動輸入代碼或名稱」**
-3. 輸入: `X99` (未知代碼)
-4. 按 Enter
-
-**預期結果**:
-- ⚠️ 顯示警告: "未知製程: X99"
-- 📝 顯示資訊: "請填寫完整資訊以註冊新製程"
-- ✅ 顯示文字輸入框: "請輸入製程 X99 的中文名稱"
-- ✅ 佔位符: "例如: 鑽孔"
-
-**繼續步驟**:
-5. 輸入名稱: `特殊加工`
-6. 點擊「確認註冊」按鈕
-
-**預期結果**:
-- ✅ 顯示成功訊息: "已註冊並加入: X99 - 特殊加工"
-- ✅ 待確認清單中出現該製程，標記為 "手動加入 (新製程)"
-
----
-
-### 測試案例 4: 輸入未知名稱 (需要代碼)
-
-**步驟**:
-1. 點擊「加入製程」
-2. 選擇 **「手動輸入代碼或名稱」**
-3. 輸入: `雷射雕刻` (未知名稱)
-4. 按 Enter
-
-**預期結果**:
-- ⚠️ 顯示警告: "未知製程: 雷射雕刻"
-- 📝 顯示資訊: "請填寫完整資訊以註冊新製程"
-- ✅ 顯示文字輸入框: "請輸入製程 '雷射雕刻' 的代碼"
-- ✅ 佔位符: "例如: F01"
-
-**繼續步驟**:
-5. 輸入代碼: `L01`
-6. 點擊「確認註冊」按鈕
-
-**預期結果**:
-- ✅ 顯示成功訊息: "已註冊並加入: L01 - 雷射雕刻"
-- ✅ 待確認清單中出現該製程，標記為 "手動加入 (新製程)"
-
----
-
-### 失敗情況
-- ❌ 無法輸入文字 (文字框不顯示) → Task 4 失敗
-- ❌ 輸入已知代碼/名稱後顯示 "未知製程" → 匹配邏輯失敗
-- ❌ 註冊表單不顯示 → Task 4 失敗
-- ❌ 點擊「確認註冊」後沒有加入清單 → Task 4 失敗
-
----
-
-## 🧪 Task 5: 學習後確認對話框測試
-
-### 目標
-驗證保存到知識庫後，系統詢問是否重新辨識，並使用相同圖片和設定
-
-### 前置條件
-- **必須啟用 RAG** (這樣才能看到知識庫的效果)
-
-### 步驟
-1. **上傳圖片並辨識**:
-   - 上傳 `test1.jpg` 或其他圖片
-   - ✅ 啟用 RAG (重要！)
-   - ✅ 啟用幾何特徵分析
-   - ✅ 啟用符號辨識
-   - 點擊「開始辨識製程」
-
-2. **調整製程清單**:
-   - 在「待確認動作」中調整製程
-   - 例如: 加入 "F01 - 焊接", "D01 - 折彎"
-
-3. **保存到知識庫**:
-   - 點擊「保存至知識庫」按鈕
-   - 觀察頁面變化
-
-4. **驗證對話框顯示**:
-   - ✅ 顯示成功訊息: "✅ 已成功保存至知識庫！"
-   - ✅ 顯示提示: "💡 知識庫已更新，是否需要重新辨識以使用最新的知識庫？"
-   - ✅ 顯示兩個按鈕: "🔄 是，重新辨識" (藍色) 和 "❌ 不需要"
-
-5. **測試重新辨識**:
-   - 點擊 **「🔄 是，重新辨識」** 按鈕
-   - **觀察行為**:
-     - ✅ 顯示 spinner: "正在使用更新後的知識庫重新辨識..."
-     - ✅ 辨識執行 (1-3 秒)
-     - ✅ 顯示成功訊息: "✅ 重新辨識完成！處理時間: X.XX 秒"
-     - ✅ 對話框消失
-     - ✅ 「當前製程清單」更新為新的辨識結果
-     - ✅ **重要**: 應該顯示 RAG 參考案例 (因為剛剛保存的就是參考案例)
-
-6. **驗證圖片未丟失**:
-   - ✅ 辨識使用的是**相同的圖片** (無需重新上傳)
-   - ✅ 設定保持不變 (RAG, 幾何, 符號都仍啟用)
-
-7. **測試拒絕重新辨識**:
-   - 再次保存到知識庫 (如果需要，先調整製程)
-   - 對話框再次出現
-   - 點擊 **「❌ 不需要」** 按鈕
-   - **觀察行為**:
-     - ✅ 對話框立即消失
-     - ✅ 不執行辨識
-     - ✅ 「當前製程清單」保持不變
-
-### 預期結果 (重新辨識)
-```
-✅ 重新辨識完成！處理時間: 1.45 秒
-
-當前製程清單:
-- F01 - 焊接 (信心度: 80%)  ← 信心度可能提高 (受 RAG 影響)
-- D01 - 折彎 (信心度: 75%)
-
-▼ 本次推論參考的歷史案例 (RAG Context)
-參考案例：...
-正確製程：F01, D01  ← 剛剛保存的案例
-```
-
-### 失敗情況
-- ❌ 對話框不顯示 → Task 5 失敗
-- ❌ 點擊「是，重新辨識」後出現錯誤 → Task 5 失敗
-- ❌ 辨識時找不到圖片 (要求重新上傳) → 圖片未保存，Task 5 失敗
-- ❌ 辨識設定改變 (例如 RAG 被關閉) → 設定未保存，Task 5 部分失敗
-- ❌ 沒有顯示 RAG 參考案例 → RAG 未正確啟用，Task 1 或 Task 5 失敗
-- ❌ 點擊「不需要」後對話框不消失 → Task 5 失敗
-
----
-
-## 綜合測試流程 (推薦)
-
-### 完整測試案例 (30 分鐘)
-
-**情境**: 使用者第一次使用系統，保存案例到知識庫，然後驗證 RAG 效果
-
-1. **啟動應用**: `streamlit run aov_app.py`
-
-2. **首次辨識**:
-   - 上傳 `test1.jpg`
-   - ❌ 關閉 RAG (首次沒有知識庫)
-   - ✅ 啟用幾何、符號
-   - 執行辨識
-   - 記錄結果 (製程清單、信心度)
-
-3. **保存到知識庫 (Task 2, Task 5)**:
-   - 調整製程: 加入 "F01", "D01"
-   - 點擊「保存至知識庫」
-   - **驗證**: 成功訊息顯示 "(1 張圖片)" → Task 2 ✅
-   - **驗證**: 對話框顯示 → Task 5 ✅
-   - 點擊「❌ 不需要」(暫時不重新辨識)
-
-4. **啟用 RAG 並重新辨識 (Task 1)**:
-   - ✅ 啟用 RAG (側邊欄)
-   - 重新上傳 `test1.jpg` (相同圖片)
-   - 執行辨識
-   - **驗證**: 辨識正常完成 (VLM 關閉) → Task 1 ✅
-   - **驗證**: 顯示 RAG 參考案例 → Task 1 ✅
-   - 對比信心度: 應該提高 (受 RAG 影響)
-
-5. **測試手動輸入 (Task 4)**:
-   - 點擊「加入製程」
-   - 選擇「手動輸入代碼或名稱」
-   - 輸入 "o01" → **驗證**: 成功加入 "O01 - 鑽孔" → Task 4 ✅
-   - 再次點擊「加入製程」
-   - 輸入 "X99" (未知)
-   - **驗證**: 顯示註冊表單 → Task 4 ✅
-   - 輸入名稱 "特殊加工"，點擊「確認註冊」
-   - **驗證**: 成功加入 → Task 4 ✅
-
-6. **測試無重載 (Task 3)**:
-   - 捲動到「待確認動作」
-   - 點擊「刪除」按鈕
-   - **驗證**: 製程立即消失，無頁面閃爍 → Task 3 ✅
-
-7. **測試學習後重新辨識 (Task 5)**:
-   - 調整製程清單
-   - 點擊「保存至知識庫」
-   - 點擊 **「🔄 是，重新辨識」**
-   - **驗證**: 辨識完成，清單更新 → Task 5 ✅
-   - **驗證**: 顯示 RAG 參考案例 (2 個案例) → Task 1 + Task 5 ✅
-
-8. **測試多圖保存 (Task 2)**:
-   - 上傳 3 張不同圖片
-   - 執行辨識
-   - 點擊「保存至知識庫」
-   - **驗證**: 成功訊息顯示 "(3 張圖片)" → Task 2 ✅
-   - 檢查 `knowledge_db.json` 和 `knowledge_images/` → Task 2 ✅
-
----
-
-## 測試檢查清單
-
-### Task 1: RAG 獨立運作
-- [ ] RAG 在 VLM 關閉時可正常啟用 (UI)
-- [ ] 辨識執行無錯誤
-- [ ] 顯示 RAG 參考案例區塊
-- [ ] 參考案例包含正確資訊
-
-### Task 2: 多圖保存
-- [ ] 上傳多張圖片成功
-- [ ] 成功訊息顯示正確數量
-- [ ] `knowledge_db.json` 包含 `additional_images` 欄位
-- [ ] `knowledge_images/` 目錄包含所有圖片
-
-### Task 3: 無頁面重載
-- [ ] 加入製程時無頁面閃爍
-- [ ] 刪除製程時無頁面閃爍
-- [ ] 捲動位置保持不變
-
-### Task 4: 手動輸入
-- [ ] 輸入已知代碼成功加入
-- [ ] 輸入已知名稱成功加入
-- [ ] 輸入未知代碼顯示註冊表單 (要求名稱)
-- [ ] 輸入未知名稱顯示註冊表單 (要求代碼)
-- [ ] 註冊新製程成功加入
-
-### Task 5: 學習後確認
-- [ ] 保存後顯示確認對話框
-- [ ] 對話框包含兩個按鈕
-- [ ] 點擊「是」執行重新辨識
-- [ ] 重新辨識使用相同圖片和設定
-- [ ] 製程清單更新為新結果
-- [ ] 點擊「否」對話框消失，不執行辨識
-
----
-
-## 錯誤排查
-
-### 錯誤 1: ModuleNotFoundError
-```
-ModuleNotFoundError: No module named 'paddleocr'
-```
-**解決**: 
-- 關閉 OCR 功能 (側邊欄)
-- 或安裝 PaddlePaddle: `pip install paddlepaddle paddleocr`
-
-### 錯誤 2: RAG 不顯示
-```
-無 "本次推論參考的歷史案例 (RAG Context)" 區塊
-```
-**檢查**:
-1. RAG 是否啟用 (側邊欄)
-2. 知識庫是否有資料 (`knowledge_db.json` 非空)
-3. 上傳的圖片是否與知識庫中的圖片相似
-
-### 錯誤 3: 重新辨識失敗
-```
-重新辨識時發生錯誤: 找不到上傳的圖片
-```
-**原因**: `st.session_state.uploaded_drawing` 丟失  
-**解決**: 重新上傳圖片，再執行保存
-
-### 錯誤 4: 手動輸入無反應
-```
-輸入代碼後無任何顯示
-```
-**檢查**:
-1. 是否選擇「手動輸入代碼或名稱」單選按鈕
-2. 是否按 Enter 或點擊執行按鈕
-3. 檢查瀏覽器控制台是否有錯誤
-
----
-
-## 測試報告模板
-
-```markdown
-# 測試報告 - 2026-02-13
-
-## 測試環境
-- OS: Windows 11 / macOS / Linux
-- Python: 3.x.x
-- Streamlit: 1.x.x
-- 測試時間: YYYY-MM-DD HH:MM
-
-## 測試結果
-
-### Task 1: RAG 獨立運作
-- [ ] 通過 / [ ] 失敗
-- 問題描述: (如果失敗)
-
-### Task 2: 多圖保存
-- [ ] 通過 / [ ] 失敗
-- 問題描述: (如果失敗)
-
-### Task 3: 無頁面重載
-- [ ] 通過 / [ ] 失敗
-- 問題描述: (如果失敗)
-
-### Task 4: 手動輸入
-- [ ] 通過 / [ ] 失敗
-- 問題描述: (如果失敗)
-
-### Task 5: 學習後確認
-- [ ] 通過 / [ ] 失敗
-- 問題描述: (如果失敗)
-
-## 整體評估
-- [ ] 所有功能正常
-- [ ] 部分功能有問題
-- [ ] 需要重大修復
-
-## 備註
-(其他觀察或建議)
-```
-
----
-
-**測試完成後，請填寫測試報告並回報結果。**
-
---------------------------------------------------------------
-
-# I01 Bug 修復報告
-
-## 錯誤描述
-
-**錯誤訊息**:
-```
-StreamlitAPIException: The default value 'I01' is not part of the options. 
-Please make sure that every default values also exists in the options.
-```
-
-**發生位置**: `aov_app.py` 第 1011 行（知識庫管理頁面）
-
-**發生時機**: 
-- 使用者啟動應用程式後，**直接切換到「知識庫管理」Tab**
-- 知識庫中有條目，且 `correct_processes` 包含 `I01` 等製程代碼
-- Streamlit multiselect 的 `default` 參數包含不在 `options` 中的值
-
----
-
-## 根本原因
-
-### 問題代碼（修復前）
-
-```python
-# aov_app.py 第 996-1000 行
-pipeline = st.session_state.mfg_pipeline
-if pipeline is not None:
-    all_process_ids = list(pipeline.decision_engine.processes.keys())
-else:
-    all_process_ids = []  # ← 這裡是問題！
-```
-
-### 原因分析
-
-1. **Pipeline 初始化時機**:
-   - `st.session_state.mfg_pipeline` 只在以下情況初始化：
-     - 使用者點擊「開始辨識製程」按鈕（第 340-347 行）
-     - 使用者點擊「🔄 是，重新辨識」按鈕（Task 5，第 716-722 行）
-   
-2. **知識庫管理頁面載入時機**:
-   - 使用者可以在**未執行任何辨識**的情況下，直接切換到「知識庫管理」Tab
-   - 此時 `st.session_state.mfg_pipeline` 為 `None`（初始值）
-   
-3. **Multiselect 衝突**:
-   - `all_process_ids = []`（空清單）
-   - 知識庫條目的 `correct_processes = ['I01', 'J01', 'E01', ...]`（78 個製程中的某些）
-   - Streamlit 檢查 `default` 值是否在 `options` 中
-   - `'I01' not in []` → 拋出異常
-
----
-
-## 修復方案
-
-### 修復後代碼
-
-```python
-# aov_app.py 第 991-1010 行
-from app.knowledge.manager import KnowledgeBaseManager
-import json
-
-kb_manager = KnowledgeBaseManager()
-entries = kb_manager.db
-
-# Get process IDs - either from pipeline or directly from JSON
-pipeline = st.session_state.mfg_pipeline
-if pipeline is not None:
-    all_process_ids = list(pipeline.decision_engine.processes.keys())
-else:
-    # Pipeline not initialized - load directly from process_lib_v2.json
-    try:
-        process_lib_path = "app/manufacturing/process_lib_v2.json"
-        with open(process_lib_path, 'r', encoding='utf-8') as f:
-            process_data = json.load(f)
-            all_process_ids = list(process_data.get('processes', {}).keys())
-    except Exception as e:
-        st.error(f"無法載入製程清單: {e}")
-        all_process_ids = []
-```
-
-### 修復邏輯
-
-1. **優先使用 Pipeline**（已初始化時）:
-   - 從 `pipeline.decision_engine.processes` 獲取製程清單
-   - 保持原有行為，確保一致性
-
-2. **回退到 JSON 直接載入**（Pipeline 未初始化時）:
-   - 直接讀取 `process_lib_v2.json`
-   - 從 `processes` 字典中提取所有 process_id
-   - 返回完整的 78 個製程代碼清單
-
-3. **錯誤處理**:
-   - 如果 JSON 載入失敗，顯示錯誤訊息
-   - 回退到空清單（最差情況）
-
----
-
-## 驗證
-
-### 測試步驟
-
-1. **重現原始錯誤**（修復前）:
-   ```bash
-   streamlit run aov_app.py
-   ```
-   - 不要點擊任何辨識按鈕
-   - 直接切換到「知識庫管理」Tab
-   - **預期**: 拋出 `StreamlitAPIException: The default value 'I01' is not part of the options`
-
-2. **驗證修復**（修復後）:
-   ```bash
-   streamlit run aov_app.py
-   ```
-   - 不要點擊任何辨識按鈕
-   - 直接切換到「知識庫管理」Tab
-   - **預期**: 正常顯示知識庫條目
-   - **預期**: multiselect 下拉清單包含所有 78 個製程
-   - **預期**: 預設值 `I01`, `J01` 等正確顯示
-
-3. **檢查製程清單完整性**:
-   ```python
-   import json
-   with open('app/manufacturing/process_lib_v2.json', 'r', encoding='utf-8') as f:
-       data = json.load(f)
-       processes = data['processes']
-       print(f"Total processes: {len(processes)}")
-       print(f"I01 exists: {'I01' in processes}")
-   ```
-   **預期輸出**:
-   ```
-   Total processes: 78
-   I01 exists: True
-   ```
-
----
-
-## 其他潛在問題點檢查
-
-### 檢查 1: 主辨識頁面的 process_defs
-
-**位置**: `aov_app.py` 第 450-460 行
-
-```python
-pipeline = st.session_state.mfg_pipeline
-process_defs: Dict[str, Dict[str, object]] = {}
-if pipeline is not None:
-    process_defs = {...}
-```
-
-**分析**: 
-- ✅ **無問題** - 這段代碼在 `if st.session_state.recognition_result is not None:` 條件內（第 419 行）
-- 如果有辨識結果，pipeline 必定已初始化
-- 不需要回退機制
-
-### 檢查 2: 手動輸入製程功能（Task 4）
-
-**位置**: `aov_app.py` 第 533-653 行
-
-**分析**:
-- ✅ **無問題** - 同樣在 `if recognition_result is not None:` 條件內
-- 使用 `process_defs` 字典進行匹配
-- 只有在執行過辨識後才會顯示
-
-### 檢查 3: 其他使用 pipeline.decision_engine 的地方
-
-**搜尋結果**: 只有兩處使用
-1. `aov_app.py:459` - 主辨識頁面（已確認無問題）
-2. `aov_app.py:1000` - 知識庫管理頁面（**已修復**）
-
----
-
-## 歷史記錄
-
-根據使用者描述，這個問題在專案建置過程中出現過**至少 4 次**。
-
-### 可能的重複原因
-
-1. **多次重構知識庫管理頁面**:
-   - 每次重構時都重新寫了 `all_process_ids` 邏輯
-   - 忘記添加 Pipeline 未初始化的回退機制
-
-2. **Session State 初始化時機不明確**:
-   - Pipeline 只在特定操作時初始化
-   - 沒有在應用程式啟動時預初始化
-
-3. **缺乏防禦性編程**:
-   - 假設 Pipeline 總是存在
-   - 沒有處理 `None` 狀態
-
-### 建議的預防措施
-
-1. **添加 Pipeline 初始化檢查輔助函數**:
-   ```python
-   def get_all_process_ids() -> List[str]:
-       """Get all process IDs from pipeline or JSON fallback"""
-       pipeline = st.session_state.mfg_pipeline
-       if pipeline is not None:
-           return list(pipeline.decision_engine.processes.keys())
-       else:
-           # Fallback to JSON
+      except Exception as e:          ← orphan except → SyntaxError
+
+  Python flags the `except` line because there is no `try:` at the same scope.
+  The variable `e` "not defined" is a secondary symptom of the same parse failure.
+
+ROOT CAUSE PATTERN:
+  "Added one side of a try/except pair and forgot the other side."
+
+FIX:
+  Inserted `        try:` (8 spaces) on the blank line before `effective_prompt`.
+  The inner block indentation (12 spaces) was already correct for a try-body.
+
+PREVENTION:
+  1. After writing any `except:`, immediately scroll up and confirm a matching
+     `try:` exists at the same indentation level in the same function scope.
+  2. Run ast.parse IMMEDIATELY after saving — SyntaxError surfaces here:
+       python -c "import ast; ast.parse(open('app/manufacturing/extractors/vlm_client.py', encoding='utf-8').read()); print('OK')"
+  3. Use lsp_diagnostics after every edit — orphan except shows as
+     "Expected expression" and the except-variable shows as undefined.
+
+
+================================================================================
+ERR-002 | 2026-02-13 | StreamlitAPIException: default value not in options
+================================================================================
+FILE:     aov_app.py — 知識庫管理 Tab (line ~1011)
+SYMPTOM:  StreamlitAPIException: The default value 'I01' is not part of the options.
+          Please make sure that every default value also exists in the options.
+REPEAT:   發生過 5 次以上（每次重構知識庫管理頁面時重複犯錯）
+
+WHAT HAPPENED:
+  The knowledge-base management tab uses `st.multiselect(options=all_process_ids,
+  default=entry['correct_processes'])`. `all_process_ids` was built from:
+
+      pipeline = st.session_state.mfg_pipeline
+      if pipeline is not None:
+          all_process_ids = list(pipeline.decision_engine.processes.keys())
+      else:
+          all_process_ids = []    ← THE BUG
+
+  `mfg_pipeline` is only initialized when the user clicks "開始辨識製程".
+  If the user opens the app and immediately switches to the 知識庫管理 Tab
+  (before running any recognition), pipeline is None → all_process_ids = [] →
+  any stored process ID like 'I01' is not in options → crash.
+
+ROOT CAUSE PATTERN:
+  "Assumed a session-state object is always initialized; it only initializes
+   on first user action, not on app startup."
+
+FIX:
+  Added a JSON fallback when pipeline is None:
+
+      else:
+          try:
+              with open('app/manufacturing/process_lib_v2.json', encoding='utf-8') as f:
+                  data = json.load(f)
+                  all_process_ids = list(data.get('processes', {}).keys())
+          except Exception as e:
+              st.error(f"無法載入製程清單: {e}")
+              all_process_ids = []
+
+PREVENTION:
+  1. Every `st.session_state.mfg_pipeline` access must have a None-guard + fallback.
+     There is NO guarantee pipeline is initialized when any Tab is opened.
+  2. Whenever writing `st.multiselect(default=X, options=Y)`:
+     assert all(v in Y for v in X), "default values must be a subset of options"
+     or filter: default=[v for v in X if v in set(Y)]
+  3. Startup-safe process ID retrieval helper (use this everywhere):
+
+       def _get_all_process_ids() -> list:
+           pipeline = st.session_state.get('mfg_pipeline')
+           if pipeline is not None:
+               return list(pipeline.decision_engine.processes.keys())
            try:
-               with open('app/manufacturing/process_lib_v2.json', 'r', encoding='utf-8') as f:
-                   data = json.load(f)
-                   return list(data.get('processes', {}).keys())
-           except:
+               import json
+               with open('app/manufacturing/process_lib_v2.json', encoding='utf-8') as f:
+                   return list(json.load(f).get('processes', {}).keys())
+           except Exception:
                return []
-   ```
 
-2. **在應用程式啟動時預載製程清單**:
-   ```python
-   # At the top of aov_app.py, after st.set_page_config
-   if "all_process_ids_cache" not in st.session_state:
-       try:
-           with open('app/manufacturing/process_lib_v2.json', 'r', encoding='utf-8') as f:
-               data = json.load(f)
-               st.session_state.all_process_ids_cache = list(data['processes'].keys())
-       except:
-           st.session_state.all_process_ids_cache = []
-   ```
-
-3. **使用 @st.cache_data 緩存製程清單**:
-   ```python
-   @st.cache_data
-   def load_process_ids() -> List[str]:
-       """Load process IDs from JSON (cached)"""
-       try:
-           with open('app/manufacturing/process_lib_v2.json', 'r', encoding='utf-8') as f:
-               data = json.load(f)
-               return list(data.get('processes', {}).keys())
-       except:
-           return []
-   ```
-
----
-
-## 結論
-
-### 修復內容
-- ✅ 修復知識庫管理頁面的 `I01` 錯誤
-- ✅ 添加 JSON 直接載入回退機制
-- ✅ 添加錯誤處理
-
-### 受影響的檔案
-- `aov_app.py` (第 991-1010 行)
-
-### 測試狀態
-- ⏳ 等待測試驗證
-
-### 後續建議
-- 考慮實作上述預防措施，避免問題再次出現
-- 在應用程式啟動時預載製程清單
-- 創建輔助函數統一處理製程清單獲取邏輯
-
----
-
-**修復日期**: 2026-02-13  
-**修復者**: Sisyphus Agent  
-**相關 Issue**: I01 不在 multiselect options 中（第 5 次出現）
+  4. Test this by: opening the app → going straight to 知識庫管理 Tab
+     (do NOT click 開始辨識 first). If no crash → prevention confirmed.
 
 
---------------------------------------------------------------------------------
-[2026-02-25] | app/manufacturing/extractors/vlm_client.py | NameError
---------------------------------------------------------------------------------
-ERROR MESSAGE:
-  NameError: name 'Dict' is not defined
-  (at module-level, line 314: ) -> Optional[Dict[str, Any]]:
+================================================================================
+ERR-003 | 2026-02-25 | NameError: name 'Dict' is not defined
+================================================================================
+FILE:     app/manufacturing/extractors/vlm_client.py (line 314)
+SYMPTOM:  NameError: name 'Dict' is not defined
+          Raised at module-level on `def analyze_engineering_drawing(...) -> Optional[Dict[str, Any]]:`
+          App crashes immediately on startup — every import of vlm_client fails.
 
-TRACEBACK PATH:
+TRACEBACK (same path every time this module fails):
   aov_app.py:26
   → app/manufacturing/__init__.py:31
   → app/manufacturing/pipeline.py:30
   → app/manufacturing/extractors/parent_parser.py:20
   → app/manufacturing/extractors/vlm_client.py:314
 
-ROOT CAUSE:
-  During the previous refactor session, the forbidden-imports cleanup removed the
-  ENTIRE duplicate import block (lines 13-23). That block contained not only the
-  unwanted `import json` and `import re`, but also the original typing imports.
-  The surviving `from typing import Optional, Union, List` was missing `Dict` and
-  `Any`, which are used by the module-level convenience function signature:
+WHAT HAPPENED:
+  The file had a duplicate import block (copy-paste artefact from earlier work):
 
-      def analyze_engineering_drawing(...) -> Optional[Dict[str, Any]]:
+      # Block A (line 13) — survived
+      from typing import Optional, Union, List
 
-  Python raises NameError at import time because `Dict` and `Any` are referenced
-  in an annotation before being imported.
+      # Block B (lines 19-23) — was the "duplicate" that got deleted
+      import json       ← forbidden, correctly targeted for removal
+      import re         ← forbidden, correctly targeted for removal
+      from pathlib import Path
+      import numpy as np
+      import cv2
 
-  Timeline:
-  1. Original file had duplicate import blocks (copy-paste artefact).
-  2. Cleanup (commit c549819) removed the duplicate block entirely.
-  3. Surviving import line was: `from typing import Optional, Union, List` —
-     missing Dict and Any.
-  4. Module-level function at line 314 uses `Dict[str, Any]` → NameError on
-     every import of vlm_client, crashing the whole app at startup.
+  The cleanup pass deleted ALL of Block B to remove json and re.
+  Block A only had `Optional, Union, List` — `Dict` and `Any` came from
+  somewhere else in the original file and were lost in the cleanup.
+  The module-level function at line 314 still referenced `Dict[str, Any]`
+  → NameError on every import.
 
-FIX APPLIED:
-  File:    app/manufacturing/extractors/vlm_client.py
-  Line:    13
-  Before:  from typing import Optional, Union, List
-  After:   from typing import Optional, Union, List, Dict, Any
+ROOT CAUSE PATTERN:
+  "Deleted a whole import block to remove 2 names; silently dropped other
+   names that were also needed. ast.parse() passed because it's a valid
+   annotation syntax — the missing names only surface at runtime import."
 
-  Commit:  17a1fe0
-  Message: fix: vlm_client.py 補回 Dict, Any 至 typing import 修復 NameError
+FIX:
+  Line 13: from typing import Optional, Union, List, Dict, Any
+  Commit: 17a1fe0
 
-PREVENTION RULES:
-  1. When removing duplicate import blocks, UNION all imported names across
-     every duplicate line BEFORE deleting anything.
-     Checklist:
-       - Collect all names from every `from X import ...` duplicate
-       - Merge into one import line containing ALL names
-       - Only then delete the duplicates
+PREVENTION:
+  1. UNION BEFORE DELETE rule:
+     When removing duplicate import blocks, collect ALL names from every
+     duplicate `from X import ...` line, merge into one line, then delete
+     the originals. Never delete a block until you have the merged line ready.
 
-  2. `ast.parse()` catches SyntaxError only — NOT NameError.
-     After any import-cleanup edit, also run the actual import check:
+  2. ast.parse() is NOT enough after import cleanup.
+     It only validates syntax. NameError requires a real import:
        python -c "from app.manufacturing.extractors.vlm_client import VLMClient; print('OK')"
-     A NameError will surface here immediately.
 
-  3. Run `flake8 --select=F821` (undefined names) after every import cleanup:
-       flake8 app/manufacturing/extractors/vlm_client.py --select=F821
-     This catches `Dict`, `Any`, etc. referenced but not imported.
+  3. Run flake8 F821 (undefined names) after every import-related edit:
+       python -m flake8 app/manufacturing/extractors/vlm_client.py --select=F821
+     This would have caught `Dict` and `Any` as undefined.
 
-  4. When scanning for forbidden imports (`import json`, `import re`) to remove,
-     never delete entire import lines blindly. Instead strip only the offending
-     names and keep the rest.
+  4. When the task is "remove `import json`", do a SURGICAL edit:
+     Change: `from typing import Optional, Union, List, Dict, Any`  (keep)
+     Delete: only the line `import json`
+     Never touch other lines in the same block.
 
-  5. Two-step verification after any import-related commit:
-       Step 1: python -c "import ast; ast.parse(open('file.py').read()); print('syntax OK')"
-       Step 2: python -c "import app.manufacturing; print('import OK')"
+  5. Post-cleanup verification sequence (run all three):
+       Step 1 — syntax:  python -c "import ast; ast.parse(open('vlm_client.py', encoding='utf-8').read()); print('syntax OK')"
+       Step 2 — import:  python -c "from app.manufacturing.extractors.vlm_client import VLMClient; print('import OK')"
+       Step 3 — flake8:  python -m flake8 app/manufacturing/extractors/vlm_client.py --select=F821
 
+
+================================================================================
+PATTERNS — 這個 codebase 的高頻錯誤規律
+================================================================================
+
+PATTERN A: Session State 初始化假設
+  ┌─ 症狀: Streamlit UI 在某些 Tab / 路徑下崩潰
+  ├─ 原因: 假設 `st.session_state.X` 一定已存在
+  └─ 規則: 所有 session state 存取必須用 `.get()` 或明確 None-guard + fallback
+
+PATTERN B: Import 清理時名稱遺失
+  ┌─ 症狀: NameError at module-level, 但 ast.parse 沒報錯
+  ├─ 原因: 刪除 import 行時連帶刪掉其他仍在使用的名稱
+  └─ 規則: UNION → MERGE → DELETE，事後跑 flake8 F821 + 實際 import 測試
+
+PATTERN C: try/except 只寫一半
+  ┌─ 症狀: SyntaxError "Expected expression" at `except`, 且 `e` undefined
+  ├─ 原因: 加 except 忘加 try（或反之）
+  └─ 規則: 寫 except 後立刻往上確認同層的 try，再跑 ast.parse
+
+PATTERN D: VLM JSON 殘留
+  ┌─ 症狀: VLM 輸出包含 `{}` 或 json.loads 拋出 JSONDecodeError
+  ├─ 原因: 舊的 response_format="json" 或 get_default_prompt 未清除
+  └─ 規則: forbidden 掃描（見下方命令）後才能提交
+
+FORBIDDEN PATTERN SCAN（每次提交前）：
+  python -c "
+  import re, os
+  bad = [r'json\.loads\(', r'response_format=[\'\"](json)[\'\"]]']
+  files = ['aov_app.py','app/manufacturing/pipeline.py',
+           'app/manufacturing/extractors/vlm_client.py',
+           'app/manufacturing/prompts.py']
+  ok = True
+  for f in files:
+      src = open(f, encoding='utf-8').read()
+      for p in bad:
+          hits = [i+1 for i,l in enumerate(src.splitlines()) if re.search(p,l)]
+          if hits: print(f'VIOLATION {f}:{hits}'); ok = False
+  print('ALL CLEAR' if ok else 'FIX BEFORE COMMIT')
+  "
+
+
+================================================================================
+CHANGE LOG
+================================================================================
+2026-02-13  ERR-002 first documented (I01 multiselect crash, 5th occurrence)
+2026-02-25  ERR-001 SyntaxError (orphan except in vlm_client.py) — fixed
+2026-02-25  ERR-003 NameError Dict/Any (import cleanup collateral) — fixed
+2026-02-25  File restructured: merged error + task-summary + test-guide →
+            single AI-readable error log (task summaries removed, test guide
+            is in task.txt history)
+================================================================================
