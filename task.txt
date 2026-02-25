@@ -1,0 +1,44 @@
+{
+  "task_title": "徹底重構：多視角 VLM 純文字描述管線與防幻覺機制 (清除舊版 JSON 邏輯)",
+  "objective": "將現有強制 VLM 輸出 JSON 與製程 ID 的舊管線，徹底改寫為『多視角上傳 + BOM 脈絡注入 + 全英文純描述報告』的新架構。加入防迴圈參數，並拔除所有舊有的 json.loads 解析器。",
+  "target_files": [
+    "aov_app.py",
+    "app/manufacturing/prompts.py",
+    "app/manufacturing/extractors/vlm_client.py",
+    "app/manufacturing/pipeline.py",
+    "app/manufacturing/decision/engine_v2.py"
+  ],
+  "implementation_steps": [
+    {
+      "step": 1,
+      "module": "aov_app.py",
+      "description": "徹底改寫前端 UI。1. 移除舊的單一圖片 st.file_uploader。 2. 新增『📄 BOM表文字擷取區』(使用 st.text_area 讓使用者輸入已知事實，綁定為 bom_context)。 3. 建立 4 個視角的獨立圖片上傳區 (Top, Front, Side, Iso)。 4. 畫面只保留一個『▶️ 開始分析』主按鈕，按下後將上述 4 張圖與 bom_context 一併傳入 pipeline。"
+    },
+    {
+      "step": 2,
+      "module": "app/manufacturing/prompts.py",
+      "description": "將原本強迫輸出 JSON 的 `get_default_prompt` 徹底刪除或停用。建立全新的 `get_vlm_descriptive_prompt(bom_context: str = \"\")`。明確指示 VLM：『You are a mechanical engineer. Describe the 3D geometry based on the 2D views. DO NOT output JSON. DO NOT recommend process IDs.』。大綱必須是：1. OVERALL 3D SHAPE 2. COMPONENT STRUCTURE 3. VIEW-BY-VIEW GEOMETRY 4. CRITICAL TEXT & SYMBOLS。將 `bom_context` 作為 KNOWN FACTS 注入。嚴格禁止在 Prompt 範例中出現 M3、M4、Tap 等具體字眼，避免範例讓小模型引發幻覺。"
+    },
+    {
+      "step": 3,
+      "module": "app/manufacturing/extractors/vlm_client.py",
+      "description": "1. 修改 `analyze_image` (或對應的 API 呼叫函式)，使其能接收多張圖片與 `bom_context`。 2. 在呼叫模型推論時加入防暴走與防幻覺參數：`repetition_penalty=1.15` (或 1.2), `temperature=0.1`, `max_tokens=1024`。 3. 拿到 VLM 回應後，**直接 return 純文字字串**。必須徹底刪除程式碼中所有嘗試使用 regex 抓取 JSON 或呼叫 `json.loads` 的段落。"
+    },
+    {
+      "step": 4,
+      "module": "app/manufacturing/pipeline.py",
+      "description": "修改 `analyze_drawing`，接收多張圖片與 `bom_context` 並傳遞給 VLM client。將 VLM 回傳的『全英文純文字報告』儲存到 features 的字串屬性中 (如 `raw_vlm_description`)。為了避免下游決策引擎崩潰，強制作為預設值 `suggested_process_ids = []`。"
+    },
+    {
+      "step": 5,
+      "module": "app/manufacturing/decision/engine_v2.py",
+      "description": "增加防呆機制。因為 VLM 已經不再輸出製程 ID (`C01`, `D01`)，請確保引擎在讀取特徵時，若找不到 ID 不會拋出例外 (Exception) 或當機，安全地回傳空陣列即可。"
+    }
+  ],
+  "acceptance_criteria": [
+    "前端 UI 成功顯示 4 個視角上傳框與 BOM 文字輸入框。",
+    "分析過程不會因為 json.loads 解析失敗而崩潰。",
+    "VLM 輸出純英文的結構化描述報告，不再輸出任何帶有 {} 的 JSON 格式。",
+    "VLM 的結尾不會出現無限跳針迴圈，也不會憑空幻想出 Prompt 中未提及的 M3、M4 尺寸。"
+  ]
+}
