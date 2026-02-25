@@ -8,6 +8,7 @@ manufacturing drawings and identify required processes.
 """
 
 from typing import Dict, List, Optional, Any
+import warnings
 from dataclasses import dataclass
 
 
@@ -84,6 +85,11 @@ class EngineeringPrompts:
         Returns:
             PromptTemplate with complete prompt structure
         """
+        warnings.warn(
+            "get_process_recognition_prompt is deprecated. Use get_vlm_descriptive_prompt() instead.",
+            DeprecationWarning, stacklevel=2
+        )
+
         
         # Define expected output schema
         expected_output = {
@@ -527,6 +533,11 @@ def get_default_prompt(parent_context: str = "") -> str:
         "reasoning": "你的判斷理由 (請引用看到的具體符號)"
         }
     """
+    warnings.warn(
+        "get_default_prompt is deprecated. Use get_vlm_descriptive_prompt() instead.",
+        DeprecationWarning, stacklevel=2
+    )
+    parent_section = ""
     parent_section = ""
     if parent_context:
         parent_section = (
