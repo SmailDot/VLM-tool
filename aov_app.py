@@ -20,6 +20,7 @@ import numpy as np
 import time
 import tempfile
 from typing import Dict, List
+from pathlib import Path
 from PIL import Image
 
 # 製程辨識核心模組
@@ -521,14 +522,18 @@ with col_right:
                         if item.get("process_id")
                     ]
 
-                    kb_manager = KnowledgeBaseManager()
-                    kb_manager.add_entry(
-                        image_path=st.session_state.temp_file_path,
-                        features={"raw_vlm_description": result.features.raw_vlm_description or ""},
-                        correct_processes=correct_processes,
-                        reasoning="\n".join(reasoning_lines)
-                    )
-                    st.toast("已保存至知識庫")
+                    tmp_path = st.session_state.temp_file_path
+                    if not tmp_path or not Path(tmp_path).exists():
+                        st.error("⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。")
+                    else:
+                        kb_manager = KnowledgeBaseManager()
+                        kb_manager.add_entry(
+                            image_path=tmp_path,
+                            features={"raw_vlm_description": result.features.raw_vlm_description or ""},
+                            correct_processes=correct_processes,
+                            reasoning="\n".join(reasoning_lines)
+                        )
+                        st.toast("已保存至知識庫")
 
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
@@ -740,7 +745,11 @@ with tab2:
             with st.expander(f"ID: {entry['id']} - {entry['features'].get('shape_description')}"):
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    st.image(entry['image_rel_path'], caption="原始圖檔")
+                    img_path = Path(entry['image_rel_path'])
+                    if img_path.exists():
+                        st.image(str(img_path), caption="原始圖檔")
+                    else:
+                        st.warning(f"⚠️ 原始圖檔已遺失：{img_path.name}")
                 with col_b:
                     new_processes = st.multiselect(
                         "修正製程",
