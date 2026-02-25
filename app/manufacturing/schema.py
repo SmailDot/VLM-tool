@@ -106,6 +106,10 @@ class ExtractedFeatures:
     tolerances: List[Any] = field(default_factory=list)  # List[ToleranceSpec] - Any to avoid circular import
     
     # VLM Analysis (NEW - Vision Language Model)
+    # raw_vlm_description: plain-text geometry report from VLM (primary output)
+    raw_vlm_description: Optional[str] = None
+    # vlm_analysis: legacy dict field kept for backward compat; always None in new pipeline
+    vlm_analysis: Optional[str] = None  # str (plain text) or None — never a dict
     vlm_analysis: Optional[Dict[str, Any]] = None  # VLM-based process recognition result
     
     # Metadata
@@ -155,6 +159,7 @@ class ExtractedFeatures:
                 for tol in self.tolerances
             ],
             "vlm_analysis": self.vlm_analysis,
+            "raw_vlm_description": self.raw_vlm_description,
             "image_shape": self.image_shape,
             "extraction_time": self.extraction_time
         }
