@@ -1,0 +1,264 @@
+[
+  {
+    "id": "20260213_112511_tmpbt2gtx_h",
+    "timestamp": "2026-02-13T11:25:11.941827",
+    "image_rel_path": "D:\\NKUST_LAB_Work_Data\\Lab work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png",
+    "image_hash": "df97a7272327a3fc",
+    "features": {
+      "shape_description": "L型板金",
+      "detected_features": {
+        "geometry": [
+          "特徵1",
+          "特徵2"
+        ],
+        "symbols": [
+          "符号1",
+          "符号2"
+        ],
+        "text_annotations": [
+          "標註1",
+          "標註2"
+        ],
+        "material_info": "材質資訊或null"
+      },
+      "suggested_process_ids": [
+        "C05",
+        "D01",
+        "F01"
+      ],
+      "confidence_scores": {
+        "C05": 0.95,
+        "D01": 0.85,
+        "F01": 0.1
+      },
+      "reasoning": "視覺過濾：主要特徵為L型板金，符號1和2代表特定的孔洞和尺寸。材料信息未提供，推測為不明。",
+      "process_sequence": [
+        "C05",
+        "D01",
+        "F01"
+      ]
+    },
+    "correct_processes": [
+      "I01",
+      "J01",
+      "E01",
+      "H02",
+      "H01",
+      "D04",
+      "C05",
+      "F01",
+      "F14",
+      "H31",
+      "F05",
+      "F11",
+      "F06",
+      "F10",
+      "F20",
+      "F16",
+      "F25",
+      "O14",
+      "C01"
+    ],
+    "reasoning": "I01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nJ01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nE01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH02: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH01: [材質邏輯] 白鐵+焊接+無烤漆 → 需除焦洗淨\nD04: 我看到的幾何特徵有：折彎線 29 條。\n[取代] 取代 D01 (折彎)\n[衝突解決] 取代 D01 和 D06\nC05: VLM: 我看到它長得像 L型板金。\nVLM: 我看到 幾何特徵：特徵1, 特徵2，符號：符号1, 符号2。\n[衝突解決] 優先於 C01 (單機切割)\nF01: 我有看到符號：welding, welding。\nF14: 經驗法則：這類鈑金件，大家多半會做。\nH31: 經驗法則：這類鈑金件，大家多半會做。\n[衝突解決] 取代 H26 和 H27\nF05: 經驗法則：這類鈑金件，大家多半會做。\nF11: 經驗法則：這類鈑金件，大家多半會做。\nF06: 經驗法則：這類鈑金件，大家多半會做。\nF10: 經驗法則：這類鈑金件，大家多半會做。\nF20: 經驗法則：這類鈑金件，大家多半會做。\nF16: 經驗法則：這類鈑金件，大家多半會做。\nF25: 經驗法則：這類鈑金件，大家多半會做。\nO14: 經驗法則：這類鈑金件，大家多半會做。\nC01: 因為 BOM 表顯示需要切割出兩塊不同厚度的板材。\n[ADD] C01: 因為 BOM 表顯示需要切割出兩塊不同厚度的板材。\n[ADD] F01: 圖面有焊接符號，且需將 Base 與 Rib 接合。",
+    "tags": []
+  },
+  {
+    "id": "20260213_122407_tmp931jq7by_0",
+    "timestamp": "2026-02-13T12:24:07.873753",
+    "image_rel_path": "knowledge_images\\20260213_122407_tmp931jq7by_0.png",
+    "additional_images": [
+      "knowledge_images\\20260213_122407_1_tmpljdjugt9_1.png",
+      "knowledge_images\\20260213_122407_2_tmp5pq1ccwq_2.png",
+      "knowledge_images\\20260213_122407_3_tmp4efda5n1_3.png"
+    ],
+    "features": {
+      "shape_description": "The shape is a rectangular prism with a cylindrical hole through the center.",
+      "detected_features": {
+        "geometry": [
+          "rectangular prism",
+          "cylindrical hole"
+        ],
+        "symbols": [
+          "cylinder",
+          "hole"
+        ],
+        "text_annotations": [
+          "a",
+          "S=1/1"
+        ],
+        "material_info": "Not specified"
+      },
+      "suggested_process_ids": [
+        "C05",
+        "D01",
+        "F01"
+      ],
+      "confidence_scores": {
+        "C05": 0.95,
+        "D01": 0.85,
+        "F01": 0.1
+      },
+      "reasoning": "The shape is identified as a rectangular prism with a cylindrical hole through the center, which matches the detected features.",
+      "process_sequence": [
+        "C05",
+        "D01",
+        "F01"
+      ]
+    },
+    "correct_processes": [
+      "J01",
+      "E01",
+      "I01",
+      "H02",
+      "H01",
+      "D04",
+      "F01",
+      "C05",
+      "F14",
+      "H31",
+      "F11",
+      "F05",
+      "H32",
+      "H08",
+      "F06",
+      "F20",
+      "I19",
+      "D07",
+      "I02",
+      "D01",
+      "C03"
+    ],
+    "reasoning": "J01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nE01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nI01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH02: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH01: [材質邏輯] 白鐵+焊接+無烤漆 → 需除焦洗淨\nD04: 我看到的幾何特徵有：折彎線 29 條。\n[取代] 取代 D01 (折彎)\n[衝突解決] 取代 D01 和 D06\nF01: 我有看到符號：welding, welding。\nC05: VLM: 我看到它長得像 The shape is a rectangular prism with a cylindrical hole through the center.。\nVLM: 我看到 幾何特徵：rectangular prism, cylindrical 孔，符號：cylinder, 孔。\nF14: 經驗法則：這類鈑金件，大家多半會做。\n[連動] F01 信心度高 → 提升 F14\nH31: 經驗法則：這類鈑金件，大家多半會做。\n[衝突解決] 取代 H26 和 H27\nF11: 經驗法則：這類鈑金件，大家多半會做。\nF05: 經驗法則：這類鈑金件，大家多半會做。\nH32: 經驗法則：這類鈑金件，大家多半會做。\nH08: 經驗法則：這類鈑金件，大家多半會做。\nF06: 經驗法則：這類鈑金件，大家多半會做。\nF20: 經驗法則：這類鈑金件，大家多半會做。\nI19: 經驗法則：這類鈑金件，大家多半會做。\nD07: 經驗法則：這類鈑金件，大家多半會做。\nI02: 經驗法則：這類鈑金件，大家多半會做。\nD01: (人工新增)\nC03: (人工新增)",
+    "tags": []
+  },
+  {
+    "id": "20260213_124505_tmpnyvf35kj_0",
+    "timestamp": "2026-02-13T12:45:05.191703",
+    "image_rel_path": "knowledge_images\\20260213_124505_tmpnyvf35kj_0.png",
+    "additional_images": [
+      "knowledge_images\\20260213_124505_1_tmpfj1mwwyo_1.png",
+      "knowledge_images\\20260213_124505_2_tmp8qfz4_yl_2.png",
+      "knowledge_images\\20260213_124505_3_tmp61lnrd35_3.png"
+    ],
+    "features": {
+      "shape_description": "L-shaped bracket with two oval holes and a rectangular base.",
+      "detected_features": {
+        "geometry": [
+          "Two oval holes",
+          "Rectangular base"
+        ],
+        "symbols": [],
+        "text_annotations": [],
+        "material_info": null
+      },
+      "suggested_process_ids": [
+        "C05",
+        "D01"
+      ],
+      "confidence_scores": {
+        "C05": 0.95,
+        "D01": 0.85,
+        "F01": 0.1
+      },
+      "reasoning": "The shape is identified as an L-shaped bracket with two oval holes and a rectangular base based on the geometric features visible in the diagram.",
+      "process_sequence": [
+        "C05",
+        "D01"
+      ]
+    },
+    "correct_processes": [
+      "E01",
+      "J01",
+      "H02",
+      "I01",
+      "C05",
+      "H01",
+      "D04",
+      "F14",
+      "H31",
+      "F05",
+      "F11",
+      "I14",
+      "F06",
+      "F10",
+      "H14",
+      "I19",
+      "F20",
+      "F16",
+      "Q01",
+      "Q11",
+      "H32",
+      "D01"
+    ],
+    "reasoning": "E01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nJ01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH02: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nI01: [父圖觸發] 由父圖全域資訊觸發\n材質: 白鐵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nC05: VLM: 我看到它長得像 L-shaped bracket with two oval holes and a rectangular base.。\nVLM: 我看到 幾何特徵：two 橢圓孔s, Rectangular base。\n[衝突解決] 優先於 C01 (單機切割)\nH01: [材質邏輯] 白鐵+焊接+無烤漆 → 需除焦洗淨\nD04: 我看到的幾何特徵有：折彎線 29 條。\n[取代] 取代 D01 (折彎)\n[衝突解決] 取代 D01 和 D06\nF14: 經驗法則：這類鈑金件，大家多半會做。\nH31: 經驗法則：這類鈑金件，大家多半會做。\n[衝突解決] 取代 H26 和 H27\nF05: 經驗法則：這類鈑金件，大家多半會做。\nF11: 經驗法則：這類鈑金件，大家多半會做。\nI14: 經驗法則：這類鈑金件，大家多半會做。\nF06: 經驗法則：這類鈑金件，大家多半會做。\nF10: 經驗法則：這類鈑金件，大家多半會做。\nH14: 經驗法則：這類鈑金件，大家多半會做。\nI19: 經驗法則：這類鈑金件，大家多半會做。\nF20: 經驗法則：這類鈑金件，大家多半會做。\nF16: 經驗法則：這類鈑金件，大家多半會做。\nQ01: 經驗法則：這類鈑金件，大家多半會做。\nQ11: 經驗法則：這類鈑金件，大家多半會做。\nH32: 經驗法則：這類鈑金件，大家多半會做。\nD01: TEST",
+    "tags": [],
+    "updated_at": "2026-02-13T14:37:42.913521"
+  },
+  {
+    "id": "20260213_144745_tmpha7_15z4_0",
+    "timestamp": "2026-02-13T14:47:45.612616",
+    "image_rel_path": "knowledge_images\\20260213_144745_tmpha7_15z4_0.png",
+    "additional_images": [
+      "knowledge_images\\20260213_144745_1_tmp5nypgnna_1.png",
+      "knowledge_images\\20260213_144745_2_tmp1rao9yj6_2.png"
+    ],
+    "features": {
+      "shape_description": "L型板金",
+      "detected_features": {
+        "geometry": [
+          "使用中英對照格式，如：折彎線(bend line)"
+        ],
+        "symbols": [
+          "看到的符號文字，如：焊接符號(welding symbol)"
+        ],
+        "text_annotations": [
+          "看到的文字標註"
+        ],
+        "material_info": "不明，建议在使用前进行材料验证"
+      },
+      "suggested_process_ids": [
+        "C05",
+        "D01",
+        "F01"
+      ],
+      "confidence_scores": {
+        "C05": 0.95,
+        "D01": 0.85,
+        "F01": 0.1
+      },
+      "reasoning": "請依照 Step 1~3 描述視覺過濾與判斷依據",
+      "process_sequence": [
+        "C05",
+        "D01",
+        "F01"
+      ]
+    },
+    "correct_processes": [
+      "I01",
+      "H02",
+      "J01",
+      "E01",
+      "C05",
+      "D01",
+      "F01",
+      "F14",
+      "H31",
+      "F05",
+      "F11",
+      "F06",
+      "H26",
+      "Q04",
+      "H14",
+      "F25",
+      "Q11",
+      "Q01",
+      "D07",
+      "F10",
+      "F20",
+      "I02",
+      "I23/24"
+    ],
+    "reasoning": "I01: [父圖觸發] 由父圖全域資訊觸發\n材質: 鋁板\n特殊要求: 無塵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nH02: [父圖觸發] 由父圖全域資訊觸發\n材質: 鋁板\n特殊要求: 無塵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nJ01: [父圖觸發] 由父圖全域資訊觸發\n材質: 鋁板\n特殊要求: 無塵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nE01: [父圖觸發] 由父圖全域資訊觸發\n材質: 鋁板\n特殊要求: 無塵\n\n[子圖證據]\n經驗法則：這類鈑金件，大家多半會做。\nC05: VLM: 我看到它長得像 L型板金。\nVLM: 我看到 幾何特徵：使用中英對照格式，如：折彎線(折彎 line)，符號：看到的符號文字，如：焊接符號(焊接 symbol)。\nD01: VLM: 我看到它長得像 L型板金。\nVLM: 我看到 幾何特徵：使用中英對照格式，如：折彎線(折彎 line)，符號：看到的符號文字，如：焊接符號(焊接 symbol)。\nF01: 經驗法則：這類鈑金件，大家多半會做。\nF14: 經驗法則：這類鈑金件，大家多半會做。\n[連動] F01 信心度高 → 提升 F14\nH31: 經驗法則：這類鈑金件，大家多半會做。\n[衝突解決] 取代 H26 和 H27\nF05: 經驗法則：這類鈑金件，大家多半會做。\nF11: 經驗法則：這類鈑金件，大家多半會做。\nF06: 經驗法則：這類鈑金件，大家多半會做。\nH26: 經驗法則：這類鈑金件，大家多半會做。\nQ04: 經驗法則：這類鈑金件，大家多半會做。\nH14: 經驗法則：這類鈑金件，大家多半會做。\nF25: 經驗法則：這類鈑金件，大家多半會做。\nQ11: 經驗法則：這類鈑金件，大家多半會做。\nQ01: 經驗法則：這類鈑金件，大家多半會做。\nD07: 經驗法則：這類鈑金件，大家多半會做。\nF10: 經驗法則：這類鈑金件，大家多半會做。\nF20: 經驗法則：這類鈑金件，大家多半會做。\nI02: 經驗法則：這類鈑金件，大家多半會做。\nI23/24: TEST123456798",
+    "tags": []
+  }
+]
