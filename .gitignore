@@ -14,3 +14,22 @@ pip-delete-this-directory.txt
 temp_*
 uploads/
 response_debug.json
+
+# Test files (local only)
+test_*.py
+test_*.txt
+test_*.jpg
+test_*.png
+test jpg/
+"test jpg/"
+test1.jpg
+test2.jpg
+
+# Local scratch files
+test_suggestion.txt
+test_errorlog.txt
+nul
+
+# OS
+.DS_Store
+Thumbs.db
