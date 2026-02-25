@@ -524,7 +524,7 @@ with col_right:
                     kb_manager = KnowledgeBaseManager()
                     kb_manager.add_entry(
                         image_path=st.session_state.temp_file_path,
-                        features=result.features.vlm_analysis or {},
+                        features={"raw_vlm_description": result.features.raw_vlm_description or ""},
                         correct_processes=correct_processes,
                         reasoning="\n".join(reasoning_lines)
                     )
