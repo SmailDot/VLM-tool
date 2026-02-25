@@ -15,12 +15,6 @@ import base64
 from pathlib import Path
 import numpy as np
 import cv2
-import base64
-import json
-import re
-from pathlib import Path
-import numpy as np
-import cv2
 
 try:
     from openai import OpenAI
