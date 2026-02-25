@@ -187,10 +187,18 @@ class VLMClient:
         effective_prompt = prompt
         if bom_context.strip():
             effective_prompt = (
-                "### 0. KNOWN FACTS FROM BOM (HIGHEST PRIORITY)\n"
+                "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY — DO NOT IGNORE) ===\n"
+                "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
+                "You MUST treat every item below as authoritative ground truth.\n"
+                "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
                 f"{bom_context.strip()}\n\n"
-                "You MUST incorporate these facts into every section of your report.\n"
-                "The material and thickness stated above are AUTHORITATIVE.\n\n"
+                "COMPLIANCE CHECKLIST (apply before writing each section):\n"
+                "  [1] Material / surface treatment stated above → mention it in Sections 2 and 4.\n"
+                "  [2] Part name / assembly context stated above → reference it in Section 1.\n"
+                "  [3] Any dimension or thickness stated above → use it verbatim in Section 3.\n"
+                "  [4] Any finish or coating stated above → call it out explicitly in Section 4.\n"
+                "If a KNOWN FACT cannot be reconciled with what you see, state the conflict explicitly.\n"
+                "=== END OF KNOWN FACTS ===\n\n"
             ) + prompt
 
         try:
@@ -223,18 +231,12 @@ class VLMClient:
             ]
             
             # Make API request
-            # Make API request with anti-hallucination parameters
-            extra_params: dict = {}
-            try:
-                extra_params["repetition_penalty"] = 1.15
-            except Exception:
-                pass
+            # Make API request
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
-                **extra_params
+                max_tokens=max_tokens
             )
             
             # Extract response content

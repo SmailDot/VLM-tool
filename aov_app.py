@@ -192,13 +192,87 @@ with col_left:
         st.caption("未上傳父圖（將僅依子圖特徵判定）")
 
     # ==================== BOM Context ====================
-    st.markdown("#### 📝 BOM / 全域備註 (可選)")
-    bom_context_input = st.text_area(
+    st.markdown("#### 📝 BOM 表圖片 + 內容備註 (可選)")
+
+    # BOM 表圖片上傳（支援多張）
+    bom_files = st.file_uploader(
+        "上傳 BOM 表圖片 (可上傳多張)",
+        type=['jpg', 'jpeg', 'png', 'bmp'],
+        accept_multiple_files=True,
+        help="BOM 表圖片，支援多張。上傳後可點擊「掃描內容」自動填入文字框",
+        key="bom_uploader"
+    )
+
+    if 'bom_drawings' not in st.session_state:
+        st.session_state.bom_drawings = []
+
+    _bom_imgs: List[np.ndarray] = []
+    for _bf in (bom_files or []):
+        _bb = np.asarray(bytearray(_bf.read()), dtype=np.uint8)
+        _bi = cv2.imdecode(_bb, cv2.IMREAD_COLOR)
+        if _bi is not None:
+            _bom_imgs.append(_bi)
+
+    st.session_state.bom_drawings = _bom_imgs
+
+    if _bom_imgs:
+        for _i, (_bi, _bf) in enumerate(zip(_bom_imgs, bom_files)):
+            st.image(cv2.cvtColor(_bi, cv2.COLOR_BGR2RGB), caption=f"BOM 表 {_i+1}: {_bf.name}", width="stretch")
+
+    # 「掃描內容」按鈕：優先掃描 BOM 圖片（全部頁合併），否則 fallback 父圖
+    _has_bom_imgs = len(st.session_state.bom_drawings) > 0
+    _has_parent   = st.session_state.parent_drawing is not None
+
+    if _has_bom_imgs or _has_parent:
+        _btn_label = f"🔍 掃描 BOM 表內容 ({len(st.session_state.bom_drawings)}張)" if _has_bom_imgs else "🔍 掃描父圖內容"
+        if st.button(
+            _btn_label,
+            help="OCR 掃描圖片，將辨識到的文字填入下方文字框",
+            type="secondary",
+            use_container_width=True
+        ):
+            with st.spinner("正在掃描..."):
+                try:
+                    from app.manufacturing.extractors.ocr import OCRExtractor
+                    _ocr = OCRExtractor()
+                    _targets = st.session_state.bom_drawings if _has_bom_imgs else [st.session_state.parent_drawing]
+                    _all_texts: List[str] = []
+                    _total_regions = 0
+                    for _page_idx, _target_img in enumerate(_targets):
+                        _page_results = _ocr.extract(_target_img)
+                        if _page_results:
+                            _total_regions += len(_page_results)
+                            if len(_targets) > 1:
+                                _all_texts.append(f"--- 第 {_page_idx+1} 頁 ---")
+                            _all_texts.extend([r.text for r in _page_results if r.text.strip()])
+                    if _all_texts:
+                        st.session_state.bom_scanned_text = "\n".join(_all_texts)
+                        st.success(f"✅ 掃描完成，共辨識到 {_total_regions} 個文字區域")
+                    else:
+                        st.warning("⚠️ 未掃描到任何文字，請確認圖片品質")
+                        st.session_state.bom_scanned_text = ""
+                except Exception as _ocr_err:
+                    st.error(f"掃描失敗：{str(_ocr_err)}")
+                    st.info("提示：OCR 功能需要安裝 PaddlePaddle。您仍可手動輸入 BOM 內容。")
+                    st.session_state.bom_scanned_text = ""
+            st.rerun()
+    else:
+        st.caption("💡 上傳 BOM 表圖片或父圖後，可使用「掃描內容」自動填入文字")
+
+    if 'bom_context_input' not in st.session_state:
+        st.session_state.bom_context_input = ""
+    if 'bom_scanned_text' not in st.session_state:
+        st.session_state.bom_scanned_text = ""
+    # 掃描完成後同步到 text_area key（讓使用者可繼續手動修改）
+    if st.session_state.bom_scanned_text and st.session_state.bom_scanned_text != st.session_state.get('_last_synced_bom', ''):
+        st.session_state.bom_context_input = st.session_state.bom_scanned_text
+        st.session_state['_last_synced_bom'] = st.session_state.bom_scanned_text
+
+    st.text_area(
         "輸入 BOM 內容或全域技術備註",
-        value="",
         height=120,
         placeholder="例如：材質 SUS304、表面陽極處理、批量 500 pcs...",
-        help="此文字將注入 VLM 提示詞作為全域背景資訊",
+        help="此文字將注入 VLM 提示詞作為全域背景資訊（權重最高，VLM 必須遵守）",
         key="bom_context_input"
     )
 
@@ -320,7 +394,7 @@ with col_left:
                         frequency_filter=freq_options if freq_options else None,
                         use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
-                        bom_context=bom_context_input
+                        bom_context=st.session_state.get("bom_context_input", "")
                     )
                     elapsed = time.time() - start_time
                     st.session_state.recognition_result = result
@@ -395,146 +469,47 @@ with col_right:
         
         st.divider()
 
-        # === [新增] 製程預測與人工校正 (互動卡片清單) ===
-        st.markdown("### 製程預測與人工校正")
-
-        pipeline = st.session_state.mfg_pipeline
-        process_defs: Dict[str, Dict[str, object]] = {}
-        if pipeline is not None:
-            process_defs = {
-                pid: {
-                    "name": getattr(proc, "name", proc.get("name", ""))
-                    if isinstance(proc, dict)
-                    else getattr(proc, "name", "")
-                }
-                for pid, proc in pipeline.decision_engine.processes.items()
-            }
-
-        def _sorted_process_options() -> List[str]:
-            def _sort_key(pid: str) -> tuple:
-                prefix = pid[0] if pid else "Z"
-                return (prefix, pid)
-
-            return [
-                f"{pid} - {process_defs[pid].get('name', '')}"
-                for pid in sorted(process_defs.keys(), key=_sort_key)
-            ]
-
-        def _display_label(process_id: str) -> str:
-            if not process_id:
-                return ""
-            name = process_defs.get(process_id, {}).get("name", "")
-            return f"{process_id} - {name}" if name else process_id
-
-        def _extract_id(label: str) -> str:
-            if not isinstance(label, str):
-                return ""
-            return label.split(" - ")[0].strip()
-
-        options = _sorted_process_options()
-
-        if "editing_predictions" not in st.session_state:
-            st.session_state.editing_predictions = []
-
-        if "editing_source_signature" not in st.session_state:
-            st.session_state.editing_source_signature = None
-
-        signature = "|".join(
-            [f"{p.process_id}:{p.confidence:.3f}:{p.reasoning}" for p in result.predictions]
-        )
-
-        if st.session_state.editing_source_signature != signature:
-            st.session_state.editing_predictions = [
-                {
-                    "process_id": pred.process_id,
-                    "process_name": pred.name,
-                    "confidence": pred.confidence,
-                    "reasoning": pred.reasoning
-                }
-                for pred in result.predictions
-            ]
-            st.session_state.editing_source_signature = signature
-
-        for idx, item in enumerate(st.session_state.editing_predictions):
-            with st.container(border=True):
-                col_title, col_conf, col_action = st.columns([4, 3, 1])
-
-                with col_title:
-                    st.markdown(
-                        f"**{item['process_id']} - {item['process_name']}**"
-                    )
-
-                with col_conf:
-                    st.progress(item["confidence"])
-                    st.caption(f"信心度: {item['confidence'] * 100:.1f}%")
-
-                with col_action:
-                    if st.button("🗑️ 刪除", key=f"del_{idx}"):
-                        st.session_state.editing_predictions.pop(idx)
-                        st.rerun()
-
-                updated_reasoning = st.text_area(
-                    "判斷依據 (Reasoning)",
-                    value=item["reasoning"],
-                    height=100,
-                    key=f"reason_{idx}"
-                )
-                item["reasoning"] = updated_reasoning
-
-        st.markdown("#### 新增製程")
-        col_add1, col_add2 = st.columns([4, 1])
-        with col_add1:
-            selected_process = st.selectbox(
-                "選擇製程",
-                options=options,
-                key="add_process_select"
+        # === VLM 視覺描述 (主要輸出) ===
+        vlm_desc = result.features.raw_vlm_description
+        if vlm_desc:
+            st.markdown("### 🤖 VLM 視覺重建結果")
+            st.markdown(
+                f"<div style='background:#f0f8ff;border-left:4px solid #1f77b4;"
+                "padding:1rem 1.2rem;border-radius:4px;font-size:1rem;line-height:1.7;white-space:pre-wrap;'>"
+                f"{vlm_desc}</div>",
+                unsafe_allow_html=True
             )
-        with col_add2:
-            if st.button("➕ 加入", key="add_process_button"):
-                new_id = _extract_id(selected_process)
-                if new_id:
-                    new_name = process_defs.get(new_id, {}).get("name", "")
-                    st.session_state.editing_predictions.append({
-                        "process_id": new_id,
-                        "process_name": new_name,
-                        "confidence": 0.5,
-                        "reasoning": ""
-                    })
-                    st.rerun()
+        else:
+            st.info("⚠️ VLM 未返回效描述。請確認：① LM Studio 已啟動 ② 左侧「辨識設定」已勾選 VLM")
 
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("保存至知識庫"):
-                if not st.session_state.temp_file_path:
-                    st.error("找不到暫存圖片，請重新上傳圖檔")
-                else:
-                    from app.knowledge.manager import KnowledgeBaseManager
+        st.divider()
 
-                    enabled_rows = st.session_state.editing_predictions
-                    correct_processes = [
-                        item["process_id"]
-                        for item in enabled_rows
-                        if item.get("process_id")
-                    ]
-                    reasoning_lines = [
-                        f"{item['process_id']}: {item.get('reasoning', '')}"
-                        for item in enabled_rows
-                        if item.get("process_id")
-                    ]
-
+        # === 保存至知識庫 ===
+        with st.expander("💾 保存此結果至知識庫", expanded=False):
+            if not st.session_state.temp_file_path:
+                st.warning("找不到暫存圖片，請重新上傳圖檔")
+            else:
+                st.caption("下方 VLM 純文字描述將一併存入知識庫，可輸入附加備註（選填）")
+                kb_note = st.text_area(
+                    "附加備註",
+                    height=80,
+                    placeholder="例如：此零件為柨樣板，實際製程待確認...",
+                    key="kb_save_note"
+                )
+                if st.button("💾 保存至知識庫", type="primary", key="btn_save_kb"):
                     tmp_path = st.session_state.temp_file_path
                     if not tmp_path or not Path(tmp_path).exists():
-                        st.error("⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。")
+                        st.error("⚠️ 暫存圖檔已遗失，無法加入知識庫，請重新上傳圖紙。")
                     else:
+                        from app.knowledge.manager import KnowledgeBaseManager
                         kb_manager = KnowledgeBaseManager()
                         kb_manager.add_entry(
                             image_path=tmp_path,
-                            features={"raw_vlm_description": result.features.raw_vlm_description or ""},
-                            correct_processes=correct_processes,
-                            reasoning="\n".join(reasoning_lines)
+                            features={"raw_vlm_description": vlm_desc or ""},
+                            correct_processes=[],
+                            reasoning=kb_note or ""
                         )
-                        st.toast("已保存至知識庫")
-
+                        st.toast("✅ 已保存至知識庫")
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
                 for ref in result.rag_references:
@@ -736,7 +711,13 @@ with tab2:
     if pipeline is not None:
         all_process_ids = list(pipeline.decision_engine.processes.keys())
     else:
-        all_process_ids = []
+        try:
+            import json as _json
+            with open('app/manufacturing/process_lib_v2.json', encoding='utf-8') as _f:
+                _data = _json.load(_f)
+                all_process_ids = list(_data.get('processes', {}).keys())
+        except Exception:
+            all_process_ids = []
 
     if not entries:
         st.info("目前尚無知識庫條目")

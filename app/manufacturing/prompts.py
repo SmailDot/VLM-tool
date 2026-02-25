@@ -628,11 +628,19 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     known_facts_block = ""
     if bom_context.strip():
         known_facts_block = (
-            "### 0. KNOWN FACTS FROM BOM (HIGHEST PRIORITY)\n"
+            "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY — DO NOT IGNORE) ===\n"
+            "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
+            "You MUST treat every item below as authoritative ground truth.\n"
+            "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
             f"{bom_context.strip()}\n\n"
-            "You MUST incorporate these facts (material, thickness, part name) into"
-            " every section of your report.\n"
-            "The values stated above are AUTHORITATIVE — do not contradict them.\n\n"
+            "COMPLIANCE CHECKLIST (apply before writing each section):\n"
+            "  [1] Material / surface treatment stated above → mention it in Section 2 and 4.\n"
+            "  [2] Part name / assembly context stated above → reference it in Section 1.\n"
+            "  [3] Any dimension or thickness stated above → use it verbatim in Section 3.\n"
+            "  [4] Any finish or coating stated above → call it out explicitly in Section 4.\n"
+            "If a KNOWN FACT cannot be reconciled with what you see in the drawings, "
+            "state the conflict explicitly (e.g., 'BOM states SUS304 but material callout not visible in views.').\n"
+            "=== END OF KNOWN FACTS ===\n\n"
         )
 
     return (

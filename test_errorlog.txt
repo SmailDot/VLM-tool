@@ -25,6 +25,7 @@ NKUST AoV Tool V2 — AI Agent Error Log
 提交前只看語法正確                     語法 + 實際 import + UI 三層驗證
 直接 st.image(entry['image_rel_path'])    先 Path(path).exists() 確認，再 st.image()，否則顯示 st.warning()
 
+Tab2 知識庫管理 pipeline=None 時跳過 fallback  all_process_ids 必須走 JSON fallback（ERR-002 fix 要覆蓋兩處）
 VERIFY COMMANDS（每次改完跑這三行）：
   python -c "import ast; ast.parse(open('FILE.py', encoding='utf-8').read()); print('syntax OK')"
   python -c "import sys; sys.path.insert(0,'.'); import app.manufacturing; print('import OK')"
@@ -312,6 +313,69 @@ PREVENTION:
 
 
 ================================================================================
+ERR-005 | 2026-02-25 | StreamlitAPIException: multiselect default not in options (Tab2 regression)
+================================================================================
+FILE:     aov_app.py (line ~735-745) — Tab 2 知識庫管理
+SYMPTOM:  StreamlitAPIException: The default value 'I01' is not part of the options.
+          Identical to ERR-002, but occurred in a DIFFERENT code path that was NOT
+          patched during the ERR-002 fix.
+
+TRACEBACK (key path):
+  aov_app.py: Tab 2 block → st.multiselect(options=all_process_ids, default=entry['correct_processes'])
+  → StreamlitAPIException when pipeline is None and DB has stored process IDs
+
+WHAT HAPPENED:
+  ERR-002 was fixed at the result-display section (Tab 1 area, ~line 511), adding a
+  JSON fallback when pipeline is None. However, Tab 2 (知識庫管理) has its OWN copy
+  of the same all_process_ids initialization logic (line ~735-739). This second copy
+  was NOT updated — it still had the unfixed `else: all_process_ids = []` fallback.
+
+  The fix in ERR-002 was INCOMPLETE: it only patched one of two places where
+  all_process_ids is built. Tab 2 crashes identically when:
+    1. User opens app → goes directly to 知識庫管理 Tab (no recognition run yet)
+    2. pipeline = None → all_process_ids = []
+    3. entry['correct_processes'] = ['I01', ...] → not in [] → crash
+
+ROOT CAUSE PATTERN:
+  "Fixed a bug in one code location but the same pattern exists in another location.
+   grep/search was not run after the fix to find all occurrences."
+
+FIX:
+  aov_app.py Tab 2 block (line ~735-745) — replaced bare `else: all_process_ids = []`
+  with the same JSON fallback as ERR-002 fix:
+
+      pipeline = st.session_state.mfg_pipeline
+      if pipeline is not None:
+          all_process_ids = list(pipeline.decision_engine.processes.keys())
+      else:
+          try:
+              import json as _json
+              with open('app/manufacturing/process_lib_v2.json', encoding='utf-8') as _f:
+                  _data = _json.load(_f)
+                  all_process_ids = list(_data.get('processes', {}).keys())
+          except Exception:
+              all_process_ids = []
+
+PREVENTION:
+  1. After fixing any bug, ALWAYS grep the entire codebase for identical patterns.
+     Example: grep for 'all_process_ids = \[\]' across all .py files before closing fix.
+  2. The _get_all_process_ids() helper described in ERR-002 PREVENTION was never
+     extracted as a shared function. If it were, this regression is impossible.
+     → RULE: Extract repeated session-state fallback logic into a helper function.
+  3. RULE: If you fix `else: X = []` for a session-state-dependent variable,
+     search for ALL occurrences of that variable assignment and apply the same fix.
+  4. Test: open app → go straight to 知識庫管理 Tab (no recognition first).
+     Must not crash even with stored entries.
+
+
+================================================================================
+CHEATSHEET UPDATE (from ERR-005)
+================================================================================
+❌ ERR-002 fix 只改一處 all_process_ids     ✅ fix 後跑 grep 找同樣 pattern 的所有位置
+❌ 假設 bug fix 只有一個出現點              ✅ session-state 相關變數初始化必須全搜尋
+
+
+================================================================================
 CHANGE LOG
 ================================================================================
 2026-02-13  ERR-002 first documented (I01 multiselect crash, 5th occurrence)
@@ -322,4 +386,6 @@ CHANGE LOG
             is in task.txt history)
 2026-02-25  ERR-004 MediaFileStorageError (stale image path in knowledge_db) —
             fixed in aov_app.py (2 sites) + manager.py (1 site)
+2026-02-25  ERR-005 Tab2 all_process_ids missing JSON fallback (ERR-002 regression) —
+            fixed in aov_app.py Tab 2 block (line ~735)
 ================================================================================

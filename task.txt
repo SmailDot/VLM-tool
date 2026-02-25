@@ -1,116 +1,81 @@
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:289 in              
-  image_to_url                                                                          
-────────────────────────────────────────────────────────────────────────────────────────
-FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
-work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
-'
+### 1. OVERALL 3D SHAPE
+The part depicted is a rectangular base with an attached cylindrical component on the right side. The base has dimensions of 55 mm in height and 62 mm in width, while the cylindrical component extends upwards from the center of the base, measuring 30 mm in diameter and 50 mm in length.
+2. COMPONENT STRUCTURE
 
-During handling of the above exception, another exception occurred:
+The structure includes:
 
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:164 in     
-  _read_file                                                                            
-────────────────────────────────────────────────────────────────────────────────────────
-FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
-work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
-'
 
-The above exception was the direct cause of the following exception:
 
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py:129 in        
-  exec_func_with_error_handling                                                         
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py:669 in    
-  code_to_exec                                                                          
-                                                                                        
-  D:\NKUST_LAB_Work_Data\Lab work\cv-algorithm-study\AoV_Tool_V2\aov_app.py:743 in      
-  <module>                                                                              
-                                                                                        
-    740 │   │   │   with st.expander(f"ID: {entry['id']} - {entry['features'].get('sha  
-    741 │   │   │   │   col_a, col_b = st.columns(2)                                    
-    742 │   │   │   │   with col_a:                                                     
-  ❱ 743 │   │   │   │   │   st.image(entry['image_rel_path'], caption="原始圖檔")       
-    744 │   │   │   │   with col_b:                                                     
-    745 │   │   │   │   │   new_processes = st.multiselect(                             
-    746 │   │   │   │   │   │   "修正製程",                                             
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\metrics_util.py:447 in wrapped_func     
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\image.py:206 in image                  
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:445 in              
-  marshall_images                                                                       
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:301 in              
-  image_to_url                                                                          
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\media_file_manager.py:225 in add        
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:114 in     
-  load_and_get_id                                                                       
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:167 in     
-  _read_file                                                                            
-────────────────────────────────────────────────────────────────────────────────────────
-MediaFileStorageError: Error opening 'D:\NKUST_LAB_Work_Data\Lab 
-work\cv-algorithm-study\AoV_Tool_V2\knowledge_images\20260213_112511_tmpbt2gtx_h.png'
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:289 in              
-  image_to_url                                                                          
-────────────────────────────────────────────────────────────────────────────────────────
-FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
-work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
-'
+Base: A rectangular section with dimensions 55 mm (height) by 62 mm (width).
 
-During handling of the above exception, another exception occurred:
+Cylindrical Component: Attached to the right side of the base, it has a diameter of 30 mm and extends vertically for 50 mm.
 
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:164 in     
-  _read_file                                                                            
-────────────────────────────────────────────────────────────────────────────────────────
-FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
-work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
-'
 
-The above exception was the direct cause of the following exception:
+3. VIEW-BY-VIEW GEOMETRY
 
-────────────────────────── Traceback (most recent call last) ───────────────────────────
-  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py:129 in        
-  exec_func_with_error_handling                                                         
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py:669 in    
-  code_to_exec                                                                          
-                                                                                        
-  D:\NKUST_LAB_Work_Data\Lab work\cv-algorithm-study\AoV_Tool_V2\aov_app.py:743 in      
-  <module>                                                                              
-                                                                                        
-    740 │   │   │   with st.expander(f"ID: {entry['id']} - {entry['features'].get('sha  
-    741 │   │   │   │   col_a, col_b = st.columns(2)                                    
-    742 │   │   │   │   with col_a:                                                     
-  ❱ 743 │   │   │   │   │   st.image(entry['image_rel_path'], caption="原始圖檔")       
-    744 │   │   │   │   with col_b:                                                     
-    745 │   │   │   │   │   new_processes = st.multiselect(                             
-    746 │   │   │   │   │   │   "修正製程",                                             
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\metrics_util.py:447 in wrapped_func     
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\image.py:206 in image                  
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:445 in              
-  marshall_images                                                                       
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:301 in              
-  image_to_url                                                                          
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\media_file_manager.py:225 in add        
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:114 in     
-  load_and_get_id                                                                       
-                                                                                        
-  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:167 in     
-  _read_file                                                                            
-────────────────────────────────────────────────────────────────────────────────────────
-MediaFileStorageError: Error opening 'D:\NKUST_LAB_Work_Data\Lab 
-work\cv-algorithm-study\AoV_Tool_V2\knowledge_images\20260213_112511_tmpbt2gtx_h.png'
+Top View:
+
+
+The top view shows the rectangular base with dimensions 55 mm (height) by 62 mm (width).
+
+There are two holes on the top surface, each measuring 30 mm in diameter and 50 mm in length.
+
+
+Front View:
+
+
+The front view displays the rectangular base with dimensions 55 mm (height) by 62 mm (width).
+
+Two holes are visible on the front surface, each measuring 30 mm in diameter and 50 mm in length.
+
+
+Side View:
+
+
+The side view reveals the height of the base as 55 mm and the width as 62 mm.
+
+There is a hole on the left side of the base with dimensions 30 mm in diameter and 50 mm in length.
+
+
+Detail/Iso View:
+
+
+This view shows the cylindrical component attached to the right side of the base.
+
+The cylinder has a diameter of 30 mm and extends vertically for 50 mm.
+
+
+4. CRITICAL TEXT & SYMBOLS
+
+
+Surface Finish Marks: Indicate areas where surface treatments are required.
+
+Weld Symbols: Represent welding points on the cylindrical component.
+
+Material Notes: Specify that the base is made of SUS304 material, and the cylindrical component is made of SUS304 material.
+
+
+5. DIMENSIONS
+
+
+Base Height: 55 mm
+
+Base Width: 62 mm
+
+Cylindrical Diameter: 30 mm
+
+Cylindrical Length: 50 mm
+
+Hole Diameter: 30 mm
+
+Hole Length: 50 mm
+
+
+6. CRITICAL TEXT & SYMBOLS
+
+
+Surface Finish Marks: Indicate areas where surface treatments are required.
+
+Weld Symbols: Represent welding points on the cylindrical component.
+
+Material Notes: Specify that the base is made of SUS304 material, and the cylindrical component is made of SUS304 material.
