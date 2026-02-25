@@ -40,8 +40,12 @@ class VLMClient:
     
     # System prompt optimized for sheet metal manufacturing
     SYSTEM_PROMPT = (
-        "你是一個資深的鈑金加工工程師，請根據工程圖視覺特徵回答問題，"
-        "只輸出 JSON 格式。"
+        "You are a mechanical engineer specializing in 2D engineering drawing interpretation. "
+        "Analyze the provided drawing views and describe the 3D geometry of the part. "
+        "Output ONLY plain text using the 4 structured headings given in the user prompt. "
+        "DO NOT output JSON. DO NOT use curly braces {}. "
+        "DO NOT recommend manufacturing process IDs. "
+        "DO NOT invent specific dimensions not visible in the drawings."
     )
     
     def __init__(
@@ -147,35 +151,26 @@ class VLMClient:
         self,
         image_path: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]],
         prompt: str,
-        response_format: str = "json",
-        temperature: float = 0.0,
-        max_tokens: int = 2000
-    ) -> Optional[Dict[str, Any]]:
+        bom_context: str = "",
+        response_format: str = "text",
+        temperature: float = 0.1,
+        max_tokens: int = 1024
+    ) -> Optional[str]:
         """
         Analyze engineering drawing using vision-language model.
-        
+        Always returns a plain-text string (no JSON parsing).
+
         Args:
-            image_path: Path to image file or OpenCV image array (np.ndarray).
-            prompt: User prompt describing what to analyze.
-                   Example: "識別此工程圖中所有可能的製程類型"
-            response_format: Expected response format ("json" or "text").
-                           "json" will attempt to parse the response as JSON.
-            temperature: Sampling temperature (0.0 = deterministic, 1.0 = creative).
-                        Use 0.0 for factual engineering analysis.
+            image_path: Path, OpenCV array, or list thereof.
+            prompt: User prompt. Use get_vlm_descriptive_prompt() for geometry analysis.
+            bom_context: Optional plain-text BOM facts (material, thickness, part name).
+                         Prepended as KNOWN FACTS block when non-empty.
+            response_format: Kept for call-site compatibility; ignored internally.
+            temperature: Sampling temperature. Keep low (0.1) to reduce hallucination.
             max_tokens: Maximum tokens in response.
-        
+
         Returns:
-            Dictionary containing analysis results, or None if request fails.
-            
-            Example successful response:
-            {
-                "processes": ["折彎", "雷射切割", "焊接"],
-                "confidence": 0.85,
-                "reasoning": "圖中可見折彎線、切割路徑標記和焊接符號"
-            }
-            
-            Example error response (connection failed):
-            None
+            Plain-text description string, or None if request fails.
         """
         # Check if client is initialized
         if self.client is None:
@@ -190,13 +185,22 @@ class VLMClient:
             if base64_image is None:
                 return None
             base64_images.append(base64_image)
-        
+        # Inject bom_context as KNOWN FACTS preamble if provided
+        effective_prompt = prompt
+        if bom_context.strip():
+            effective_prompt = (
+                "### 0. KNOWN FACTS FROM BOM (HIGHEST PRIORITY)\n"
+                f"{bom_context.strip()}\n\n"
+                "You MUST incorporate these facts into every section of your report.\n"
+                "The material and thickness stated above are AUTHORITATIVE.\n\n"
+            ) + prompt
+
         try:
             # Construct message with image
             user_content = [
                 {
                     "type": "text",
-                    "text": prompt
+                    "text": effective_prompt
                 }
             ]
             for base64_image in base64_images:
@@ -221,11 +225,18 @@ class VLMClient:
             ]
             
             # Make API request
+            # Make API request with anti-hallucination parameters
+            extra_params: dict = {}
+            try:
+                extra_params["repetition_penalty"] = 1.15
+            except Exception:
+                pass
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                **extra_params
             )
             
             # Extract response content
@@ -236,26 +247,8 @@ class VLMClient:
                 print("Warning: Model returned empty response")
                 return None
             
-            # Parse JSON response if requested
-            if response_format == "json":
-                try:
-                    # content is guaranteed to be str here (None check above)
-                    match = re.search(r"\{.*\}", content, re.DOTALL)
-                    if match:
-                        json_str = match.group(0)
-                        return json.loads(json_str)
-
-                    if "```json" in content:
-                        content = content.split("```json")[1].split("```")[0].strip()
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    print(f"Warning: Failed to parse response as JSON: {e}")
-                    print(f"Raw response: {content}")
-                    # Return raw text wrapped in dict
-                    return {"raw_response": content, "parse_error": str(e)}
-            else:
-                # Return raw text response (content is str here)
-                return {"response": content}
+            # Return plain text directly — no JSON parsing
+            return content
         
         except Exception as e:
             print(f"Error during VLM API request: {e}")
