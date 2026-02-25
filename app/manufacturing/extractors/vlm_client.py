@@ -10,7 +10,11 @@ Compatible with:
 - Any OpenAI-compatible vision API endpoint
 """
 
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Union, List
+import base64
+from pathlib import Path
+import numpy as np
+import cv2
 import base64
 import json
 import re
