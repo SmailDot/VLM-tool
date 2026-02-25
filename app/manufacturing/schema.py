@@ -108,9 +108,10 @@ class ExtractedFeatures:
     # VLM Analysis (NEW - Vision Language Model)
     # raw_vlm_description: plain-text geometry report from VLM (primary output)
     raw_vlm_description: Optional[str] = None
-    # vlm_analysis: legacy dict field kept for backward compat; always None in new pipeline
-    vlm_analysis: Optional[str] = None  # str (plain text) or None — never a dict
-    vlm_analysis: Optional[Dict[str, Any]] = None  # VLM-based process recognition result
+    # vlm_analysis: kept as plain str for backward compat; always None in new pipeline
+    vlm_analysis: Optional[str] = None
+    # suggested_process_ids: always [] — VLM must NOT recommend IDs
+    suggested_process_ids: List[str] = field(default_factory=list)
     
     # Metadata
     image_shape: Optional[tuple] = None  # (H, W, C)

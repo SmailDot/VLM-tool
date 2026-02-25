@@ -159,7 +159,8 @@ class ManufacturingPipeline:
         symbol_threshold: float = 0.6,
         frequency_filter: Optional[List[str]] = None,
         use_rag: bool = False,
-        child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None
+        child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
+        bom_context: str = ""
     ) -> RecognitionResult:
         """
         Recognize manufacturing processes from engineering drawing.
@@ -176,6 +177,7 @@ class ManufacturingPipeline:
                             If None, all frequencies are included.
             use_rag: Enable RAG-based context augmentation.
             child_images: Optional list of child images for VLM context.
+            bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
         
         Returns:
             RecognitionResult with predictions and diagnostics.
@@ -252,9 +254,10 @@ class ManufacturingPipeline:
         
         # Extract features from child image
         parent_prompt = ""
-        if parent_context_text:
+        if parent_context_text or bom_context:
+            effective_bom = bom_context or parent_context_text
             parent_report = self._build_parent_report(parent_context, parent_context_payload)
-            parent_prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text)
+            parent_prompt = get_vlm_descriptive_prompt(bom_context=effective_bom)
             structure = parent_context_payload.get("3d_structure")
             if structure:
                 parent_prompt = (

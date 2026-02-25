@@ -190,199 +190,154 @@ with col_left:
         st.session_state.parent_drawing = None
         st.caption("未上傳父圖（將僅依子圖特徵判定）")
 
-    # 子圖上傳（必填）
-    st.markdown("#### 📄 上傳零件圖 (Child Drawing)")
-    uploaded_files = st.file_uploader(
-        "選擇子圖檔案 *",
-        type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
-        help=(
-            "子圖為必要上傳，包含零件局部特徵、標註數字、符號等。"
-            "支援 PDF 格式（將以 300 DPI 高解析度渲染），可多選上傳。"
-        ),
-        key="drawing_uploader",
-        accept_multiple_files=True
+    # ==================== BOM Context ====================
+    st.markdown("#### 📝 BOM / 全域備註 (可選)")
+    bom_context_input = st.text_area(
+        "輸入 BOM 內容或全域技術備註",
+        value="",
+        height=120,
+        placeholder="例如：材質 SUS304、表面陽極處理、批量 500 pcs...",
+        help="此文字將注入 VLM 提示詞作為全域背景資訊",
+        key="bom_context_input"
     )
-    
-    if uploaded_files:
-        drawing_images: List[np.ndarray] = []
-        drawing_names: List[str] = []
 
-        for uploaded_file in uploaded_files:
-            file_extension = uploaded_file.name.lower().split('.')[-1]
-            drawing_image = None
-            
-            if file_extension == 'pdf':
-                st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
+    # ==================== 四視圖上傳 ====================
+    st.markdown("#### 📐 上傳零件四視圖 (Child Drawing)")
+    st.caption("至少上傳一張視圖，其餘可留空。第一張有效圖將作為主辨識來源。")
+
+    _view_labels = ["Top（俯視圖）", "Front（前視圖）", "Side（側視圖）", "Iso（等角視圖）"]
+    _view_keys   = ["view_top", "view_front", "view_side", "view_iso"]
+    _view_files  = []
+    for _lbl, _key in zip(_view_labels, _view_keys):
+        _f = st.file_uploader(_lbl, type=['jpg', 'jpeg', 'png', 'bmp'], key=_key)
+        _view_files.append(_f)
+
+    # Decode uploaded views
+    drawing_images: List[np.ndarray] = []
+    drawing_names: List[str] = []
+    for _uf, _lbl in zip(_view_files, _view_labels):
+        if _uf is not None:
+            _fb = np.asarray(bytearray(_uf.read()), dtype=np.uint8)
+            _img = cv2.imdecode(_fb, cv2.IMREAD_COLOR)
+            if _img is not None:
+                drawing_images.append(_img)
+                drawing_names.append(f"{_lbl}: {_uf.name}")
+
+    if drawing_images:
+        primary_image = drawing_images[0]
+        st.session_state.uploaded_drawing = primary_image
+        st.session_state.uploaded_drawings = drawing_images
+
+        # Save temp image for knowledge base
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
+            cv2.imwrite(tmp_image.name, primary_image)
+            st.session_state.temp_file_path = tmp_image.name
+
+        # Preview uploaded views
+        for idx, (_img, _name) in enumerate(zip(drawing_images, drawing_names)):
+            st.image(cv2.cvtColor(_img, cv2.COLOR_BGR2RGB), caption=_name, width="stretch")
+            _h, _w = _img.shape[:2]
+            st.caption(f"尺寸: {_w} × {_h} px")
+
+        st.divider()
+
+        # ==================== 辨識設定 ====================
+        st.markdown("### 辨識設定")
+
+        with st.expander("特徵提取選項", expanded=True):
+            use_ocr = st.checkbox(
+                "OCR 文字辨識",
+                value=False,
+                help="需要安裝 PaddlePaddle (可選功能)"
+            )
+            use_geometry = st.checkbox(
+                "幾何特徵分析",
+                value=True,
+                help="分析線條、孔洞、折彎線等幾何特徵 (建議啟用)"
+            )
+            use_symbols = st.checkbox(
+                "符號辨識",
+                value=True,
+                help="辨識焊接符號、表面處理標記等"
+            )
+            use_vlm = st.session_state.use_vlm
+            if use_vlm:
+                from app.manufacturing.extractors.vlm_client import VLMClient
                 try:
-                    from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
-                    
-                    if not is_pdf_available():
-                        st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")
+                    _vlm_test = VLMClient()
+                    if _vlm_test.is_available():
+                        st.success("✅ VLM 服務已連接 (LM Studio)")
                     else:
-                        import tempfile
-                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
-                            tmp_file.write(uploaded_file.read())
-                            tmp_pdf_path = tmp_file.name
-                        
-                        pdf_extractor = PDFImageExtractor(target_dpi=300)
-                        drawing_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
-                        
-                        import os
-                        os.unlink(tmp_pdf_path)
-                
-                except Exception as e:
-                    st.error(f"PDF 處理失敗: {str(e)}")
-            
-            else:
-                file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-                drawing_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-            
-            if drawing_image is not None:
-                drawing_images.append(drawing_image)
-                drawing_names.append(uploaded_file.name)
-        
-        if drawing_images:
-            primary_image = drawing_images[0]
-            
-            st.session_state.uploaded_drawing = primary_image
-            st.session_state.uploaded_drawings = drawing_images
+                        st.warning("⚠️ VLM 服務未運行 - 請確認 LM Studio 已啟動 (http://localhost:1234)")
+                except Exception as _ve:
+                    st.error(f"❌ VLM 初始化失敗: {str(_ve)}")
 
-            # Save temp image for knowledge base
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
-                cv2.imwrite(tmp_image.name, primary_image)
-                st.session_state.temp_file_path = tmp_image.name
-            
-            # 顯示圖紙預覽
-            for idx, drawing_image in enumerate(drawing_images):
-                st.image(
-                    cv2.cvtColor(drawing_image, cv2.COLOR_BGR2RGB),
-                    caption=f"圖紙 {idx + 1}: {drawing_names[idx]}",
-                    width="stretch"
-                )
-                h, w = drawing_image.shape[:2]
-                st.caption(
-                    f"尺寸: {w} × {h} px | 檔案大小: {uploaded_files[idx].size / 1024:.1f} KB"
-                )
-            
-            st.divider()
-            
-            # ==================== 辨識設定 ====================
-            st.markdown("### 辨識設定")
-            
-            with st.expander("特徵提取選項", expanded=True):
-                use_ocr = st.checkbox(
-                    "OCR 文字辨識",
-                    value=False,
-                    help="需要安裝 PaddlePaddle (可選功能)"
-                )
-                
-                use_geometry = st.checkbox(
-                    "幾何特徵分析",
-                    value=True,
-                    help="分析線條、孔洞、折彎線等幾何特徵 (建議啟用)"
-                )
-                
-                use_symbols = st.checkbox(
-                    "符號辨識",
-                    value=True,
-                    help="辨識焊接符號、表面處理標記等"
-                )
-                
-                use_vlm = st.session_state.use_vlm
+        with st.expander("進階選項", expanded=False):
+            st.markdown("**頻率過濾** (選擇要顯示的製程頻率)")
+            freq_options = st.multiselect(
+                "製程頻率",
+                options=["高", "中", "低", "無"],
+                default=["高", "中"],
+                help="只顯示選定頻率的製程。高=常用、中=中等、低=少用、無=未分類"
+            )
+            show_visualization = st.checkbox(
+                "顯示特徵視覺化",
+                value=False,
+                help="在圖紙上標註檢測到的特徵"
+            )
+            st.session_state.last_settings = {
+                'use_ocr': use_ocr,
+                'use_geometry': use_geometry,
+                'use_symbols': use_symbols,
+                'use_vlm': use_vlm,
+                'show_visualization': show_visualization
+            }
 
-                # VLM 狀態檢查
-                if use_vlm:
-                    from app.manufacturing.extractors.vlm_client import VLMClient
-                    try:
-                        vlm_test = VLMClient()
-                        if vlm_test.is_available():
-                            st.success("✅ VLM 服務已連接 (LM Studio)")
-                        else:
-                            st.warning("⚠️ VLM 服務未運行 - 請確認 LM Studio 已啟動 (http://localhost:1234)")
-                    except Exception as e:
-                        st.error(f"❌ VLM 初始化失敗: {str(e)}")
-            
-            with st.expander("進階選項", expanded=False):
-                st.markdown("**頻率過濾** (選擇要顯示的製程頻率)")
-                freq_options = st.multiselect(
-                    "製程頻率",
-                    options=["高", "中", "低", "無"],
-                    default=["高", "中"],
-                    help="只顯示選定頻率的製程。高=常用、中=中等、低=少用、無=未分類"
-                )
-                
-                show_visualization = st.checkbox(
-                    "顯示特徵視覺化",
-                    value=False,
-                    help="在圖紙上標註檢測到的特徵"
-                )
-                
-                # 儲存設定到 session_state
-                st.session_state.last_settings = {
-                    'use_ocr': use_ocr,
-                    'use_geometry': use_geometry,
-                    'use_symbols': use_symbols,
-                    'use_vlm': use_vlm,
-                    'show_visualization': show_visualization
-                }
-            
-            st.divider()
-            
-            # ==================== 執行辨識 ====================
-            if st.button("開始辨識製程", type="primary", width="stretch"):
-                with st.spinner("正在分析工程圖紙..."):
-                    try:
-                        # 初始化管線
-                        if st.session_state.mfg_pipeline is None:
-                            st.session_state.mfg_pipeline = ManufacturingPipeline(
-                                use_ocr=use_ocr,
-                                use_geometry=use_geometry,
-                                use_symbols=use_symbols,
-                                use_visual=False,  # DINOv2 可選 (耗時)
-                                use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
-                            )
-                        
-                        # 執行辨識（支援雙圖模式）
-                        start_time = time.time()
-                        
-                        # 檢查是否有父圖
-                        parent_img = st.session_state.parent_drawing
-                        if parent_img is not None:
-                            st.info("雙圖模式: 正在解析父圖全域資訊...")
-                        
-                        result = st.session_state.mfg_pipeline.recognize(
-                            primary_image,
-                            parent_image=parent_img,  # 傳遞父圖
-                            top_n=None,
-                            min_confidence=st.session_state.min_confidence,
-                            frequency_filter=freq_options if freq_options else None,
-                            use_rag=st.session_state.use_rag,
-                            child_images=st.session_state.uploaded_drawings
+        st.divider()
+
+        # ==================== 執行辨識 ====================
+        if st.button("▶️ 確認無誤，開始 VLM 視覺重建", type="primary", use_container_width=True):
+            with st.spinner("正在分析工程圖紙..."):
+                try:
+                    if st.session_state.mfg_pipeline is None:
+                        st.session_state.mfg_pipeline = ManufacturingPipeline(
+                            use_ocr=use_ocr,
+                            use_geometry=use_geometry,
+                            use_symbols=use_symbols,
+                            use_visual=False,
+                            use_vlm=use_vlm
                         )
-                        elapsed = time.time() - start_time
-                        
-                        st.session_state.recognition_result = result
-                        
-                        if parent_img is not None:
-                            st.success(f"雙圖辨識完成！處理時間: {elapsed:.2f} 秒")
-                        else:
-                            st.success(f"辨識完成！處理時間: {elapsed:.2f} 秒")
-                        st.rerun()
-                        
-                    except ImportError as e:
-                        st.error(f"模組載入失敗: {str(e)}")
-                        st.info("請確認已安裝相關依賴套件 (參考 requirements.txt)")
-                    except Exception as e:
-                        st.error(f"辨識過程發生錯誤: {str(e)}")
-                        with st.expander("查看錯誤詳情"):
-                            import traceback
-                            st.code(traceback.format_exc())
-        else:
-            st.error("無法讀取圖片，請確認檔案格式正確")
+                    start_time = time.time()
+                    parent_img = st.session_state.parent_drawing
+                    if parent_img is not None:
+                        st.info("雙圖模式: 正在解析父圖全域資訊...")
+                    result = st.session_state.mfg_pipeline.recognize(
+                        primary_image,
+                        parent_image=parent_img,
+                        top_n=None,
+                        min_confidence=st.session_state.min_confidence,
+                        frequency_filter=freq_options if freq_options else None,
+                        use_rag=st.session_state.use_rag,
+                        child_images=st.session_state.uploaded_drawings,
+                        bom_context=bom_context_input
+                    )
+                    elapsed = time.time() - start_time
+                    st.session_state.recognition_result = result
+                    if parent_img is not None:
+                        st.success(f"雙圖辨識完成！處理時間: {elapsed:.2f} 秒")
+                    else:
+                        st.success(f"辨識完成！處理時間: {elapsed:.2f} 秒")
+                    st.rerun()
+                except ImportError as e:
+                    st.error(f"模組載入失敗: {str(e)}")
+                    st.info("請確認已安裝相關依賴套件 (參考 requirements.txt)")
+                except Exception as e:
+                    st.error(f"辨識過程發生錯誤: {str(e)}")
+                    with st.expander("查看錯誤詳情"):
+                        import traceback
+                        st.code(traceback.format_exc())
     else:
-        # 無圖紙時顯示說明
-        st.info("請上傳工程圖紙以開始製程辨識")
-        
+        st.info("請至少上傳一張視圖以開始製程辨識")
         with st.expander("使用說明", expanded=True):
             st.markdown("""
             ### 系統功能
@@ -391,7 +346,7 @@ with col_left:
             - 符號辨識 (焊接符號、表面處理標記)
             - OCR 文字辨識 (可選)
             - 製程推薦 (多種製程類型)
-            
+
             ### 支援製程類別
             - **切割**: 雷射切割、水刀切割、剪板機等
             - **折彎**: 折彎、滾圓、滾弧等
@@ -399,14 +354,13 @@ with col_left:
             - **表面處理**: 噴砂、烤漆、鍍鋅、陽極處理等
             - **組裝**: 自攻牙、螺絲、鉚接、拉釘等
             - **檢驗**: 成品全檢、尺寸檢驗、外觀檢驗等
-            
+
             ### 建議圖紙品質
             - **解析度**: 300 DPI 以上
             - **格式**: JPG, PNG, BMP
             - **類型**: 工程圖 (白底黑線)
             - **內容**: 包含完整標註與符號
             """)
-
 # ==================== Right Column: Results ====================
 
 with col_right:
@@ -668,41 +622,13 @@ with col_right:
                 for sym in result.features.symbols:
                     st.caption(f"- {sym.symbol_type} (信心度: {sym.confidence:.2f})")
             
-            # VLM 分析結果 (NEW!)
-            if result.features.vlm_analysis:
-                st.markdown("**🤖 VLM 視覺語言模型分析:**")
-                vlm = result.features.vlm_analysis
-                
-                # 形狀描述
-                if vlm.get("shape_description"):
-                    st.caption(f"形狀: {vlm['shape_description']}")
-                
-                # 複雜度
-                if vlm.get("overall_complexity"):
-                    st.caption(f"複雜度: {vlm['overall_complexity']}")
-                
-                # 建議製程
-                if vlm.get("suggested_process_ids"):
-                    st.caption(f"VLM 建議製程: {', '.join(vlm['suggested_process_ids'][:5])}")
-                
-                # 檢測特徵
-                if vlm.get("detected_features"):
-                    det_feat = vlm["detected_features"]
-                    features_summary = []
-                    if det_feat.get("geometry"):
-                        features_summary.append(f"幾何 ({len(det_feat['geometry'])})")
-                    if det_feat.get("symbols"):
-                        features_summary.append(f"符號 ({len(det_feat['symbols'])})")
-                    if det_feat.get("text_annotations"):
-                        features_summary.append(f"文字 ({len(det_feat['text_annotations'])})")
-                    if features_summary:
-                        st.caption(f"檢測特徵: {', '.join(features_summary)}")
-                
-                # 推理依據（可展開查看）
-                if vlm.get("reasoning"):
-                    with st.expander("查看 VLM 推理依據"):
-                        st.text(vlm["reasoning"])
-            
+            # VLM 純文字描述 (raw_vlm_description)
+            if result.features.raw_vlm_description:
+                st.markdown("**🤖 VLM 視覺語言模型分析 (純文字描述):**")
+                st.markdown(result.features.raw_vlm_description)
+            elif result.features.vlm_analysis:
+                st.markdown("**🤖 VLM 分析 (文字):**")
+                st.text(str(result.features.vlm_analysis))
             # 父圖上下文資訊
             if result.parent_context:
                 st.markdown("**父圖上下文資訊:**")
