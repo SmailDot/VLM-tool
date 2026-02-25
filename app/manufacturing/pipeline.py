@@ -31,7 +31,7 @@ from .extractors import (
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
-from .prompts import EngineeringPrompts, get_default_prompt
+from .prompts import EngineeringPrompts, get_default_prompt, get_vlm_descriptive_prompt
 from .decision import DecisionEngine
 from .decision.engine_v2 import DecisionEngineV2
 from .schema import GeometryFeatures
@@ -290,7 +290,8 @@ class ManufacturingPipeline:
         rag_context_text = ""
 
         # RAG retrieval based on initial VLM analysis
-        if use_rag and features.vlm_analysis:
+        # RAG retrieval based on initial VLM analysis (only if vlm_analysis is a dict)
+        if use_rag and isinstance(features.vlm_analysis, dict):
             try:
                 from app.knowledge.manager import KnowledgeBaseManager
 
@@ -333,7 +334,7 @@ class ManufacturingPipeline:
                     temperature=0.0,
                     max_tokens=2000
                 )
-                if vlm_result:
+                if vlm_result and isinstance(vlm_result, str):
                     features.vlm_analysis = vlm_result
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
@@ -490,14 +491,15 @@ class ManufacturingPipeline:
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,
                     prompt=prompt,
-                    response_format="json",
-                    temperature=0.0,
-                    max_tokens=2000
+                    response_format="text",
+                    temperature=0.1,
+                    max_tokens=1024
                 )
                 
                 if vlm_result:
                     vlm_analysis = vlm_result
-                    print(f"Info: VLM analysis completed - detected {len(vlm_result.get('suggested_process_ids', []))} suggested processes")
+                    chars = len(vlm_result) if isinstance(vlm_result, str) else 0
+                    print(f"Info: VLM analysis completed - {chars} chars")
                 else:
                     print("Warning: VLM analysis returned None")
             except Exception as e:
