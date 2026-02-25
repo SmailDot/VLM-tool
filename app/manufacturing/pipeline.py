@@ -9,7 +9,6 @@ End-to-end workflow:
 """
 
 from typing import Optional, Union, List, Dict, Any, Sequence
-import json
 from pathlib import Path
 import numpy as np
 import cv2
@@ -31,7 +30,7 @@ from .extractors import (
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
-from .prompts import EngineeringPrompts, get_default_prompt, get_vlm_descriptive_prompt
+from .prompts import EngineeringPrompts, get_vlm_descriptive_prompt
 from .decision import DecisionEngine
 from .decision.engine_v2 import DecisionEngineV2
 from .schema import GeometryFeatures
@@ -211,7 +210,7 @@ class ManufacturingPipeline:
             )
             parent_context_text = self.parent_parser.analyze_parent_context(parent_img_array)
             if parent_context_text:
-                parent_context_payload = self._safe_parse_parent_context(parent_context_text)
+                parent_context_payload = {}
                 parent_context.vlm_context = parent_context_payload
 
             if image is None:
@@ -255,9 +254,7 @@ class ManufacturingPipeline:
         parent_prompt = ""
         if parent_context_text:
             parent_report = self._build_parent_report(parent_context, parent_context_payload)
-            parent_prompt = get_default_prompt(parent_context=parent_context_text).replace(
-                "{rag_examples}", ""
-            )
+            parent_prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text)
             structure = parent_context_payload.get("3d_structure")
             if structure:
                 parent_prompt = (
@@ -317,9 +314,7 @@ class ManufacturingPipeline:
         if rag_context_text and self.vlm_client:
             try:
                 input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
-                prompt = get_default_prompt(parent_context=parent_context_text).replace(
-                    "{rag_examples}", rag_context_text
-                )
+                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text)
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (
@@ -330,12 +325,12 @@ class ManufacturingPipeline:
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_images,
                     prompt=prompt,
-                    response_format="json",
+                    response_format="text",
                     temperature=0.0,
                     max_tokens=2000
                 )
                 if vlm_result and isinstance(vlm_result, str):
-                    features.vlm_analysis = vlm_result
+                    features.raw_vlm_description = vlm_result
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
@@ -369,22 +364,6 @@ class ManufacturingPipeline:
         )
         
         return result
-
-    def _safe_parse_parent_context(self, context_text: str) -> Dict[str, Any]:
-        """
-        Parse parent VLM context JSON safely.
-
-        Args:
-            context_text: Raw context text from VLM.
-
-        Returns:
-            Parsed dictionary if JSON, otherwise empty dict.
-        """
-        try:
-            parsed = json.loads(context_text)
-            return parsed if isinstance(parsed, dict) else {}
-        except json.JSONDecodeError:
-            return {}
 
     def _build_parent_report(
         self,
@@ -512,7 +491,7 @@ class ManufacturingPipeline:
             symbols=symbols,
             visual_embedding=visual_embedding,
             tolerances=tolerances,  # NEW!
-            vlm_analysis=vlm_analysis  # NEW!
+            raw_vlm_description=vlm_analysis  # NEW!
         )
     
     def batch_recognize(
