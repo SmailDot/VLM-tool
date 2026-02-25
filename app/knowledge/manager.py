@@ -78,6 +78,8 @@ class KnowledgeBaseManager:
         timestamp = datetime.now()
         filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{Path(image_path).name}"
         target_path = self.image_storage_dir / filename
+        if not Path(image_path).exists():
+            raise FileNotFoundError(f"Source image not found: {image_path}")
         shutil.copy2(image_path, target_path)
 
         entry = {
