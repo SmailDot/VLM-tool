@@ -381,17 +381,15 @@ if __name__ == "__main__":
     
     if Path(test_image).exists():
         print(f"Analyzing image: {test_image}")
-        
         result = client.analyze_image(
             image_path=test_image,
-            prompt="請分析這張工程圖，識別可能需要的製程類型。以 JSON 格式輸出，包含: processes (製程列表), confidence (信心度), reasoning (判斷依據)",
-            response_format="json",
-            temperature=0.0
+            prompt="請分析這張工程圖，描述其形狀、特徵與可能需要的製程類型。請用純文字描述，不要輸出 JSON。",
+            response_format="text",
+            temperature=0.1
         )
-        
         if result:
             print("\n✅ Analysis successful!")
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(result)
         else:
             print("\n❌ Analysis failed.")
     else:
