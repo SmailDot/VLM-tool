@@ -33,6 +33,45 @@ from components.style import apply_custom_style
 from components.process_manager import render_process_manager
 from components.sidebar import render_recognition_sidebar
 
+# VLM 信心度色彩渲染器 helper
+import re as _re
+
+
+def _render_vlm_with_confidence(raw_text: str) -> str:
+    """
+    將 VLM 輸出的 <green>/<orange>/<red> XML 標籤
+    替換為對應顏色的 HTML span，供 st.markdown 渲染。
+
+    Args:
+        raw_text: VLM 原始輸出字串（含 XML 信心度標籤）。
+
+    Returns:
+        str: 替換後的 HTML 字串。
+    """
+    text = _re.sub(
+        r"<green>(.*?)</green>",
+        r"<span style='color:#00c853;font-weight:bold;'>\1</span>",
+        raw_text,
+        flags=_re.DOTALL
+    )
+    text = _re.sub(
+        r"<orange>(.*?)</orange>",
+        r"<span style='color:#ff6d00;font-weight:bold;'>\1</span>",
+        text,
+        flags=_re.DOTALL
+    )
+    text = _re.sub(
+        r"<red>(.*?)</red>",
+        r"<span style='color:#d50000;font-weight:bold;'>\1</span>",
+        text,
+        flags=_re.DOTALL
+    )
+    return text
+
+
+def _strip_confidence_tags(raw_text: str) -> str:
+    """去除所有信心度 XML 標籤，返回純文字。"""
+    return _re.sub(r"</?(?:green|orange|red)>", "", raw_text)
 # ==================== Page Config ====================
 
 st.set_page_config(
@@ -469,14 +508,23 @@ with col_right:
         
         st.divider()
 
-        # === VLM 視覺描述 (主要輸出) ===
+        # === VLM 視覺描述 (主要輸出) + 信心度色彩渲染 ===
         vlm_desc = result.features.raw_vlm_description
         if vlm_desc:
             st.markdown("### 🤖 VLM 視覺重建結果")
+
+            # 色彩圖例
+            st.caption(
+                "🟢 高信心，🟠 中信心，🔴 低信心 / 檢測不確定"
+            )
+
+            # 將 XML 標籤渲染為彩色 HTML（深色背景避免白底白字）
+            rendered_html = _render_vlm_with_confidence(vlm_desc)
             st.markdown(
-                f"<div style='background:#f0f8ff;border-left:4px solid #1f77b4;"
-                "padding:1rem 1.2rem;border-radius:4px;font-size:1rem;line-height:1.7;white-space:pre-wrap;'>"
-                f"{vlm_desc}</div>",
+                "<div style='background:#1e2a3a;border-left:4px solid #1f77b4;"
+                "padding:1rem 1.2rem;border-radius:4px;font-size:1rem;"
+                "line-height:1.8;white-space:pre-wrap;color:#e8edf2;'>"
+                f"{rendered_html}</div>",
                 unsafe_allow_html=True
             )
         else:
@@ -484,32 +532,43 @@ with col_right:
 
         st.divider()
 
-        # === 保存至知識庫 ===
-        with st.expander("💾 保存此結果至知識庫", expanded=False):
-            if not st.session_state.temp_file_path:
-                st.warning("找不到暫存圖片，請重新上傳圖檔")
+        # === 人類專家修正區 (HITL) + 儲存至 RAG ===
+        st.markdown("### ✏️ 人類專家修正區")
+
+        # 當辨識完成新結果時，自動將原始 VLM 描述（已去標籤）填入修正區
+        _vlm_key = id(result)
+        if st.session_state.get('_hitl_result_key') != _vlm_key:
+            st.session_state['hitl_corrected_text'] = _strip_confidence_tags(vlm_desc or "")
+            st.session_state['_hitl_result_key'] = _vlm_key
+
+        corrected_text = st.text_area(
+            "✏️ 人類專家修正區 (請修正 AI 的錯誤描述)",
+            value=st.session_state.get('hitl_corrected_text', ''),
+            height=200,
+            placeholder="AI 的描述將自動填入此處，您可直接修改...",
+            key="hitl_corrected_text",
+            help="此處顯示的文字將在按下「儲存至 RAG 知識庫」時一併寫入。"
+        )
+
+        # 儲存按鈕
+        if st.button("💾 儲存至 RAG 知識庫", type="primary", key="btn_save_rag"):
+            tmp_path = st.session_state.get("temp_file_path")
+            if not tmp_path or not Path(tmp_path).exists():
+                st.error("⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。")
             else:
-                st.caption("下方 VLM 純文字描述將一併存入知識庫，可輸入附加備註（選填）")
-                kb_note = st.text_area(
-                    "附加備註",
-                    height=80,
-                    placeholder="例如：此零件為柨樣板，實際製程待確認...",
-                    key="kb_save_note"
+                from app.knowledge.manager import KnowledgeBaseManager as _KBMgr
+                _kb = _KBMgr()
+                _final_desc = st.session_state.get("hitl_corrected_text", "").strip()
+                _kb.add_entry(
+                    image_path=tmp_path,
+                    features={
+                        "raw_vlm_description": _final_desc,
+                        "shape_description": _final_desc[:80] if _final_desc else "",
+                    },
+                    correct_processes=[],
+                    reasoning=_final_desc
                 )
-                if st.button("💾 保存至知識庫", type="primary", key="btn_save_kb"):
-                    tmp_path = st.session_state.temp_file_path
-                    if not tmp_path or not Path(tmp_path).exists():
-                        st.error("⚠️ 暫存圖檔已遗失，無法加入知識庫，請重新上傳圖紙。")
-                    else:
-                        from app.knowledge.manager import KnowledgeBaseManager
-                        kb_manager = KnowledgeBaseManager()
-                        kb_manager.add_entry(
-                            image_path=tmp_path,
-                            features={"raw_vlm_description": vlm_desc or ""},
-                            correct_processes=[],
-                            reasoning=kb_note or ""
-                        )
-                        st.toast("✅ 已保存至知識庫")
+                st.toast("✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！", icon="✅")
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
                 for ref in result.rag_references:
