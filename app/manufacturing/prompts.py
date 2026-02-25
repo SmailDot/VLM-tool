@@ -599,8 +599,63 @@ Step 3: 根據代碼表匹配製程。
 
 
 # Export main classes and functions
+def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
+    """
+    Generate a pure plain-text descriptive prompt for VLM geometry analysis.
+
+    This prompt instructs the VLM to output ONLY a structured English description
+    using 4 fixed headings. It explicitly forbids JSON output, process IDs, and
+    specific dimension hallucinations (e.g. thread sizes like M3/M4).
+
+    Args:
+        bom_context: Plain-text BOM / material facts confirmed by the user.
+                     If non-empty, injected as a KNOWN FACTS preamble.
+
+    Returns:
+        Complete prompt string ready to pass to VLMClient.analyze_image().
+    """
+    known_facts_block = ""
+    if bom_context.strip():
+        known_facts_block = (
+            "### 0. KNOWN FACTS FROM BOM (HIGHEST PRIORITY)\n"
+            f"{bom_context.strip()}\n\n"
+            "You MUST incorporate these facts (material, thickness, part name) into"
+            " every section of your report.\n"
+            "The values stated above are AUTHORITATIVE — do not contradict them.\n\n"
+        )
+
+    return (
+        f"{known_facts_block}"
+        "You are a mechanical engineer analyzing 2D engineering drawings.\n"
+        "Your task: describe the 3D geometry of the part shown across all provided views.\n\n"
+        "STRICT OUTPUT RULES:\n"
+        "- Output ONLY plain text using the 4 headings below. NO other text before or after.\n"
+        "- DO NOT output JSON. DO NOT use {{ or }}.\n"
+        "- DO NOT recommend manufacturing process IDs (e.g. C01, D01).\n"
+        "- DO NOT invent specific dimensions (thread sizes, hole counts) not visible in the drawings.\n"
+        "- If a feature is unclear, write: [unclear from available views].\n\n"
+        "OUTPUT FORMAT (use exactly these 4 headings):\n\n"
+        "### 1. OVERALL 3D SHAPE\n"
+        "Describe the primary 3D form: flat plate, L-bracket, U-channel, box enclosure,"
+        " cylinder, or compound shape. State the dominant axes and overall envelope.\n\n"
+        "### 2. COMPONENT STRUCTURE\n"
+        "List each distinct sub-region or feature body: flanges, webs, tabs, bosses,"
+        " ribs, gussets. Include confirmed material or thickness from KNOWN FACTS if available.\n\n"
+        "### 3. VIEW-BY-VIEW GEOMETRY\n"
+        "For each provided view (Top, Front, Side, Detail/Iso), describe what geometry"
+        " is visible: outline shape, visible edges, bend radii, hole patterns, cutouts."
+        " Reference the view label (e.g. 'Top View:').\n\n"
+        "### 4. CRITICAL TEXT & SYMBOLS\n"
+        "List any text annotations or symbols legible in the drawings: surface finish marks,"
+        " weld symbols, tolerance callouts, material notes. Quote them exactly as seen."
+        " Do not infer hidden values.\n"
+    )
+
+
+# Export main classes and functions
 __all__ = [
     "EngineeringPrompts",
     "PromptTemplate",
-    "get_default_prompt"
+    "get_default_prompt",
+    "get_vlm_descriptive_prompt",
 ]
