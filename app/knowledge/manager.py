@@ -60,19 +60,17 @@ class KnowledgeBaseManager:
         features: Dict[str, Any],
         correct_processes: List[str],
         reasoning: str,
-        tags: Optional[List[str]] = None,
-        additional_images: Optional[List[str]] = None
+        tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Add a new knowledge entry to the database.
 
         Args:
-            image_path: Path to source image file (primary image).
+            image_path: Path to source image file.
             features: Extracted features (VLM analysis output).
             correct_processes: Corrected process IDs.
             reasoning: Expert reasoning for correction.
             tags: Optional tags for retrieval.
-            additional_images: Optional list of additional image paths to save.
 
         Returns:
             Dict[str, Any]: The created entry.
@@ -81,22 +79,11 @@ class KnowledgeBaseManager:
         filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{Path(image_path).name}"
         target_path = self.image_storage_dir / filename
         shutil.copy2(image_path, target_path)
-        
-        # Save additional images if provided
-        additional_rel_paths = []
-        if additional_images:
-            for idx, img_path in enumerate(additional_images):
-                if img_path != image_path:  # Skip primary image
-                    additional_filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{idx}_{Path(img_path).name}"
-                    additional_target = self.image_storage_dir / additional_filename
-                    shutil.copy2(img_path, additional_target)
-                    additional_rel_paths.append(str(additional_target))
 
         entry = {
             "id": filename.split(".")[0],
             "timestamp": timestamp.isoformat(),
             "image_rel_path": str(target_path),
-            "additional_images": additional_rel_paths,  # NEW: Store additional images
             "features": features,
             "correct_processes": correct_processes,
             "reasoning": reasoning,

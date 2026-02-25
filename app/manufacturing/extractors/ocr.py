@@ -26,36 +26,6 @@ except ImportError:
 from ..schema import OCRResult
 
 
-def get_ocr_engine(lang: str = 'ch') -> 'PaddleOCR':
-    """
-    取得指定語言的 PaddleOCR 實例，利用 Streamlit cache_resource 快取，
-    避免每次按下擷取按鈕都重新載入模型。
-
-    在非 Streamlit 環境（如測試腳本）下自動降級為單例字典快取。
-
-    Args:
-        lang: PaddleOCR 語言代碼，如 'ch', 'chinese_cht', 'japan', 'en', 'korean'。
-
-    Returns:
-        PaddleOCR: 對應語言的 OCR 實例。
-    """
-    try:
-        import streamlit as st
-        @st.cache_resource
-        def _cached_engine(lang_key: str) -> 'PaddleOCR':
-            return PaddleOCR(use_angle_cls=True, lang=lang_key, use_gpu=False)
-        return _cached_engine(lang)
-    except Exception:
-        # 非 Streamlit 環境：使用模組層級單例字典
-        if not hasattr(get_ocr_engine, '_cache'):
-            get_ocr_engine._cache: Dict[str, Any] = {}
-        if lang not in get_ocr_engine._cache:
-            get_ocr_engine._cache[lang] = PaddleOCR(
-                use_angle_cls=True, lang=lang, use_gpu=False
-            )
-        return get_ocr_engine._cache[lang]
-
-
 class OCRExtractor:
     """
     Wrapper for PaddleOCR optimized for engineering drawings.
@@ -391,87 +361,7 @@ class OCRExtractor:
                 continue
         
         return all_results
-
-    def extract_bom_text_only(
-        self,
-        image_path: str,
-        confidence_threshold: float = 0.4,
-        lang: str = 'ch'
-    ) -> str:
-        """
-        以 PaddleOCR 掃描指定圖片，回傳 BOM 相關文字行（純字串），供 HITL 人工確認。
-
-        優先保留含工程領域關鍵字的行（材料碼、板厚標注、零件名稱等）。
-        若優先行少於 3 行，則回傳全部 OCR 文字，由使用者手動刪除雜訊。
-
-        根據傳入的 lang 參數動態選擇掃描語言清單：
-        - 'japan' -> 以日文為主，追加繁中/英文
-        - 'chinese_cht' -> 以繁中為主，追加日文/英文
-        - 其他 (ch/en/korean) -> 以該語言為主，追加繁中/英文
-
-        Args:
-            image_path: 父圖/BOM 圖片的絕對路徑。
-            confidence_threshold: OCR 最低信心度（0.0-1.0）。
-            lang: 圖紙主要語言代碼（'ch', 'chinese_cht', 'japan', 'en', 'korean'）。
-        Returns:
-            換行符號連接的相關文字行字串。
-            OCR 無結果時回傳空字串。
-        """
-        if not Path(image_path).exists():
-            return "[錯誤] 找不到檔案"
-        image = cv2.imread(image_path)
-        if image is None:
-            return "[錯誤] 無法讀取圖片"
-        _lang_map: Dict[str, List[str]] = {
-            'japan':       ['japan', 'chinese_cht', 'en'],
-            'chinese_cht': ['chinese_cht', 'en', 'japan'],
-            'en':          ['en', 'chinese_cht', 'ch'],
-            'korean':      ['korean', 'en', 'ch'],
-        }
-        scan_langs = _lang_map.get(lang, ['ch', 'chinese_cht', 'en', 'japan'])
-        try:
-            results = self.extract_multilang(
-                image,
-                languages=scan_langs,
-                confidence_threshold=confidence_threshold,
-            )
-        except Exception as exc:
-            print(f"[extract_bom_text_only] OCR failed: {exc}")
-            return "[錯誤] OCR 執行失敗"
-        if not results:
-            return ""
-
-        all_lines: List[str] = [r.text for r in results if r.text.strip()]
-
-        # ---- Priority keyword filter ----
-        # Keep lines that contain BOM-relevant engineering terms
-        PRIORITY_KEYWORDS = [
-            # Material codes
-            'SUS', 'SPCC', 'SECC', 'AL', 'A5052', 'A6061', 'SS400', 'C1020',
-            'POM', 'PC', 'ABS', 'PTFE', 'FR4',
-            # Thickness / dimension annotations
-            't=', 'T=', 't =', 'T =', '厚', '板厚',
-            # Part names (Chinese)
-            '品名', '零件', '件名', '部品', '材質', '材料', '規格',
-            # Part names (Japanese)
-            'リブ', 'ベース', 'ブラケット', 'パネル', 'フレーム',
-            'プレート', 'カバー', 'ホルダ', 'サポート',
-            # Quantity / BOM fields
-            '数量', '員数', 'QTY', 'Qty', '品番',
-            # Surface finish / treatment hints
-            '烤漆', '陽極', '鍍', '處理', '噴砂',
-        ]
-
-        priority_lines: List[str] = []
-        for line in all_lines:
-            if any(kw in line for kw in PRIORITY_KEYWORDS):
-                priority_lines.append(line)
-
-        # If priority filter yields meaningful results, return those;
-        # otherwise fall back to everything so the user can trim manually.
-        if len(priority_lines) >= 3:
-            return '\n'.join(priority_lines)
-        return '\n'.join(all_lines)
+    
     def detect_title_block_notes(
         self,
         image: np.ndarray,
