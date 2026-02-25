@@ -1,10 +1,116 @@
-{
-  "status": "RESOLVED",
-  "resolved_at": "2026-02-25",
-  "error": "NameError: name 'Dict' is not defined",
-  "file": "app/manufacturing/extractors/vlm_client.py:314",
-  "fix_commit": "17a1fe0",
-  "fix_summary": "Added Dict, Any back to `from typing import` line after they were accidentally removed during import cleanup.",
-  "logged_in": "test_errorlog.txt",
-  "next_task": "none — all task.txt items complete"
-}
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:289 in              
+  image_to_url                                                                          
+────────────────────────────────────────────────────────────────────────────────────────
+FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
+work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
+'
+
+During handling of the above exception, another exception occurred:
+
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:164 in     
+  _read_file                                                                            
+────────────────────────────────────────────────────────────────────────────────────────
+FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
+work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
+'
+
+The above exception was the direct cause of the following exception:
+
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py:129 in        
+  exec_func_with_error_handling                                                         
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py:669 in    
+  code_to_exec                                                                          
+                                                                                        
+  D:\NKUST_LAB_Work_Data\Lab work\cv-algorithm-study\AoV_Tool_V2\aov_app.py:743 in      
+  <module>                                                                              
+                                                                                        
+    740 │   │   │   with st.expander(f"ID: {entry['id']} - {entry['features'].get('sha  
+    741 │   │   │   │   col_a, col_b = st.columns(2)                                    
+    742 │   │   │   │   with col_a:                                                     
+  ❱ 743 │   │   │   │   │   st.image(entry['image_rel_path'], caption="原始圖檔")       
+    744 │   │   │   │   with col_b:                                                     
+    745 │   │   │   │   │   new_processes = st.multiselect(                             
+    746 │   │   │   │   │   │   "修正製程",                                             
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\metrics_util.py:447 in wrapped_func     
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\image.py:206 in image                  
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:445 in              
+  marshall_images                                                                       
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:301 in              
+  image_to_url                                                                          
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\media_file_manager.py:225 in add        
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:114 in     
+  load_and_get_id                                                                       
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:167 in     
+  _read_file                                                                            
+────────────────────────────────────────────────────────────────────────────────────────
+MediaFileStorageError: Error opening 'D:\NKUST_LAB_Work_Data\Lab 
+work\cv-algorithm-study\AoV_Tool_V2\knowledge_images\20260213_112511_tmpbt2gtx_h.png'
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:289 in              
+  image_to_url                                                                          
+────────────────────────────────────────────────────────────────────────────────────────
+FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
+work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
+'
+
+During handling of the above exception, another exception occurred:
+
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:164 in     
+  _read_file                                                                            
+────────────────────────────────────────────────────────────────────────────────────────
+FileNotFoundError: [Errno 2] No such file or directory: 'D:\\NKUST_LAB_Work_Data\\Lab 
+work\\cv-algorithm-study\\AoV_Tool_V2\\knowledge_images\\20260213_112511_tmpbt2gtx_h.png
+'
+
+The above exception was the direct cause of the following exception:
+
+────────────────────────── Traceback (most recent call last) ───────────────────────────
+  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py:129 in        
+  exec_func_with_error_handling                                                         
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py:669 in    
+  code_to_exec                                                                          
+                                                                                        
+  D:\NKUST_LAB_Work_Data\Lab work\cv-algorithm-study\AoV_Tool_V2\aov_app.py:743 in      
+  <module>                                                                              
+                                                                                        
+    740 │   │   │   with st.expander(f"ID: {entry['id']} - {entry['features'].get('sha  
+    741 │   │   │   │   col_a, col_b = st.columns(2)                                    
+    742 │   │   │   │   with col_a:                                                     
+  ❱ 743 │   │   │   │   │   st.image(entry['image_rel_path'], caption="原始圖檔")       
+    744 │   │   │   │   with col_b:                                                     
+    745 │   │   │   │   │   new_processes = st.multiselect(                             
+    746 │   │   │   │   │   │   "修正製程",                                             
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\metrics_util.py:447 in wrapped_func     
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\image.py:206 in image                  
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:445 in              
+  marshall_images                                                                       
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\elements\lib\image_utils.py:301 in              
+  image_to_url                                                                          
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\media_file_manager.py:225 in add        
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:114 in     
+  load_and_get_id                                                                       
+                                                                                        
+  D:\python\Lib\site-packages\streamlit\runtime\memory_media_file_storage.py:167 in     
+  _read_file                                                                            
+────────────────────────────────────────────────────────────────────────────────────────
+MediaFileStorageError: Error opening 'D:\NKUST_LAB_Work_Data\Lab 
+work\cv-algorithm-study\AoV_Tool_V2\knowledge_images\20260213_112511_tmpbt2gtx_h.png'

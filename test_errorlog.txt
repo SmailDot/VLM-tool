@@ -6,7 +6,7 @@ NKUST AoV Tool V2 — AI Agent Error Log
 
 結構：
   [CHEATSHEET]   最高頻地雷速查，每次 coding 前先看
-  [ERR-001..003] 歷史錯誤詳細記錄
+  [ERR-001..004] 歷史錯誤詳細記錄
   [PATTERNS]     跨錯誤共通規律總結
 ================================================================================
 
@@ -23,6 +23,7 @@ NKUST AoV Tool V2 — AI Agent Error Log
 在 Streamlit multiselect 傳空 options  fallback 到直接讀 process_lib_v2.json
 加 try/except 時只加一側               兩側都確認：`try:` 和 `except:` 同時存在
 提交前只看語法正確                     語法 + 實際 import + UI 三層驗證
+直接 st.image(entry['image_rel_path'])    先 Path(path).exists() 確認，再 st.image()，否則顯示 st.warning()
 
 VERIFY COMMANDS（每次改完跑這三行）：
   python -c "import ast; ast.parse(open('FILE.py', encoding='utf-8').read()); print('syntax OK')"
@@ -240,6 +241,77 @@ FORBIDDEN PATTERN SCAN（每次提交前）：
 
 
 ================================================================================
+ERR-004 | 2026-02-25 | MediaFileStorageError: stale absolute path in knowledge_db
+================================================================================
+FILE:     aov_app.py (line ~743) + app/knowledge/manager.py (line ~81)
+SYMPTOM:  MediaFileStorageError: Error opening '...knowledge_images/20260213_112511_tmpbt2gtx_h.png'
+          Raised every time 知識庫管理 Tab is opened, crashing the whole page.
+
+TRACEBACK (key path):
+  aov_app.py:743 → st.image(entry['image_rel_path'], ...)
+  → streamlit image_utils.py → memory_media_file_storage._read_file
+  → FileNotFoundError (wrapped as MediaFileStorageError)
+
+WHAT HAPPENED:
+  When a user clicks「加入知識庫」, the app calls `kb_manager.add_entry()`.
+  Inside `add_entry()`, the source image is a tempfile:
+
+      with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_image:
+          cv2.imwrite(tmp_image.name, primary_image)
+          st.session_state.temp_file_path = tmp_image.name   ← absolute OS temp path
+
+  `add_entry()` copies it to `knowledge_images/<timestamp>_<filename>.png`,
+  then stores that ABSOLUTE path in `knowledge_db.json` as `image_rel_path`.
+
+  Weeks later, the knowledge DB still holds the old path but the file is gone
+  (OS temp cleanup, disk reshuffle, project move, etc.).
+  `st.image()` receives the stale path → Streamlit's media manager throws
+  MediaFileStorageError, crashing the entire 知識庫管理 Tab.
+
+SECONDARY VULNERABILITY (found during fix scan):
+  manager.py:81 called `shutil.copy2(image_path, target_path)` with NO check
+  that `image_path` actually exists. If temp_file_path was cleaned up before
+  the user clicks「加入知識庫」, shutil.copy2 throws uncaught FileNotFoundError.
+
+ROOT CAUSE PATTERN:
+  "Stored an absolute file path in a persistent DB, then assumed that path will
+   always be valid in future sessions. Temp files and moved projects break this."
+
+FIX (3 changes, all minimal):
+  1. aov_app.py:~743 — guard st.image() with existence check:
+       img_path = Path(entry['image_rel_path'])
+       if img_path.exists():
+           st.image(str(img_path), caption="原始圖檔")
+       else:
+           st.warning(f"⚠️ 原始圖檔已遺失：{img_path.name}")
+
+  2. aov_app.py:~525 — guard add_entry() call with temp path check:
+       tmp_path = st.session_state.temp_file_path
+       if not tmp_path or not Path(tmp_path).exists():
+           st.error("⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。")
+       else:
+           kb_manager.add_entry(image_path=tmp_path, ...)
+
+  3. manager.py:~81 — guard shutil.copy2 with source existence check:
+       if not Path(image_path).exists():
+           raise FileNotFoundError(f"Source image not found: {image_path}")
+       shutil.copy2(image_path, target_path)
+
+  Also added `from pathlib import Path` to aov_app.py imports.
+
+PREVENTION:
+  1. Never pass `entry['image_rel_path']` directly to st.image() without
+     Path(...).exists() guard. Knowledge DB entries can outlive their files.
+  2. Before any file I/O (shutil.copy2, cv2.imread, open()), verify source
+     path exists at the CALL SITE.
+  3. When storing paths to persistent DBs, prefer relative paths from a stable
+     base directory. Absolute paths break when project is moved or OS cleans
+     temp directories.
+  4. Whenever reading image_rel_path from knowledge_db:
+     ALWAYS apply: Path(p).exists() → show / warn, never crash.
+
+
+================================================================================
 CHANGE LOG
 ================================================================================
 2026-02-13  ERR-002 first documented (I01 multiselect crash, 5th occurrence)
@@ -248,4 +320,6 @@ CHANGE LOG
 2026-02-25  File restructured: merged error + task-summary + test-guide →
             single AI-readable error log (task summaries removed, test guide
             is in task.txt history)
+2026-02-25  ERR-004 MediaFileStorageError (stale image path in knowledge_db) —
+            fixed in aov_app.py (2 sites) + manager.py (1 site)
 ================================================================================
