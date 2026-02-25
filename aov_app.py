@@ -47,15 +47,7 @@ apply_custom_style()
 
 # 初始化製程辨識管線 (延遲載入)
 if 'mfg_pipeline' not in st.session_state:
-    # Initialize pipeline early to make process_defs available for smart matching
-    # This lightweight initialization only loads process library, no heavy extractors yet
-    st.session_state.mfg_pipeline = ManufacturingPipeline(
-        use_ocr=False,  # Will be reconfigured on first recognition
-        use_geometry=False,
-        use_symbols=False,
-        use_visual=False,
-        use_vlm=False
-    )
+    st.session_state.mfg_pipeline = None
 
 if 'uploaded_drawing' not in st.session_state:
     st.session_state.uploaded_drawing = None
@@ -81,19 +73,6 @@ if 'min_confidence' not in st.session_state:
 
 if 'temp_file_path' not in st.session_state:
     st.session_state.temp_file_path = None
-
-# 暫存區機制 (Batch Editing) - 必須在 editing_predictions 之前初始化
-if 'pending_changes' not in st.session_state:
-    st.session_state.pending_changes = []  # List[Dict]: [{"action": "add/remove", "process_id": str, "process_name": str, "reasoning": str, "confidence": float}]
-
-if 'reasoning_input_key' not in st.session_state:
-    st.session_state.reasoning_input_key = 0  # 用於清空理由欄位
-
-if 'pending_unknown_process' not in st.session_state:
-    st.session_state.pending_unknown_process = None  # Dict or None: {"input", "looks_like_id", "action", "reasoning"}
-
-if 'is_corrected' not in st.session_state:
-    st.session_state.is_corrected = False  # 標記是否已進行人工校正
 
 # 儲存上次的設定 (用於特徵視覺化)
 if 'last_settings' not in st.session_state:
@@ -211,129 +190,18 @@ with col_left:
         st.session_state.parent_drawing = None
         st.caption("未上傳父圖（將僅依子圖特徵判定）")
 
-
-    # ==================== BOM/父圖 OCR 擷取區 (Steps 1+2+4) ====================
-    st.markdown("### 📄 父圖/BOM 表自動擷取 (OCR HITL)")
-    st.caption("上傳含有 BOM 表或技術要求的父圖，讓 OCR 自動擷取材質/厚度資訊，再由您刪除雜訊後注入 VLM")
-
-    # Session state 初始化
-    if "bom_ocr_paths" not in st.session_state:
-        st.session_state.bom_ocr_paths = []
-    if "extracted_bom" not in st.session_state:
-        st.session_state.extracted_bom = ""
-    if "bom_context" not in st.session_state:
-        st.session_state.bom_context = ""
-    # Step 1: 圖紙語言選擇器
-    _LANG_OPTIONS = {
-        '繁體中文 (chinese_cht)': 'chinese_cht',
-        '日文 (japan)':           'japan',
-        '英文 (en)':              'en',
-        '簡體中文 (ch)':          'ch',
-        '韓文 (korean)':          'korean',
-    }
-    _lang_label = st.selectbox(
-        '🌐 選擇圖紙主要語言',
-        options=list(_LANG_OPTIONS.keys()),
-        index=0,
-        key='bom_ocr_lang',
-        help='選擇圖面的主要語言，系統會導向這個語言模型進行 OCR，改善其他語言圖紙的辨識結果'
+    # 子圖上傳（必填）
+    st.markdown("#### 📄 上傳零件圖 (Child Drawing)")
+    uploaded_files = st.file_uploader(
+        "選擇子圖檔案 *",
+        type=['jpg', 'jpeg', 'png', 'bmp', 'pdf'],
+        help=(
+            "子圖為必要上傳，包含零件局部特徵、標註數字、符號等。"
+            "支援 PDF 格式（將以 300 DPI 高解析度渲染），可多選上傳。"
+        ),
+        key="drawing_uploader",
+        accept_multiple_files=True
     )
-    _selected_lang = _LANG_OPTIONS[_lang_label]
-    bom_files = st.file_uploader(
-        "選擇父圖/BOM 圖片 (JPG/PNG，可多選)",
-        type=['jpg', 'jpeg', 'png'],
-        key="bom_ocr_uploader",
-        accept_multiple_files=True,
-        help="可同時選取多張 BOM 表圖片，擷取結果將以分隔線區隔"
-    )
-
-    if bom_files:
-        import tempfile as _tmpmod
-        _saved_paths = []
-        for _bf in bom_files:
-            _suffix = '.' + _bf.name.lower().split('.')[-1]
-            with _tmpmod.NamedTemporaryFile(delete=False, suffix=_suffix) as _tmp:
-                _tmp.write(_bf.read())
-                _saved_paths.append(_tmp.name)
-        st.session_state.bom_ocr_paths = _saved_paths
-        st.success(f"已上傳 {len(_saved_paths)} 張：{', '.join(f.name for f in bom_files)}")
-    elif not st.session_state.bom_ocr_paths:
-        st.session_state.bom_ocr_paths = []
-    if st.button("🔍 自動擷取 BOM 資訊", use_container_width=True,
-                 disabled=(not st.session_state.bom_ocr_paths)):
-        try:
-            from app.manufacturing.extractors.ocr import OCRExtractor as _OCRExtractor
-            with st.spinner("PaddleOCR 正在掃描圖面文字... 請稍候"):
-                _ocr_inst = _OCRExtractor(lang='ch')
-                _results = []
-                for _idx, _scan_path in enumerate(st.session_state.bom_ocr_paths):
-                    _bom_text = _ocr_inst.extract_bom_text_only(_scan_path, lang=_selected_lang)
-                    _results.append(_bom_text if _bom_text else f"(第 {_idx+1} 張：OCR 未偵測到文字)")
-                _separator = "\n" + "=" * 18 + "\n"
-                st.session_state.extracted_bom = _separator.join(_results)
-        except Exception as _e:
-            st.error(f"OCR 擷取失敗：{_e}")
-            st.session_state.extracted_bom = ""
-
-    # HITL 可編輯 text_area — 不綁 key，直接用 value + 回寫 session_state
-    _edited = st.text_area(
-        "📝 擷取結果 (請手動刪除無關雜訊，保留材質、厚度 t=、零件名稱等)",
-        value=st.session_state.extracted_bom,
-        height=220,
-        placeholder="例如：\nSUS304 t=1.5\n品名：ブラケット\n員数：2"
-    )
-    st.session_state.extracted_bom = _edited
-    # Step 4: 確認並啟動 VLM 分析
-    _vlm_btn_disabled = (
-        not st.session_state.extracted_bom.strip()
-        or "temp_file_paths" not in st.session_state
-        or not st.session_state.get("temp_file_paths")
-    )
-    if st.button("▶️ 確認無誤，開始 VLM 視覺重建", use_container_width=True, type="primary",
-                 disabled=_vlm_btn_disabled):
-        st.session_state.bom_context = st.session_state.extracted_bom.strip()
-        from app.manufacturing.extractors.vlm_client import VLMClient as _VLMClient
-        from app.manufacturing.prompts import get_vlm_descriptive_prompt as _get_prompt
-        _vlm = _VLMClient()
-        if not _vlm.is_available():
-            st.warning("⚠️ VLM 服務未運行 — 請確認 LM Studio 已啟動 (http://localhost:1234)")
-        else:
-            with st.spinner("VLM 正在整合 BOM 事實並分析多視角圖形... 請稍候"):
-                _images = list(st.session_state.temp_file_paths)
-                _prompt = _get_prompt(bom_context=st.session_state.bom_context)
-                _desc = _vlm.analyze_image(_images, _prompt, response_format="text",
-                                           temperature=0.1, max_tokens=1500)
-                if _desc:
-                    st.session_state.vlm_shape_description = _desc
-                    st.success("✅ VLM 已完成分析，請見下方描述報告")
-                else:
-                    st.error("VLM 未回傳結果，請確認模型已載入")
-
-    # --- 多視角圖片上傳區 (替換原本的 file_uploader) ---
-    st.markdown("### 👁️ 多視角零件圖上傳 (VLM 視覺重建)")
-    st.caption("請上傳此零件的不同視角，幫助 VLM 建立 3D 空間認知 (可只上傳部分視角)")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    vlm_images = {}  # 收集多視角圖片
-    
-    with col1:
-        top_view = st.file_uploader("1. 俯視圖 (Top View)", type=['png', 'jpg', 'jpeg'], key="top_view")
-        if top_view: vlm_images["Top View"] = top_view
-    with col2:
-        front_view = st.file_uploader("2. 前視圖 (Front View)", type=['png', 'jpg', 'jpeg'], key="front_view")
-        if front_view: vlm_images["Front View"] = front_view
-    with col3:
-        side_view = st.file_uploader("3. 側視圖 (Side View)", type=['png', 'jpg', 'jpeg'], key="side_view")
-        if side_view: vlm_images["Side View"] = side_view
-    with col4:
-        iso_view = st.file_uploader("4. 立體/細部圖 (Detail/Iso)", type=['png', 'jpg', 'jpeg'], key="iso_view")
-        if iso_view: vlm_images["Detail/Iso View"] = iso_view
-    
-    # 為了相容原本管線，將第一張上傳的圖設為主力分析圖
-    if vlm_images:
-        uploaded_files = list(vlm_images.values())  # 所有視角的圖片
-    else:
-        uploaded_files = []
     
     if uploaded_files:
         drawing_images: List[np.ndarray] = []
@@ -379,14 +247,10 @@ with col_left:
             st.session_state.uploaded_drawing = primary_image
             st.session_state.uploaded_drawings = drawing_images
 
-            # Save all temp images for knowledge base
-            temp_paths = []
-            for idx, img in enumerate(drawing_images):
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{idx}.png") as tmp_image:
-                    cv2.imwrite(tmp_image.name, img)
-                    temp_paths.append(tmp_image.name)
-            st.session_state.temp_file_path = temp_paths[0]  # Primary image (backward compatibility)
-            st.session_state.temp_file_paths = temp_paths  # All images
+            # Save temp image for knowledge base
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
+                cv2.imwrite(tmp_image.name, primary_image)
+                st.session_state.temp_file_path = tmp_image.name
             
             # 顯示圖紙預覽
             for idx, drawing_image in enumerate(drawing_images):
@@ -400,34 +264,6 @@ with col_left:
                     f"尺寸: {w} × {h} px | 檔案大小: {uploaded_files[idx].size / 1024:.1f} KB"
                 )
             
-            # ==================== VLM 形狀描述 ====================
-            st.markdown("### 🔍 VLM 零件幾何描述")
-            st.caption("讓 VLM 根據上傳的多視角圖，描述它所『看到』並『組合』出來的零件形狀")
-
-            # 初始化 session_state key
-            if "vlm_shape_description" not in st.session_state:
-                st.session_state.vlm_shape_description = None
-
-            if st.button("🧠 請 VLM 描述零件形狀", use_container_width=True):
-                from app.manufacturing.extractors.vlm_client import VLMClient
-                from app.manufacturing.prompts import get_vlm_descriptive_prompt
-                _vlm = VLMClient()
-                if not _vlm.is_available():
-                    st.warning("⚠️ VLM 服務未運行 — 請確認 LM Studio 已啟動 (http://localhost:1234)")
-                else:
-                    with st.spinner("VLM 正在分析並組合多視角圖形... 請稍候"):
-                        _images = list(st.session_state.temp_file_paths)
-                        _prompt = get_vlm_descriptive_prompt()
-                        _desc = _vlm.analyze_image(_images, _prompt, response_format="text", temperature=0.1, max_tokens=1500)
-                        if _desc:
-                            st.session_state.vlm_shape_description = _desc
-                        else:
-                            st.session_state.vlm_shape_description = None
-                            st.error("VLM 未回傳結果，請確認模型已載入")
-
-            if st.session_state.vlm_shape_description:
-                with st.expander("📋 VLM 零件形狀描述報告", expanded=True):
-                    st.markdown(st.session_state.vlm_shape_description)
             st.divider()
             
             # ==================== 辨識設定 ====================
@@ -493,18 +329,18 @@ with col_left:
             st.divider()
             
             # ==================== 執行辨識 ====================
-            if st.button("🚀 開始辨識製程", type="primary", use_container_width=True):
+            if st.button("開始辨識製程", type="primary", width="stretch"):
                 with st.spinner("正在分析工程圖紙..."):
                     try:
-                        # Reconfigure pipeline with user's selected options
-                        # Pipeline was initialized early with defaults, now apply actual settings
-                        st.session_state.mfg_pipeline = ManufacturingPipeline(
-                            use_ocr=use_ocr,
-                            use_geometry=use_geometry,
-                            use_symbols=use_symbols,
-                            use_visual=False,  # DINOv2 可選 (耗時)
-                            use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
-                        )
+                        # 初始化管線
+                        if st.session_state.mfg_pipeline is None:
+                            st.session_state.mfg_pipeline = ManufacturingPipeline(
+                                use_ocr=use_ocr,
+                                use_geometry=use_geometry,
+                                use_symbols=use_symbols,
+                                use_visual=False,  # DINOv2 可選 (耗時)
+                                use_vlm=use_vlm  # VLM 視覺語言模型 (實驗功能)
+                            )
                         
                         # 執行辨識（支援雙圖模式）
                         start_time = time.time()
@@ -664,550 +500,81 @@ with col_right:
             ]
             st.session_state.editing_source_signature = signature
 
-        # ========== A-B-C 單列表單 (Single-Row Form) ==========
-        st.markdown("#### ⚙️ 製程修正表單")
-        
-        with st.form(key="correction_form", clear_on_submit=True, enter_to_submit=False):
-            col_a, col_b, col_c, col_submit = st.columns([3, 2, 4, 1])
-            
-            with col_a:
-                # 製程選單 - 格式: [代碼] 名稱
-                process_options_formatted = [
-                    f"[{pid}] {process_defs[pid].get('name', '')}"
-                    for pid in sorted(process_defs.keys())
-                ]
-                selected_process_label = st.selectbox(
-                    "A - 製程",
-                    options=process_options_formatted,
-                    help="支援搜尋代碼或名稱"
-                )
-                
-                # 手動輸入代碼（選填）- Task 4 Integration
-                manual_code = st.text_input(
-                    "手動輸入代碼或名稱（選填）",
-                    placeholder="如：X99 或 鑽孔",
-                    help="若清單中沒有要的製程，可手動輸入代碼或名稱",
-                    key="manual_code_input"
-                )
-            
-            with col_b:
-                # 動作選擇
-                action_type = st.radio(
-                    "B - 動作",
-                    options=["新增 (Add)", "移除 (Remove)"],
-                    index=0,
-                    horizontal=True
-                )
-            
-            with col_c:
-                # 理由輸入 (使用 key 來控制清空)
-                reasoning_input = st.text_input(
-                    "C - 理由（RAG關鍵數據）",
-                    placeholder="例如：BOM表分開列出，故非折彎...",
-                    help="這段理由會記錄到知識庫，供 RAG 檢索使用",
-                    key=f"reasoning_input_{st.session_state.reasoning_input_key}"
-                )
-            
-            with col_submit:
-                st.write("")  # 對齊用
-                st.write("")  # 對齊用
-                form_submitted = st.form_submit_button("▶️ 執行", use_container_width=True)
-        
-        # Enter-hook JS: 在手動輸入欄按 Enter 時，跳到理由欄
-        import streamlit.components.v1 as components
-        components.html("""
-        <script>
-        (function() {
-            function hookEnterOnManualCode() {
-                // Find all text inputs in the parent frame
-                var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
-                allInputs.forEach(function(inp) {
-                    var placeholder = inp.getAttribute('placeholder') || '';
-                    var label = '';
-                    // Try to find associated label
-                    var wrapper = inp.closest('[data-testid="stTextInput"]');
-                    if (wrapper) {
-                        var labelEl = wrapper.querySelector('label');
-                        if (labelEl) label = labelEl.textContent || '';
-                    }
-                    // Match the manual code input:
-                    // by placeholder 'X99' OR label containing '手動輸入'
-                    var isManualCodeInput = (
-                        placeholder.indexOf('X99') !== -1 ||
-                        label.indexOf('\u624b\u52d5\u8f38\u5165') !== -1
-                    );
-                    if (isManualCodeInput) {
-                        if (!inp.__enterHooked) {
-                            inp.__enterHooked = true;
-                            inp.addEventListener('keydown', function(e) {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    // Find the reasoning input (C column) and focus it
-                                    // Match by placeholder OR label text for robustness
-                                    var allInputs2 = window.parent.document.querySelectorAll('input[type="text"]');
-                                    for (var i = 0; i < allInputs2.length; i++) {
-                                        var ph2 = allInputs2[i].getAttribute('placeholder') || '';
-                                        var lbl2 = '';
-                                        var w2 = allInputs2[i].closest('[data-testid="stTextInput"]');
-                                        if (w2) {
-                                            var lEl2 = w2.querySelector('label');
-                                            if (lEl2) lbl2 = lEl2.textContent || '';
-                                        }
-                                        var isReasoningInput = (
-                                            ph2.indexOf('BOM') !== -1 ||
-                                            ph2.indexOf('\u975e\u6298\u5f4e') !== -1 ||
-                                            lbl2.indexOf('C - \u7406\u7531') !== -1 ||
-                                            lbl2.indexOf('RAG') !== -1
-                                        );
-                                        if (isReasoningInput) {
-                                            allInputs2[i].focus();
-                                            break;
-                                        }
-                                    }
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-            // Run after DOM is ready, and retry to handle dynamic rendering
-            setTimeout(hookEnterOnManualCode, 800);
-            setTimeout(hookEnterOnManualCode, 1600);
-            setTimeout(hookEnterOnManualCode, 3000);
-        })();
-        </script>
-        """, height=0)
-        # 處理表單提交 - Task 4 Smart Matching Logic
-        if form_submitted:
-            # 決定製程代碼 - 優先使用手動輸入
-            target_process_id = None
-            target_process_name = "(未知製程)"
-            is_new_process = False
-            
-            if manual_code.strip():
-                # Task 4: Smart matching logic
-                manual_input = manual_code.strip()
-                matched_id = None
-                matched_name = None
-                
-                # Try to match by ID first (normalized, case-insensitive)
-                manual_normalized = manual_input.strip().upper()
-                norm_id_map = {k.strip().upper(): k for k in process_defs.keys()}
-                if manual_normalized in norm_id_map:
-                    matched_id = norm_id_map[manual_normalized]
-                    matched_name = process_defs[matched_id].get("name", "")
-                else:
-                    # Check if input matches a process name (strip + case-insensitive)
-                    manual_lower = manual_input.strip().lower()
-                    for pid, pdata in process_defs.items():
-                        pname = pdata.get("name", "")
-                        if isinstance(pname, str) and pname.strip().lower() == manual_lower:
-                            matched_id = pid
-                            matched_name = pname
-                            break
-                if matched_id:
-                    # Found existing process
-                    target_process_id = matched_id
-                    target_process_name = matched_name
-                else:
-                    # Unknown process - store in session_state for persistent UI outside form
-                    is_new_process = True
-                    looks_like_id = len(manual_input.strip()) <= 5 and any(c.isdigit() for c in manual_input)
-                    st.session_state.pending_unknown_process = {
-                        "input": manual_input.strip(),
-                        "looks_like_id": looks_like_id,
-                        "action": "add" if "新增" in action_type else "remove",
-                        "reasoning": reasoning_input if reasoning_input else ""
-                    }
-            else:
-                # 從選單提取代碼 [I01] 雷射切割 -> I01
-                import re
-                match = re.match(r"\[([^\]]+)\]", selected_process_label)
-                if match:
-                    target_process_id = match.group(1)
-                    target_process_name = process_defs.get(target_process_id, {}).get("name", "(未知製程)")
-                else:
-                    st.error("無法解析選擇的製程")
-                    target_process_id = None
-            
-            if target_process_id and not is_new_process:
-                action = "add" if "新增" in action_type else "remove"
-                
-                # 檢查是否已在暫存區
-                existing_pending = [p for p in st.session_state.pending_changes if p["process_id"] == target_process_id and p["action"] == action]
-                
-                if existing_pending:
-                    st.warning(f"⚠️ {target_process_id} 的 {action} 操作已在待確認區")
-                else:
-                    # 新增到暫存區
-                    st.session_state.pending_changes.append({
-                        "action": action,
-                        "process_id": target_process_id,
-                        "process_name": target_process_name,
-                        "reasoning": reasoning_input if reasoning_input else "",
-                        "confidence": 1.0  # 新增時預設 100%
-                    })
-                    
-                    # 清空理由欄位 (遞增 key)
-                    st.session_state.reasoning_input_key += 1
-                    
-                    # Task 3: No st.rerun() - let Streamlit naturally refresh
-        
-        # ========== 未知製程補充 UI（持久顯示，不受 form 提交影響） ==========
-        if st.session_state.pending_unknown_process:
-            pup = st.session_state.pending_unknown_process
-            st.markdown("---")
-            st.warning(f"⚠️ 未知製程：請補充資料後加入待確認區")
-            if pup["looks_like_id"]:
-                new_name_val = st.text_input(
-                    f"請輸入製程代碼 **{pup['input']}** 的中文名稱",
-                    key="unknown_process_name_supplement",
-                    placeholder="例如: 鑽孔"
-                )
-                col_uk1, col_uk2 = st.columns([2, 1])
-                with col_uk1:
-                    if st.button("確認並加入待確認區", key="confirm_unknown_from_id", type="primary"):
-                        if new_name_val.strip():
-                            action_uk = pup["action"]
-                            existing_uk = [p for p in st.session_state.pending_changes if p["process_id"] == pup["input"].upper() and p["action"] == action_uk]
-                            if not existing_uk:
-                                st.session_state.pending_changes.append({
-                                    "action": action_uk,
-                                    "process_id": pup["input"].upper(),
-                                    "process_name": new_name_val.strip(),
-                                    "reasoning": pup["reasoning"],
-                                    "confidence": 1.0
-                                })
-                            st.session_state.pending_unknown_process = None
-                            st.session_state.reasoning_input_key += 1
-                            st.toast(f"已加入待確認區：{pup['input'].upper()} - {new_name_val.strip()}")
-                        else:
-                            st.error("請輸入製程名稱")
-                with col_uk2:
-                    if st.button("取消", key="cancel_unknown_process_id"):
-                        st.session_state.pending_unknown_process = None
-            else:
-                new_id_val = st.text_input(
-                    f"請輸入製程名稱 **{pup['input']}** 的代碼",
-                    key="unknown_process_id_supplement",
-                    placeholder="例如: F01"
-                )
-                col_uk3, col_uk4 = st.columns([2, 1])
-                with col_uk3:
-                    if st.button("確認並加入待確認區", key="confirm_unknown_from_name", type="primary"):
-                        if new_id_val.strip():
-                            action_uk = pup["action"]
-                            existing_uk = [p for p in st.session_state.pending_changes if p["process_id"] == new_id_val.strip().upper() and p["action"] == action_uk]
-                            if not existing_uk:
-                                st.session_state.pending_changes.append({
-                                    "action": action_uk,
-                                    "process_id": new_id_val.strip().upper(),
-                                    "process_name": pup["input"],
-                                    "reasoning": pup["reasoning"],
-                                    "confidence": 1.0
-                                })
-                            st.session_state.pending_unknown_process = None
-                            st.session_state.reasoning_input_key += 1
-                            st.toast(f"已加入待確認區：{new_id_val.strip().upper()} - {pup['input']}")
-                        else:
-                            st.error("請輸入製程代碼")
-                with col_uk4:
-                    if st.button("取消", key="cancel_unknown_process_name"):
-                        st.session_state.pending_unknown_process = None
+        for idx, item in enumerate(st.session_state.editing_predictions):
+            with st.container(border=True):
+                col_title, col_conf, col_action = st.columns([4, 3, 1])
 
-        # ========== 待確認區 (Pending Changes) ==========
-        if st.session_state.pending_changes:
-            st.markdown("---")
-            st.markdown("#### 待確認操作")
-            
-            with st.container():
-                st.warning(f"📝 共有 {len(st.session_state.pending_changes)} 個待處理操作")
-                
-                for idx, change in enumerate(st.session_state.pending_changes):
-                    action = change["action"]
-                    pid = change["process_id"]
-                    pname = change["process_name"]
-                    reason = change.get("reasoning", "")
-                    
-                    # 根據動作類型選擇顏色和圖標（使用更深的顏色對比）
-                    if action == "add":
-                        icon = "➕"
-                        color = "#c8e6c9"  # 更深的綠色背景
-                        text_color = "#1b5e20"  # 更深的綠色文字
-                        action_text = "新增"
-                    else:  # remove
-                        icon = "➖"
-                        color = "#ffcdd2"  # 更深的紅色背景
-                        text_color = "#b71c1c"  # 更深的紅色文字
-                        action_text = "移除"
-                    
-                    # 顯示待確認項目
-                    col_badge, col_remove = st.columns([10, 1])
-                    
-                    with col_badge:
-                        badge_html = f"""
-                        <div style='background-color:{color} !important; padding:8px 12px; border-radius:8px; margin:4px 0; 
-                                    border-left:4px solid {text_color};'>
-                            <span style='font-size:16px;'>{icon}</span>
-                            <strong style='color:{text_color} !important;'>{action_text}</strong>
-                            <span style='background-color:rgba(0,0,0,0.7) !important; color:#fff !important; padding:2px 8px; 
-                                         border-radius:12px; margin:0 8px; font-weight:bold;'>[{pid}]</span>
-                            <span style='color:{text_color} !important; font-weight:500;'>{pname}</span>
-                            {f"<span style='color:{text_color} !important; font-size:0.9em; margin-left:8px; opacity:0.8;'>({reason})</span>" if reason else ""}
-                        </div>
-                        """
-                        st.markdown(badge_html, unsafe_allow_html=True)
-                    
-                    with col_remove:
-                        if st.button("❌", key=f"remove_pending_{idx}", help="撤銷此操作"):
-                            st.session_state.pending_changes.pop(idx)
-                            pass  # No rerun needed - Streamlit will naturally refresh
-                
-                # 新增：將待確認操作套用至當前製程清單（不儲存知識庫）
-                st.markdown("---")
-                col_apply, col_clear = st.columns([3, 1])
-                with col_apply:
-                    if st.button("📋 將以上製程套用至當前清單", use_container_width=True, type="primary"):
-                        # 套用所有 pending_changes 到 editing_predictions
-                        for change in st.session_state.pending_changes:
-                            if change["action"] == "add":
-                                # 新增製程到清單（如果不存在）
-                                existing_ids = [p["process_id"] for p in st.session_state.editing_predictions]
-                                if change["process_id"] not in existing_ids:
-                                    st.session_state.editing_predictions.append({
-                                        "process_id": change["process_id"],
-                                        "process_name": change["process_name"],
-                                        "confidence": change["confidence"],
-                                        "reasoning": change["reasoning"] or "(人工新增)"
-                                    })
-                            elif change["action"] == "remove":
-                                # 從清單移除製程
-                                st.session_state.editing_predictions = [
-                                    p for p in st.session_state.editing_predictions
-                                    if p["process_id"] != change["process_id"]
-                                ]
-                        
-                        # 清空待確認清單
-                        st.session_state.pending_changes = []
-                        st.toast("✅ 已套用至當前製程清單")
-                        pass  # No rerun needed - Streamlit will naturally refresh
-                
-                with col_clear:
-                    if st.button("🗑️ 清空", use_container_width=True):
-                        st.session_state.pending_changes = []
-                        pass  # No rerun needed
-        
-        # ========== 目前製程清單（彩色標籤顯示） ==========
-        st.markdown("---")
-        if st.session_state.is_corrected:
-            st.markdown("#### 人工校正所需製程為以下")
-        else:
-            st.markdown("#### 製程預測與人工校正")
-        
-        if st.session_state.editing_predictions:
-            # 渲染彩色標籤
-            st.markdown("##### 當前製程清單")
-            
-            for idx, item in enumerate(st.session_state.editing_predictions):
-                pid = item["process_id"]
-                pname = item["process_name"]
-                confidence = item["confidence"]
-                reasoning = item.get("reasoning", "")
-                
-                # 根據信心度決定顏色（使用更深的顏色對比）
-                if confidence >= 0.7:
-                    bg_color = "#b2dfdb"  # 更深的青色背景
-                    text_color = "#004d40"  # 更深的青色文字
-                elif confidence >= 0.5:
-                    bg_color = "#ffe0b2"  # 更深的橘色背景
-                    text_color = "#e65100"  # 深橘色文字（保持）
-                else:
-                    bg_color = "#ffcdd2"  # 更深的紅色背景
-                    text_color = "#b71c1c"  # 更深的紅色文字
-                
-                # 顯示標籤與信心度調整
-                col_badge, col_conf, col_actions = st.columns([6, 2, 2])
-                
-                with col_badge:
-                    badge_html = f"""
-                    <div style='background-color:{bg_color} !important; color:{text_color} !important; padding:8px 12px; 
-                                border-radius:12px; margin:4px 0; display:inline-block; 
-                                border:2px solid {text_color};'>
-                        <strong style='color:{text_color} !important;'>[{pid}]</strong> <span style='color:{text_color} !important;'>{pname}</span>
-                        {f"<span style='font-size:0.85em; color:{text_color} !important; margin-left:8px; opacity:0.7;'>({reasoning[:30]}...)</span>" if len(reasoning) > 30 else f"<span style='font-size:0.85em; color:{text_color} !important; margin-left:8px; opacity:0.7;'>({reasoning})</span>" if reasoning else ""}
-                    </div>
-                    """
-                    st.markdown(badge_html, unsafe_allow_html=True)
-                
-                with col_conf:
-                    # 信心度調整滑桿
-                    new_conf = st.slider(
-                        "信心度",
-                        min_value=0,
-                        max_value=100,
-                        value=int(confidence * 100),
-                        step=5,
-                        key=f"conf_{pid}_{idx}",
-                        label_visibility="collapsed"
+                with col_title:
+                    st.markdown(
+                        f"**{item['process_id']} - {item['process_name']}**"
                     )
-                    st.session_state.editing_predictions[idx]["confidence"] = new_conf / 100.0
-                
-                with col_actions:
-                    st.caption(f"{int(confidence * 100)}%")
-        else:
-            st.info("目前清單為空，請使用上方表單新增製程")
 
-        st.markdown("#### 定案並學習 (Save & Learn)")
-        col_learn, col_undo = st.columns([3, 1])
-        with col_learn:
-            learn_clicked = st.button("定案並學習", use_container_width=True)
-        with col_undo:
-            undo_clicked = st.button("撤回", use_container_width=True)
+                with col_conf:
+                    st.progress(item["confidence"])
+                    st.caption(f"信心度: {item['confidence'] * 100:.1f}%")
 
-        if learn_clicked:
-            if not st.session_state.temp_file_path:
-                st.error("找不到暫存圖片，請重新上傳圖檔")
-            else:
-                from app.knowledge.manager import KnowledgeBaseManager
+                with col_action:
+                    if st.button("🗑️ 刪除", key=f"del_{idx}"):
+                        st.session_state.editing_predictions.pop(idx)
+                        st.rerun()
 
-                # ========== STEP 1: 套用所有 pending_changes 到 editing_predictions ==========
-                for change in st.session_state.pending_changes:
-                    if change["action"] == "add":
-                        # 新增製程到清單（如果不存在）
-                        existing_ids = [p["process_id"] for p in st.session_state.editing_predictions]
-                        if change["process_id"] not in existing_ids:
-                            st.session_state.editing_predictions.append({
-                                "process_id": change["process_id"],
-                                "process_name": change["process_name"],
-                                "confidence": change["confidence"],
-                                "reasoning": change["reasoning"] or "(人工新增)"
-                            })
-                    elif change["action"] == "remove":
-                        # 從清單移除製程
-                        st.session_state.editing_predictions = [
-                            p for p in st.session_state.editing_predictions
-                            if p["process_id"] != change["process_id"]
-                        ]
-
-                # Clear pending changes after applying
-                st.session_state.pending_changes = []
-
-                # ========== STEP 2: 建立最終製程清單與理由 ==========
-                final_processes = [
-                    item["process_id"]
-                    for item in st.session_state.editing_predictions
-                    if item.get("process_id")
-                ]
-
-                reasoning_lines = [
-                    f"{item['process_id']}: {item.get('reasoning', '')}"
-                    for item in st.session_state.editing_predictions
-                    if item.get("process_id")
-                ]
-                
-                # ========== STEP 3: 保存到知識庫 (Task 2: Multi-image support) ==========
-                # Get all uploaded images (if multiple)
-                additional_images = None
-                if hasattr(st.session_state, 'temp_file_paths') and len(st.session_state.temp_file_paths) > 1:
-                    additional_images = st.session_state.temp_file_paths
-
-                kb_manager = KnowledgeBaseManager()
-                kb_manager.add_entry(
-                    image_path=st.session_state.temp_file_path,
-                    features=result.features.vlm_analysis or {},
-                    correct_processes=final_processes,
-                    reasoning="\n".join(reasoning_lines),
-                    additional_images=additional_images
+                updated_reasoning = st.text_area(
+                    "判斷依據 (Reasoning)",
+                    value=item["reasoning"],
+                    height=100,
+                    key=f"reason_{idx}"
                 )
-                
-                # Show success message with count
-                img_count = len(additional_images) if additional_images else 1
-                st.toast(f"已保存至知識庫 ({img_count} 張圖片)")
-                st.session_state.kb_save_success = True
-                st.session_state.is_corrected = True
-        
-        if undo_clicked:
-            # Clear all pending changes
-            st.session_state.pending_changes = []
-            pass  # No rerun needed - Streamlit will naturally refresh
-        
-        # Task 5: Post-learning confirmation dialog
-        if st.session_state.get('kb_save_success', False):
-            st.success("✅ 已成功保存至知識庫！")
-            
-            # Ask if user wants to re-run recognition
-            st.info("💡 知識庫已更新，是否需要重新辨識以使用最新的知識庫？")
-            
-            col_rerun1, col_rerun2, col_rerun3 = st.columns([1, 1, 2])
-            with col_rerun1:
-                if st.button("🔄 是，重新辨識", type="primary", use_container_width=True):
-                    # Re-run recognition with stored images and settings
-                    if st.session_state.uploaded_drawing is not None:
-                        with st.spinner("正在使用更新後的知識庫重新辨識..."):
-                            try:
-                                # Get stored settings
-                                settings = st.session_state.get('last_settings', {})
-                                use_ocr = settings.get('use_ocr', False)
-                                use_geometry = settings.get('use_geometry', True)
-                                use_symbols = settings.get('use_symbols', True)
-                                use_vlm = settings.get('use_vlm', False)
-                                
-                                # Re-initialize pipeline with same settings
-                                st.session_state.mfg_pipeline = ManufacturingPipeline(
-                                    use_ocr=use_ocr,
-                                    use_geometry=use_geometry,
-                                    use_symbols=use_symbols,
-                                    use_visual=False,
-                                    use_vlm=use_vlm
-                                )
-                                
-                                # Re-run recognition
-                                start_time = time.time()
-                                new_result = st.session_state.mfg_pipeline.recognize(
-                                    st.session_state.uploaded_drawing,
-                                    parent_image=st.session_state.get('parent_drawing'),
-                                    top_n=None,
-                                    min_confidence=st.session_state.min_confidence,
-                                    frequency_filter=st.session_state.get('frequency_filters'),
-                                    use_rag=st.session_state.use_rag,
-                                    child_images=st.session_state.get('uploaded_drawings', [])
-                                )
-                                elapsed = time.time() - start_time
-                                
-                                # Update results and editing predictions
-                                st.session_state.recognition_result = new_result
-                                st.session_state.editing_predictions = [
-                                    {
-                                        "process_id": pred.process_id,
-                                        "process_name": pred.name,
-                                        "confidence": pred.confidence,
-                                        "reasoning": pred.reasoning if pred.reasoning else ", ".join(
-                                            pred.matched_text + pred.matched_symbols + pred.matched_geometry
-                                        )
-                                    }
-                                    for pred in new_result.predictions
-                                ]
-                                
-                                # Clear save success flag
-                                st.session_state.kb_save_success = False
-                                
-                                st.success(f"✅ 重新辨識完成！處理時間: {elapsed:.2f} 秒")
-                                st.rerun()
-                                
-                            except Exception as e:
-                                st.error(f"重新辨識時發生錯誤: {str(e)}")
-                                with st.expander("查看錯誤詳情"):
-                                    import traceback
-                                    st.code(traceback.format_exc())
-                    else:
-                        st.error("找不到上傳的圖片，請重新上傳")
-            
-            with col_rerun2:
-                if st.button("❌ 不需要", use_container_width=True):
-                    # Clear the flag without re-running
-                    st.session_state.kb_save_success = False
-                    pass  # No rerun needed - Streamlit will naturally refresh
+                item["reasoning"] = updated_reasoning
+
+        st.markdown("#### 新增製程")
+        col_add1, col_add2 = st.columns([4, 1])
+        with col_add1:
+            selected_process = st.selectbox(
+                "選擇製程",
+                options=options,
+                key="add_process_select"
+            )
+        with col_add2:
+            if st.button("➕ 加入", key="add_process_button"):
+                new_id = _extract_id(selected_process)
+                if new_id:
+                    new_name = process_defs.get(new_id, {}).get("name", "")
+                    st.session_state.editing_predictions.append({
+                        "process_id": new_id,
+                        "process_name": new_name,
+                        "confidence": 0.5,
+                        "reasoning": ""
+                    })
+                    st.rerun()
+
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("保存至知識庫"):
+                if not st.session_state.temp_file_path:
+                    st.error("找不到暫存圖片，請重新上傳圖檔")
+                else:
+                    from app.knowledge.manager import KnowledgeBaseManager
+
+                    enabled_rows = st.session_state.editing_predictions
+                    correct_processes = [
+                        item["process_id"]
+                        for item in enabled_rows
+                        if item.get("process_id")
+                    ]
+                    reasoning_lines = [
+                        f"{item['process_id']}: {item.get('reasoning', '')}"
+                        for item in enabled_rows
+                        if item.get("process_id")
+                    ]
+
+                    kb_manager = KnowledgeBaseManager()
+                    kb_manager.add_entry(
+                        image_path=st.session_state.temp_file_path,
+                        features=result.features.vlm_analysis or {},
+                        correct_processes=correct_processes,
+                        reasoning="\n".join(reasoning_lines)
+                    )
+                    st.toast("已保存至知識庫")
 
         if st.session_state.use_rag and result.rag_references:
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
@@ -1430,25 +797,15 @@ with tab2:
     st.header("知識庫維護 (修正過去的錯誤)")
 
     from app.knowledge.manager import KnowledgeBaseManager
-    import json
 
     kb_manager = KnowledgeBaseManager()
     entries = kb_manager.db
 
-    # Get process IDs - either from pipeline or directly from JSON
     pipeline = st.session_state.mfg_pipeline
     if pipeline is not None:
         all_process_ids = list(pipeline.decision_engine.processes.keys())
     else:
-        # Pipeline not initialized - load directly from process_lib_v2.json
-        try:
-            process_lib_path = "app/manufacturing/process_lib_v2.json"
-            with open(process_lib_path, 'r', encoding='utf-8') as f:
-                process_data = json.load(f)
-                all_process_ids = list(process_data.get('processes', {}).keys())
-        except Exception as e:
-            st.error(f"無法載入製程清單: {e}")
-            all_process_ids = []
+        all_process_ids = []
 
     if not entries:
         st.info("目前尚無知識庫條目")
@@ -1457,14 +814,7 @@ with tab2:
             with st.expander(f"ID: {entry['id']} - {entry['features'].get('shape_description')}"):
                 col_a, col_b = st.columns(2)
                 with col_a:
-                    # 檢查圖片檔案是否存在
-                    img_path = entry.get('image_rel_path', '')
-                    if img_path and os.path.exists(img_path):
-                        st.image(img_path, caption="原始圖檔")
-                    else:
-                        st.warning("⚠️ 原始圖檔已被刪除或移動")
-                        if img_path:
-                            st.caption(f"原路徑: {img_path}")
+                    st.image(entry['image_rel_path'], caption="原始圖檔")
                 with col_b:
                     new_processes = st.multiselect(
                         "修正製程",

@@ -47,8 +47,8 @@ class ManufacturingPipeline:
         
         # Access predictions
         for pred in result.predictions:
-            print(f"{pred.name}: {pred.confidence:.2f}")
-            print(f"  Evidence: {pred.reasoning}")
+            print(f"{pred.process_name}: {pred.confidence:.2f}")
+            print(f"  Evidence: {pred.evidence}")
     """
     
     def __init__(
@@ -289,57 +289,19 @@ class ManufacturingPipeline:
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
 
-        # RAG retrieval (works with or without VLM)
-        if use_rag:
+        # RAG retrieval based on initial VLM analysis
+        if use_rag and features.vlm_analysis:
             try:
                 from app.knowledge.manager import KnowledgeBaseManager
 
                 kb = KnowledgeBaseManager()
-                
-                # Build retrieval features from available sources
-                retrieval_features = {}
-                if features.vlm_analysis:
-                    # Prefer VLM analysis if available
-                    retrieval_features = features.vlm_analysis
-                else:
-                    # Fallback: Build features from basic extractors
-                    retrieval_features = {
-                        "shape_description": "",  # No shape description without VLM
-                        "detected_features": {
-                            "geometry": [],
-                            "symbols": [],
-                            "text_annotations": []
-                        }
-                    }
-                    
-                    # Add geometry features
-                    if features.geometry:
-                        geo_list = []
-                        if features.geometry.bend_lines and len(features.geometry.bend_lines) > 0:
-                            geo_list.append(f"折彎線 {len(features.geometry.bend_lines)} 條")
-                        if features.geometry.circles and len(features.geometry.circles) > 0:
-                            geo_list.append(f"圓形/孔洞 {len(features.geometry.circles)} 個")
-                        retrieval_features["detected_features"]["geometry"] = geo_list
-                    
-                    # Add symbol features
-                    if features.symbols:
-                        retrieval_features["detected_features"]["symbols"] = [
-                            s.symbol_type for s in features.symbols
-                        ]
-                    
-                    # Add OCR text
-                    if features.ocr_text:
-                        retrieval_features["detected_features"]["text_annotations"] = [
-                            features.ocr_text[:200]  # Limit text length
-                        ]
-                
-                similar_cases = kb.retrieve_similar(retrieval_features, top_k=3)
+                similar_cases = kb.retrieve_similar(features.vlm_analysis, top_k=3)
                 if similar_cases:
                     rag_references = similar_cases
                     rag_context_text = "\n".join(
                         [
                             (
-                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description', '未知')}]，"
+                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description')}]，"
                                 f"特徵{case['features'].get('detected_features', {}).get('geometry')}，"
                                 f"正確製程{case['correct_processes']}，"
                                 f"理由：{case['reasoning']}"
