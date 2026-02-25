@@ -612,11 +612,12 @@ Step 3: 根據代碼表匹配製程。
 # Export main classes and functions
 def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     """
-    Generate a pure plain-text descriptive prompt for VLM geometry analysis.
+    Generate a structured descriptive prompt for VLM geometry analysis.
 
-    This prompt instructs the VLM to output ONLY a structured English description
-    using 4 fixed headings. It explicitly forbids JSON output, process IDs, and
-    specific dimension hallucinations (e.g. thread sizes like M3/M4).
+    Includes:
+    - ALLOWED VOCABULARY (Controlled Vocabulary): ~100 standard sheet-metal terms
+    - CONFIDENCE TAGGING rules: VLM must wrap entities with <green>, <orange>, or <red>
+    - 4-section output format for structured geometry description
 
     Args:
         bom_context: Plain-text BOM / material facts confirmed by the user.
@@ -643,8 +644,56 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
             "=== END OF KNOWN FACTS ===\n\n"
         )
 
+    # ── Controlled Vocabulary (受控詞彙表) ──────────────────────────────────────
+    controlled_vocab = (
+        "=== ALLOWED VOCABULARY (受控詞彙表) — MANDATORY ===\n"
+        "You MUST describe geometry using ONLY the terms listed below.\n"
+        "Do NOT invent, abbreviate, or paraphrase these terms.\n"
+        "Compose sentences by combining these terms (e.g. 'I see an L-shaped bracket\n"
+        " with two Thru-holes on the flange.').\n\n"
+        "[1] OVERALL SHAPES & STRUCTURES]\n"
+        "  Flat Plate, Rectangular Base, L-shaped Bracket, U-shaped Bracket / Channel,\n"
+        "  Z-shaped Bracket, Hat Channel, Box / Enclosure, Chassis, Cover / Panel,\n"
+        "  Welded Assembly, Single-piece Sheet Metal\n\n"
+        "[2] BENDING & FORMING FEATURES]\n"
+        "  Flange, Hem, Return Flange, Offset / Joggle, Rib, Gusset,\n"
+        "  Louver, Dimple, Lance / Bridge, Emboss\n\n"
+        "[3] HOLES & CUTOUTS]\n"
+        "  Thru-hole, Blind hole, Threaded hole / Tapped hole, Countersink / CSK,\n"
+        "  Counterbore / CBORE, Slotted hole / Slot, Keyhole,\n"
+        "  Extruded hole / Burring, Half-sheared hole, Notch, Cutout / Window\n\n"
+        "[4] EDGES & DETAILS]\n"
+        "  Chamfer, Fillet / Radius, Sharp corner, Burr\n\n"
+        "[5] WELDING & HARDWARE]\n"
+        "  Spot Weld, Seam Weld, Fillet Weld, Plug Weld,\n"
+        "  PEM Nut / Press-in Nut, Standoff, Weld Nut, Rivet\n\n"
+        "[6] SURFACE & MATERIAL]\n"
+        "  Stainless Steel / SUS, Galvanized Steel / SECC / SGCC,\n"
+        "  Cold Rolled Steel / SPCC, Aluminum / AL,\n"
+        "  Thickness / t, Symmetry / Symmetrical\n"
+        "=== END OF ALLOWED VOCABULARY ===\n\n"
+    )
+
+    # ── Confidence Tagging Rules (信心度標籤規則) ─────────────────────────────────
+    confidence_rules = (
+        "=== CONFIDENCE TAGGING RULES (MANDATORY) ===\n"
+        "For every descriptive entity (shape name, feature name, or material),\n"
+        "you MUST wrap it with one of the following XML confidence tags:\n\n"
+        "  <green>...</green>   → High confidence: clearly visible, no doubt.\n"
+        "  <orange>...</orange> → Medium confidence: likely correct but partially obscured.\n"
+        "  <red>...</red>       → Low confidence: uncertain or guessed.\n\n"
+        "EXAMPLES:\n"
+        "  'I see a <green>L-shaped Bracket</green> with <green>two Thru-holes</green>\n"
+        "   on the <orange>Flange</orange> and a possible <red>Spot Weld</red>.'\n"
+        "RULE: Every noun that names a geometry or feature MUST be tagged.\n"
+        "      Plain untagged geometry nouns are a CRITICAL ERROR.\n"
+        "=== END OF CONFIDENCE TAGGING RULES ===\n\n"
+    )
+
     return (
         f"{known_facts_block}"
+        f"{controlled_vocab}"
+        f"{confidence_rules}"
         "You are a mechanical engineer analyzing 2D engineering drawings.\n"
         "Your task: describe the 3D geometry of the part shown across all provided views.\n\n"
         "STRICT OUTPUT RULES:\n"
@@ -652,14 +701,15 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "- DO NOT output JSON. DO NOT use {{ or }}.\n"
         "- DO NOT recommend manufacturing process IDs (e.g. C01, D01).\n"
         "- DO NOT invent specific dimensions (thread sizes, hole counts) not visible in the drawings.\n"
+        "- EVERY geometry/feature noun MUST be wrapped with a confidence tag (<green>, <orange>, or <red>).\n"
+        "- Use ONLY vocabulary from the ALLOWED VOCABULARY list above.\n"
         "- If a feature is unclear, write: [unclear from available views].\n\n"
         "OUTPUT FORMAT (use exactly these 4 headings):\n\n"
         "### 1. OVERALL 3D SHAPE\n"
-        "Describe the primary 3D form: flat plate, L-bracket, U-channel, box enclosure,"
-        " cylinder, or compound shape. State the dominant axes and overall envelope.\n\n"
+        "Describe the primary 3D form using terms from [1] OVERALL SHAPES. State the dominant axes and overall envelope.\n\n"
         "### 2. COMPONENT STRUCTURE\n"
-        "List each distinct sub-region or feature body: flanges, webs, tabs, bosses,"
-        " ribs, gussets. Include confirmed material or thickness from KNOWN FACTS if available.\n\n"
+        "List each distinct sub-region or feature body using terms from [2] and [5].\n"
+        " Include confirmed material or thickness from KNOWN FACTS if available.\n\n"
         "### 3. VIEW-BY-VIEW GEOMETRY\n"
         "For each provided view (Top, Front, Side, Detail/Iso), describe what geometry"
         " is visible: outline shape, visible edges, bend radii, hole patterns, cutouts."
