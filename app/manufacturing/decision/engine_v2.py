@@ -234,7 +234,7 @@ class DecisionEngineV2:
         
         # Get VLM suggested process IDs and their confidence scores
         vlm_suggestions = {}
-        if features.vlm_analysis:
+        if features.vlm_analysis and isinstance(features.vlm_analysis, dict):
             suggested_ids = features.vlm_analysis.get("suggested_process_ids", [])
             confidence_scores = features.vlm_analysis.get("confidence_scores", {})
             vlm_suggestions = {pid: confidence_scores.get(pid, 0.7) for pid in suggested_ids}
