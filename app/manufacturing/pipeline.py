@@ -114,12 +114,9 @@ class ManufacturingPipeline:
                     self.vlm_client = None
                     self.use_vlm = False
                 else:
-                    # Load VLM prompt template
-                    self.vlm_prompt_template = EngineeringPrompts.get_process_recognition_prompt(
-                        include_examples=True,
-                        language="zh-TW",
-                        detail_level="standard"
-                    )
+                    # Prompt template is no longer used; get_vlm_descriptive_prompt()
+                    # is called at analysis time so the latest vocabulary is always used.
+                    self.vlm_prompt_template = True  # marker: VLM is ready
                     print("Info: VLM service connected successfully")
             except Exception as e:
                 print(f"Warning: Failed to initialize VLM client: {e}")
@@ -459,7 +456,7 @@ class ManufacturingPipeline:
         
         # VLM analysis (NEW!)
         vlm_analysis = None
-        if self.use_vlm and self.vlm_client and self.vlm_prompt_template:
+        if self.use_vlm and self.vlm_client:
             try:
                 # Use image_path if available, otherwise use numpy array
                 input_image: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]]
@@ -469,7 +466,7 @@ class ManufacturingPipeline:
                     input_image = image_path
                 else:
                     input_image = image
-                prompt = prompt_override or self.vlm_prompt_template.user_prompt
+                prompt = prompt_override or get_vlm_descriptive_prompt()
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,
                     prompt=prompt,
