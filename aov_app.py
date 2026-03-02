@@ -543,7 +543,6 @@ with col_right:
 
         corrected_text = st.text_area(
             "✏️ 人類專家修正區 (請修正 AI 的錯誤描述)",
-            value=st.session_state.get('hitl_corrected_text', ''),
             height=200,
             placeholder="AI 的描述將自動填入此處，您可直接修改...",
             key="hitl_corrected_text",
