@@ -615,7 +615,7 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     Generate a structured descriptive prompt for VLM geometry analysis.
 
     Includes:
-    - ALLOWED VOCABULARY (Controlled Vocabulary): ~100 standard sheet-metal terms
+    - ALLOWED VOCABULARY (Controlled Vocabulary): 6 categories of standard sheet-metal terms
     - CONFIDENCE TAGGING rules: VLM must wrap entities with <green>, <orange>, or <red>
     - 4-section output format for structured geometry description
 
@@ -649,25 +649,33 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "=== ALLOWED VOCABULARY (受控詞彙表) — MANDATORY ===\n"
         "You MUST describe geometry using ONLY the terms listed below.\n"
         "Do NOT invent, abbreviate, or paraphrase these terms.\n"
-        "Compose sentences by combining these terms (e.g. 'I see an L-shaped bracket\n"
-        " with two Thru-holes on the flange.').\n\n"
-        "[1] OVERALL SHAPES & STRUCTURES]\n"
-        "  Flat Plate, Rectangular Base, L-shaped Bracket, U-shaped Bracket / Channel,\n"
-        "  Z-shaped Bracket, Hat Channel, Box / Enclosure, Chassis, Cover / Panel,\n"
+        "Compose sentences by combining these terms "
+        "(e.g. 'I see an L-shaped Bracket with two Thru-holes on the Flange.').\n\n"
+
+        "[1] OVERALL SHAPES & STRUCTURES\n"
+        "  Flat Plate, Rectangular Base, L-shaped Bracket,\n"
+        "  U-shaped Bracket / Channel, Z-shaped Bracket, Hat Channel,\n"
+        "  Box / Enclosure, Chassis, Cover / Panel,\n"
         "  Welded Assembly, Single-piece Sheet Metal\n\n"
-        "[2] BENDING & FORMING FEATURES]\n"
+
+        "[2] BENDING & FORMING FEATURES\n"
         "  Flange, Hem, Return Flange, Offset / Joggle, Rib, Gusset,\n"
         "  Louver, Dimple, Lance / Bridge, Emboss\n\n"
-        "[3] HOLES & CUTOUTS]\n"
-        "  Thru-hole, Blind hole, Threaded hole / Tapped hole, Countersink / CSK,\n"
-        "  Counterbore / CBORE, Slotted hole / Slot, Keyhole,\n"
-        "  Extruded hole / Burring, Half-sheared hole, Notch, Cutout / Window\n\n"
-        "[4] EDGES & DETAILS]\n"
+
+        "[3] HOLES & CUTOUTS\n"
+        "  Thru-hole, Blind hole, Threaded hole / Tapped hole,\n"
+        "  Countersink / CSK, Counterbore / CBORE, Slotted hole / Slot,\n"
+        "  Keyhole, Extruded hole / Burring, Half-sheared hole,\n"
+        "  Notch, Cutout / Window\n\n"
+
+        "[4] EDGES & DETAILS\n"
         "  Chamfer, Fillet / Radius, Sharp corner, Burr\n\n"
-        "[5] WELDING & HARDWARE]\n"
+
+        "[5] WELDING & HARDWARE\n"
         "  Spot Weld, Seam Weld, Fillet Weld, Plug Weld,\n"
         "  PEM Nut / Press-in Nut, Standoff, Weld Nut, Rivet\n\n"
-        "[6] SURFACE & MATERIAL]\n"
+
+        "[6] SURFACE & MATERIAL\n"
         "  Stainless Steel / SUS, Galvanized Steel / SECC / SGCC,\n"
         "  Cold Rolled Steel / SPCC, Aluminum / AL,\n"
         "  Thickness / t, Symmetry / Symmetrical\n"
