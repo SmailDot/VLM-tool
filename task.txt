@@ -1,157 +1,37 @@
 {
-  "task_title": "實作 VLM 受控工程詞彙表、信心度色彩標註與 HITL RAG 修正機制",
-  "objective": "為了解決 VLM 創造非標準工程術語的幻覺，引入『受控詞彙表 (Controlled Vocabulary)』與『信心度標籤 (Confidence Tags)』。前端需將標籤渲染為紅橘綠三色，並提供人類二次修改介面，最終將修正後的描述存入 RAG 知識庫。注意：顏色調整請把Streamlit的影響考慮進去，避免造成前端白底白字的問題產生",
+  "task_title": "修復 HITL Session State 衝突與 VLM 輕量化精準 Prompt (Few-Shot & 尺寸防護)",
+  "objective": "1. 修復 Streamlit 文字框雙重賦值的警告。 2. 全面改寫 VLM Prompt，採用『Few-Shot 範例引導』取代複雜規則。 3. 限制 20 個核心工程詞彙，並加入『嚴格禁止測量尺寸』的防護機制，確保小模型輸出正確的顏色標籤且不產生幻覺。",
   "target_files": [
-    "app/manufacturing/prompts.py",
     "aov_app.py",
-    "app/knowledge/manager.py"
+    "app/manufacturing/prompts.py"
   ],
   "implementation_steps": [
     {
       "step": 1,
-      "module": "app/manufacturing/prompts.py",
-      "description": "修改 `get_vlm_descriptive_prompt`。1. 新增『ALLOWED VOCABULARY』區塊，列出標準板金術語 (如: Rectangular Base, L-shaped bracket, U-shaped bracket, Flange, Rib, Chamfer, Fillet, Thru-hole, Welded assembly)，大概上百種常用術語。嚴格要求 VLM 只能使用這些術語來拼湊描述結構(如：I saw an L-shaped bracket，There are two through holes on the side.)。2. 新增『CONFIDENCE TAGGING』規則：要求 VLM 必須用 XML 標籤包裝其描述實體。有把握的用 `<green>...</green>`, 中等信心的用 `<orange>...</orange>`, 不確定或猜測的用 `<red>...</red>`。"
+      "module": "aov_app.py",
+      "description": "修復 Session State 雙重賦值警告 (Warning)。找到渲染 HITL 修正區的 `st.text_area`。移除其 `value=` 參數。正確的做法是：在顯示 text_area 之前，檢查 `if 'hitl_text' not in st.session_state: st.session_state.hitl_text = raw_vlm_description`。然後直接呼叫 `st.text_area('專家修正區', key='hitl_text')`，讓 Streamlit 完全透過 session_state 來管理該元件的值。"
     },
     {
       "step": 2,
-      "module": "aov_app.py",
-      "description": "在前端實作『信心度色彩渲染器』。當 pipeline 回傳 VLM 的原始字串 (`raw_vlm_description`) 時，使用 Python 的正則表達式 (re) 替換這些 XML 標籤為 HTML span。例如：`<green>text</green>` 轉為 `<span style='color:#00c853; font-weight:bold;'>text</span>`；`<orange>` 轉為橙色；`<red>` 轉為紅色 (`#d50000`)。使用 `st.markdown(..., unsafe_allow_html=True)` 渲染這段帶有顏色的預覽報告。"
+      "module": "app/manufacturing/prompts.py",
+      "description": "精簡 `ALLOWED VOCABULARY`，只保留視覺特徵，不要給加工指示。替換為：『Shapes: Rectangular Base, L-shaped Bracket, U-shaped Channel. Features: Flange (bent edge), Rib (support bump), Chamfer (cut corner), Fillet (rounded corner). Details: Thru-hole, Threaded hole, Extruded hole (Burring), Notch. Symbols: Weld symbol.』"
     },
     {
       "step": 3,
-      "module": "aov_app.py",
-      "description": "實作 Human-in-the-Loop (HITL) 編輯區。在色彩預覽區下方，提供一個 `st.text_area`，讓使用者可以看到並編輯含有標籤的原始字串 (或是去除標籤的純文字)。標題為『✏️ 人類專家修正區 (請修正 AI 的錯誤描述)』。"
+      "module": "app/manufacturing/prompts.py",
+      "description": "新增強烈的尺寸防護指令 (Anti-Dimension Hallucination)。在 Prompt 中加入：『CRITICAL RULE: DO NOT attempt to read or guess specific dimensional values (like 110mm, 30mm, 55mm). You MUST ONLY describe the relative shapes. Writing specific millimeter measurements is a CRITICAL ERROR.』"
     },
     {
       "step": 4,
-      "module": "aov_app.py & app/knowledge/manager.py",
-      "description": "實作『💾 儲存至 RAG 知識庫』功能。當使用者按下後，呼叫 `knowledge_manager.add_entry` (或對應的儲存函式)，將使用者『最終修正後的完美文字』連同目前的圖片特徵一起寫入 `knowledge_db.json`。並彈出小提醒 `st.toast` 提示『敘述已成功寫入 RAG 知識庫&零件圖庫已更新！』。"
+      "module": "app/manufacturing/prompts.py",
+      "description": "移除原本冗長的『CONFIDENCE TAGGING RULES』，改為提供明確的 Few-Shot 輸出範本，讓模型直接模仿。加入以下內容：\n『OUTPUT TEMPLATE (You MUST strictly mimic this format and DO NOT output my rules):\n### 1. OVERALL 3D SHAPE\nThis is a <green>L-shaped Bracket</green>.\n### 2. COMPONENT STRUCTURE\nIt consists of a <green>Rectangular Base</green> and a <orange>Flange</orange>...』"
     }
   ],
   "acceptance_criteria": [
-    "VLM 的 Prompt 包含了標準工程詞彙表，將不再輸出/創造非標準的奇怪詞彙。",
-    "前端成功將 VLM 輸出的 `<green>`, `<orange>`, `<red>` 標籤渲染為對應顏色的文字。",
-    "使用者可以在 text_area 內自由修改 VLM 的描述。",
-    "點擊儲存按鈕後，使用者修改後的正確描述能成功被寫入 JSON 知識庫中。"
+    "前端 Streamlit 介面不再出現 `created with a default value but also had its value set via the Session State API` 的警告。",
+    "使用者在 text_area 中修改的內容能穩定保留，不會因為重整畫面而消失。",
+    "VLM 的輸出文字中，成功包含 `<green>` 等 XML 標籤，讓前端成功渲染出紅綠橘等顏色。",
+    "VLM 的報告中不再包含『110mm』、『50mm』等具體尺寸的幻覺測量數據。",
+    "VLM 不會再把 Prompt 裡面的規則或大綱當作報告內容印出來。"
   ]
 }
-
-板金與工程標準受控詞彙表 (Controlled Vocabulary)
-你可以將這些詞彙依照分類，整理成一份清單，準備寫入 VLM 的 Prompt 或是知識庫中，一定要能讓VLM能吃到這些資料：
-
-1. 整體形狀與結構 (Overall Shapes & Structures)
-這是用來讓 VLM 回答 
-1. OVERALL 3D SHAPE 的專用詞：
-
-Flat Plate (平板)
-
-Rectangular Base (長方底座)
-
-L-shaped Bracket (L型支架/角鋼)
-
-U-shaped Bracket / Channel (U型支架/槽鋼)
-
-Z-shaped Bracket (Z型支架)
-
-Hat Channel (帽型槽/Ω型鋼)
-
-Box / Enclosure (箱體/機殼)
-
-Chassis (底盤)
-
-Cover / Panel (蓋板/面板)
-
-Welded Assembly (焊接組合件 - 極重要，用來區分一體成形)
-
-Single-piece Sheet Metal (一體成形板金件)
-
-2. 折彎與成形特徵 (Bending & Forming Features)
-這是板金的靈魂，VLM 最容易把這些看成「圓柱」或「方塊」：
-
-Flange (折邊/凸緣 - 最常用的邊緣折彎)
-
-Hem (壓邊/平折 - 把邊緣對折壓平以防割手)
-
-Return Flange (回折邊/U型折)
-
-Offset / Joggle (段差/階梯折彎)
-
-Rib (加強肋/壓條 - 用來增加強度的長條狀凸起)
-
-Gusset (角板/支撐肋 - 通常焊在 L 型直角處的三角形板)
-
-Louver (百葉窗/散熱孔)
-
-Dimple (凸點/定位點)
-
-Lance / Bridge (切起/橋形切起 - 切開一面並凸起的特徵)
-
-Emboss (浮凸/壓花)
-
-3. 孔洞與切口特徵 (Holes & Cutouts)
-這是 VLM 判斷雷射切割、NCT 沖床或攻牙的關鍵：
-
-Thru-hole (貫穿孔/通孔)
-
-Blind hole (盲孔)
-
-Threaded hole / Tapped hole (攻牙孔 - 看到 M3, M4 時使用)
-
-Countersink / CSK (沉頭孔 - V 型漏斗狀的孔，用於平頭螺絲)
-
-Counterbore / CBORE (柱坑孔/平底沉孔)
-
-Slotted hole / Slot (長條孔/腰形孔)
-
-Keyhole (鑰匙孔)
-
-Extruded hole / Burring (抽牙孔/火山口 - NCT 壓出來的立體孔)
-
-Half-sheared hole (半沖孔/半剪 - 用來定位的未打穿孔)
-
-Notch (缺口/豁口 - 邊緣的開口)
-
-Cutout / Window (挖空/視窗 - 板材中間的大型開孔)
-
-4. 邊緣處理與細節 (Edges & Details)
-Chamfer (倒角 - 通常標示為 C3, C5)
-
-Fillet / Radius (圓角 - 通常標示為 R3, R5)
-
-Sharp corner (銳角)
-
-Burr (毛邊)
-
-5. 焊接與五金結合 (Welding & Hardware)
-如果 VLM 看到圖面上有特定的符號或形狀：
-
-Spot Weld (點焊 - 圖面常表現為一排十字符號或圓點)
-
-Seam Weld (線焊/連續焊)
-
-Fillet Weld (角焊 - 通常在直角交接處，標示為△)
-
-Plug Weld (塞焊)
-
-PEM Nut / Press-in Nut (壓鉚螺母)
-
-Standoff (支柱/隔離柱)
-
-Weld Nut (點焊螺母)
-
-Rivet (鉚釘)
-
-6. 表面與材質相關詞彙 (Surface & Material)
-(這些通常是由 OCR 抓取 BOM 表得出，但可以放入詞彙庫讓 VLM 組合句子)
-
-Stainless Steel / SUS (不鏽鋼)
-
-Galvanized Steel / SECC / SGCC (鍍鋅鋼板)
-
-Cold Rolled Steel / SPCC (冷軋鋼板)
-
-Aluminum / AL (鋁板)
-
-Thickness / t (板厚)
-
-Symmetry / Symmetrical (對稱)
