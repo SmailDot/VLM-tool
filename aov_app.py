@@ -34,44 +34,36 @@ from components.process_manager import render_process_manager
 from components.sidebar import render_recognition_sidebar
 
 # VLM 信心度色彩渲染器 helper
-import re as _re
+import re
 
 
-def _render_vlm_with_confidence(raw_text: str) -> str:
+def format_streamlit_colors(text: str) -> str:
     """
     將 VLM 輸出的 <green>/<orange>/<red> XML 標籤
-    替換為對應顏色的 HTML span，供 st.markdown 渲染。
+    轉換為 Streamlit 原生顏色語法（加粗體），不需要 unsafe_allow_html。
 
     Args:
-        raw_text: VLM 原始輸出字串（含 XML 信心度標籤）。
+        text: VLM 原始輸出字串（含 XML 信心度標籤）。
 
     Returns:
-        str: 替換後的 HTML 字串。
+        str: 替換後的 Streamlit markdown 字串。
     """
-    text = _re.sub(
-        r"<green>(.*?)</green>",
-        r"<span style='color:#00c853;font-weight:bold;'>\1</span>",
-        raw_text,
-        flags=_re.DOTALL
-    )
-    text = _re.sub(
-        r"<orange>(.*?)</orange>",
-        r"<span style='color:#ff6d00;font-weight:bold;'>\1</span>",
-        text,
-        flags=_re.DOTALL
-    )
-    text = _re.sub(
-        r"<red>(.*?)</red>",
-        r"<span style='color:#d50000;font-weight:bold;'>\1</span>",
-        text,
-        flags=_re.DOTALL
-    )
+    if not text:
+        return ""
+    # 將 XML 標籤轉換為 Streamlit 原生顏色語法 (加粗體)
+    text = re.sub(r'<green>(.*?)</green>', r':green[**\1**]', text)
+    text = re.sub(r'<orange>(.*?)</orange>', r':orange[**\1**]', text)
+    text = re.sub(r'<red>(.*?)</red>', r':red[**\1**]', text)
     return text
+
+
+# 相容性別名，保留舊呼叫點可繼續使用
+_render_vlm_with_confidence = format_streamlit_colors
 
 
 def _strip_confidence_tags(raw_text: str) -> str:
     """去除所有信心度 XML 標籤，返回純文字。"""
-    return _re.sub(r"</?(?:green|orange|red)>", "", raw_text)
+    return re.sub(r"</?(?:green|orange|red)>", "", raw_text)
 # ==================== Page Config ====================
 
 st.set_page_config(
@@ -523,15 +515,10 @@ with col_right:
                 "🟢 高信心，🟠 中信心，🔴 低信心 / 檢測不確定"
             )
 
-            # 將 XML 標籤渲染為彩色 HTML（深色背景避免白底白字）
-            rendered_html = _render_vlm_with_confidence(vlm_desc)
-            st.markdown(
-                "<div style='background:#1e2a3a;border-left:4px solid #1f77b4;"
-                "padding:1rem 1.2rem;border-radius:4px;font-size:1rem;"
-                "line-height:1.8;white-space:pre-wrap;color:#e8edf2;'>"
-                f"{rendered_html}</div>",
-                unsafe_allow_html=True
-            )
+            # 使用 Streamlit 原生顏色語法渲染（不需要 unsafe_allow_html）
+            colored_report = format_streamlit_colors(vlm_desc)
+            st.markdown("###  VLM 視覺描述預覽")
+            st.markdown(colored_report)
         else:
             st.info("⚠️ VLM 未返回效描述。請確認：① LM Studio 已啟動 ② 左侧「辨識設定」已勾選 VLM")
 
