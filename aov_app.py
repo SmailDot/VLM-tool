@@ -314,6 +314,11 @@ with col_left:
         help="此文字將注入 VLM 提示詞作為全域背景資訊（權重最高，VLM 必須遵守）",
         key="bom_context_input"
     )
+    if st.button('🔒 確認並鎖定此 BOM 資訊作為已知事實', type='secondary', use_container_width=True):
+        st.session_state.locked_bom = st.session_state.get('bom_context_input', '')
+        st.success('✅ BOM 資訊已成功鎖定！這將成為 AI 看圖時的鐵證。')
+    if st.session_state.get('locked_bom'):
+        st.info(f"🔒 已鎖定 BOM：{st.session_state.locked_bom[:80]}{'...' if len(st.session_state.locked_bom) > 80 else ''}")
 
     # ==================== 四視圖上傳 ====================
     st.markdown("#### 📐 上傳零件四視圖 (Child Drawing)")
@@ -433,7 +438,7 @@ with col_left:
                         frequency_filter=freq_options if freq_options else None,
                         use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
-                        bom_context=st.session_state.get("bom_context_input", "")
+                        bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', '')
                     )
                     elapsed = time.time() - start_time
                     st.session_state.recognition_result = result
