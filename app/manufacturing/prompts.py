@@ -668,25 +668,9 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "is a CRITICAL ERROR unless they appear verbatim in the KNOWN FACTS block above.\n\n"
 
         "CONFIDENCE TAGS (MANDATORY for every geometry/feature noun):\n"
-        "  <green>...</green>   → clearly visible, high confidence\n"
-        "  <orange>...</orange> → likely correct but partially obscured\n"
-        "  <red>...</red>       → uncertain or guessed\n\n"
-
-        "OUTPUT TEMPLATE (You MUST strictly mimic this format —"
-        " DO NOT output my rules, tags, or vocabulary lists):\n\n"
-        "### 1. OVERALL 3D SHAPE\n"
-        "This is a <green>L-shaped Bracket</green>.\n\n"
-        "### 2. COMPONENT STRUCTURE\n"
-        "It consists of a <green>Rectangular Base</green> and a <orange>Flange</orange>"
-        " on the long edge. Two <green>Thru-holes</green> are present on the base.\n\n"
-        "### 3. VIEW-BY-VIEW GEOMETRY\n"
-        "Top View: <green>Rectangular Base</green> outline with two <green>Thru-holes</green>.\n"
-        "Front View: <green>Flange</green> bent at approximately 90°. "
-        "A <orange>Chamfer</orange> is visible on the top-right corner.\n\n"
-        "### 4. CRITICAL TEXT & SYMBOLS\n"
-        "One <green>Weld symbol</green> visible near the left edge. "
-        "Material callout not visible in any view.\n\n"
-        "—— END OF TEMPLATE ——\n\n"
+        "  <green>...</green>   \u2192 clearly visible, high confidence\n"
+        "  <orange>...</orange> \u2192 likely correct but partially obscured\n"
+        "  <red>...</red>       \u2192 uncertain or guessed\n\n"
     )
 
     return (
