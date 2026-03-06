@@ -335,9 +335,17 @@ with col_left:
                 drawing_names.append(f"{_lbl}: {_uf.name}")
 
     if drawing_images:
+        # 記錄每張有效圖對應的視角標籤（Top/Front/Side/Iso）
+        _uploaded_labels: List[str] = []
+        for _uf, _lbl in zip(_view_files, _view_labels):
+            if _uf is not None:
+                # 與上面 decode loop 相同順序，只收有效圖的 label
+                _short = _lbl.split('（')[0].strip()  # 'Top', 'Front', 'Side', 'Iso'
+                _uploaded_labels.append(_short)
         primary_image = drawing_images[0]
         st.session_state.uploaded_drawing = primary_image
         st.session_state.uploaded_drawings = drawing_images
+        st.session_state.uploaded_view_labels = _uploaded_labels
 
         # Save temp image for knowledge base
         # If multiple views are uploaded, stitch them into a 2x2 collage
@@ -451,6 +459,7 @@ with col_left:
                         frequency_filter=freq_options if freq_options else None,
                         use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
+                        view_labels=st.session_state.get('uploaded_view_labels'),
                         bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', '')
                     )
                     elapsed = time.time() - start_time
@@ -557,7 +566,7 @@ with col_right:
         st.divider()
 
         # === 人類專家修正區 (HITL) + 儲存至 RAG ===
-        st.markdown("### ✏️ 人類專家修正區")
+        st.markdown("### 修正區")
 
         # 當辨識完成新結果時，自動將原始 VLM 描述（已去標籤）填入修正區
         _vlm_key = id(result)
@@ -566,7 +575,7 @@ with col_right:
             st.session_state['_hitl_result_key'] = _vlm_key
 
         corrected_text = st.text_area(
-            "✏️ 人類專家修正區 (請修正 AI 的錯誤描述)",
+            "修正區 (可修正 AI 的錯誤描述)",
             height=200,
             placeholder="AI 的描述將自動填入此處，您可直接修改...",
             key="hitl_corrected_text",

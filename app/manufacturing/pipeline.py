@@ -158,6 +158,7 @@ class ManufacturingPipeline:
         frequency_filter: Optional[List[str]] = None,
         use_rag: bool = False,
         child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
+        view_labels: Optional[List[str]] = None,
         bom_context: str = ""
     ) -> RecognitionResult:
         """
@@ -175,6 +176,10 @@ class ManufacturingPipeline:
                             If None, all frequencies are included.
             use_rag: Enable RAG-based context augmentation.
             child_images: Optional list of child images for VLM context.
+            view_labels: Optional list of view names matching child_images order
+                         (e.g. ['Top', 'Front', 'Side']). Top and Front are treated
+                         as primary evidence; Side/Iso as supporting reference.
+            bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
             bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
         
         Returns:
@@ -281,7 +286,8 @@ class ManufacturingPipeline:
             symbol_threshold,
             image_path=image_path,
             prompt_override=parent_prompt,
-            vlm_images=vlm_images
+            vlm_images=vlm_images,
+            view_labels=view_labels
         )
 
         rag_references: List[Dict[str, Any]] = []
@@ -415,7 +421,8 @@ class ManufacturingPipeline:
         symbol_threshold: float,
         image_path: Optional[str] = None,
         prompt_override: str = "",
-        vlm_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None
+        vlm_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
+        view_labels: Optional[List[str]] = None
     ) -> ExtractedFeatures:
         """
         Extract all features from image.
@@ -468,6 +475,20 @@ class ManufacturingPipeline:
                 else:
                     input_image = image
                 prompt = prompt_override or get_vlm_descriptive_prompt()
+                # 注入視角說明到 prompt：告討 VLM 每張圖的角色
+                if view_labels and len(view_labels) > 0:
+                    _primary = ['Top', 'Front']
+                    _label_lines = []
+                    for i, lbl in enumerate(view_labels):
+                        _role = '(Primary — main evidence)' if any(p.lower() in lbl.lower() for p in _primary) else '(Supporting reference only)'
+                        _label_lines.append(f'  Image {i+1}: {lbl} View {_role}')
+                    _view_context = (
+                        'IMAGES PROVIDED (analyse in this order):\n'
+                        + '\n'.join(_label_lines)
+                        + '\nTop View and Front View are your PRIMARY evidence for shape and features. '
+                        + 'Side/Iso views are SUPPORTING only — use them to confirm, not as main source.\n\n'
+                    )
+                    prompt = _view_context + prompt
                 vlm_result = self.vlm_client.analyze_image(
                     image_path=input_image,
                     prompt=prompt,
@@ -496,12 +517,14 @@ class ManufacturingPipeline:
                     # [END OF REPORT] 偵測：切握標記之後的一切內容
                     if '[END OF REPORT]' in _cleaned:
                         _cleaned = _cleaned.split('[END OF REPORT]')[0]
-                    # 備援截斷：第二個 '### 3.' 之後的內容全部丟棄
-                    _parts = re.split(r'(?m)^###\s+[3-9]\.', _cleaned)
+                    # 備援截斷：第二個 Section 3 header 之後的內容全部丟棄
+                    _parts = re.split(r'(?m)^(?:###\s+)?[3-9]\.', _cleaned)
                     if len(_parts) > 2:
-                        _cleaned = _parts[0] + '### 3.' + _parts[1]
+                        _head = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
+                        _prefix = ('### 3.' if (_head and '###' in _head.group()) else '3.')
+                        _cleaned = _parts[0] + _prefix + _parts[1]
                     # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）
-                    _sec3_match = re.search(r'(?m)^###\s+3\.', _cleaned)
+                    _sec3_match = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
                     if _sec3_match:
                         _before = _cleaned[:_sec3_match.end()]
                         _sec3_body = _cleaned[_sec3_match.end():]

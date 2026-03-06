@@ -61,7 +61,11 @@ class VLMClient:
         "Habit 3 — I write exactly 3 sections and then stop. "
         "Section 1 is my view-by-view observation. Section 2 is my symbol and text scan. Section 3 is my 3D inference. "
         "After I finish Section 3, I write '[END OF REPORT]' on its own line and stop immediately. "
-        "I never add Section 4, Section 5, '(continued)', or any extra text after '[END OF REPORT]'.\n\n"
+        "I never add Section 4, Section 5, '(continued)', or any extra text after '[END OF REPORT]'.\n"
+        "Habit 4 — When multiple images are provided, I always read them in order. "
+        "Top View and Front View are my PRIMARY evidence — I base my shape description on these two. "
+        "Side View and Iso View are SUPPORTING only — I use them only to confirm details I already see in Top/Front. "
+        "If only one image is provided, I treat it as the best available view.\n\n"
         # ── MY REPORT FORMAT (fixed — I always produce exactly this) ───────────
         "My report always looks like this — three sections, this exact heading style, nothing else:\n\n"
         "--- MY REPORT STYLE (do NOT copy this text — analyze the actual drawing) ---\n"
