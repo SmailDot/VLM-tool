@@ -644,70 +644,27 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
             "=== END OF KNOWN FACTS ===\n\n"
         )
 
-    # ── Controlled Vocabulary (受控詞彙表) ──────────────────────────────────────────────
-    controlled_vocab = (
-        "=== ALLOWED VOCABULARY (受控詞彙表) — MANDATORY ===\n"
-        "You MUST describe geometry using ONLY the terms listed below.\n"
-        "Do NOT invent, abbreviate, or paraphrase these terms.\n\n"
-
-        "Shapes: Flat Plate, Rectangular Base, L-shaped Bracket,"
-        " U-shaped Channel, Z-shaped Bracket, Hat Channel, Box / Enclosure\n"
-        "Features: Flange (bent edge), Rib (support bump),"
-        " Chamfer (cut corner), Fillet (rounded corner), Gusset, Louver, Emboss\n"
-        "Details: Thru-hole, Threaded hole, Extruded hole (Burring),"
-        " Countersink / CSK, Slotted hole / Slot, Notch, Cutout\n"
-        "Symbols: Weld symbol, Surface finish mark\n"
-        "=== END OF ALLOWED VOCABULARY ===\n\n"
-    )
-
-    # ── Anti-Hallucination + Few-Shot Output Template ──────────────────────────
+    # ── Anti-Hallucination rules ─────────────────────────────────────────────
     confidence_rules = (
         "CRITICAL RULE: DO NOT attempt to read or guess specific dimensional values\n"
         "(e.g., 110mm, 30mm, 55mm, M6, R3). You MUST ONLY describe the relative\n"
         "shapes and visible features. Writing specific millimeter or thread measurements\n"
         "is a CRITICAL ERROR unless they appear verbatim in the KNOWN FACTS block above.\n\n"
-
-        "CONFIDENCE TAGS (MANDATORY for every geometry/feature noun):\n"
-        "  <green>...</green>   → clearly visible, high confidence\n"
-        "  <orange>...</orange> → likely correct but partially obscured\n"
-        "  <red>...</red>       → uncertain or guessed\n\n"
-
-        "OUTPUT TEMPLATE (You MUST strictly mimic this format —"
-        " DO NOT output my rules, tags, or vocabulary lists):\n\n"
-        "### 1. OVERALL 3D SHAPE\n"
-        "This is a <green>L-shaped Bracket</green>.\n\n"
-        "### 2. COMPONENT STRUCTURE\n"
-        "It consists of a <green>Rectangular Base</green> and a <orange>Flange</orange>"
-        " on the long edge. Two <green>Thru-holes</green> are present on the base.\n\n"
-        "### 3. VIEW-BY-VIEW GEOMETRY\n"
-        "Top View: <green>Rectangular Base</green> outline with two <green>Thru-holes</green>.\n"
-        "Front View: <green>Flange</green> bent at approximately 90°. "
-        "A <orange>Chamfer</orange> is visible on the top-right corner.\n\n"
-        "### 4. CRITICAL TEXT & SYMBOLS\n"
-        "One <green>Weld symbol</green> visible near the left edge. "
-        "Material callout not visible in any view.\n\n"
-        "—— END OF TEMPLATE ——\n\n"
     )
 
     return (
         f"{known_facts_block}"
-        f"{controlled_vocab}"
         f"{confidence_rules}"
-        "You are a mechanical engineer. Analyze the 2D engineering drawing(s) provided.\n"
-        "Use ONLY vocabulary from the ALLOWED VOCABULARY list above.\n\n"
-        "CRITICAL RULES:\n"
-        "1. EVERY NOUN MUST have a <green>, <orange>, or <red> tag.\n"
-        "2. NO DIMENSIONS ALLOWED (No mm, No R, No specific numbers).\n\n"
-        "YOU MUST STRICTLY MIMIC THIS EXACT FORMAT AND ORDER TO ANSWER:\n\n"
-        "### 1. VIEW-BY-VIEW OBSERVATION\n"
-        "- Top View: Shows a <green>Rectangular Base</green> with a <orange>Thru-hole</orange>.\n"
-        "- Front View: Shows a vertical <green>Flange</green> on the right side.\n"
-        "- Side/Detail View: Shows the thickness of the <green>Base</green>.\n\n"
-        "### 2. CRITICAL TEXT & SYMBOLS\n"
-        "None detected.\n\n"
-        "### 3. COMBINED 3D SHAPE & STRUCTURE\n"
-        "Based on the multiple views above, I infer this is an <green>L-shaped Bracket</green>."
-        " It consists of a <green>Rectangular Base</green> combined with a <green>Flange</green>."
+        "Analyze the 2D engineering drawing(s) provided above.\n"
+        "Use ONLY vocabulary from the ALLOWED VOCABULARY list.\n"
+        "Tag EVERY geometry/feature noun with <green>, <orange>, or <red>.\n"
+        "NO DIMENSIONS. Follow the exact 5-section format from the system prompt.\n\n"
+        "### 1. OVERALL 3D SHAPE\n"
+        "### 2. COMPONENT STRUCTURE\n"
+        "### 3. VIEW-BY-VIEW GEOMETRY\n"
+        "### 4. CRITICAL TEXT & SYMBOLS\n"
+        "### 5. COMBINED 3D SHAPE & STRUCTURE\n"
+        "\n Begin your answer now, starting with ### 1. OVERALL 3D SHAPE:\n"
     )
 
 

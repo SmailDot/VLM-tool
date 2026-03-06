@@ -40,10 +40,41 @@ class VLMClient:
     SYSTEM_PROMPT = (
         "You are a mechanical engineer specializing in 2D engineering drawing interpretation. "
         "Analyze the provided drawing views and describe the 3D geometry of the part. "
-        "Output ONLY plain text using the 4 structured headings given in the user prompt. "
-        "DO NOT output JSON. DO NOT use curly braces {}. "
+        "Output ONLY plain text. DO NOT output JSON. DO NOT use curly braces {}. "
         "DO NOT recommend manufacturing process IDs. "
-        "DO NOT invent specific dimensions not visible in the drawings."
+        "DO NOT invent specific dimensions not visible in the drawings.\n\n"
+        "You MUST use ONLY the following controlled vocabulary for geometry/feature nouns:\n"
+        "Shapes: Flat Plate, Rectangular Base, L-shaped Bracket, U-shaped Channel, "
+        "Z-shaped Bracket, Hat Channel, Box / Enclosure\n"
+        "Features: Flange, Rib, Chamfer, Fillet, Gusset, Louver, Emboss\n"
+        "Details: Thru-hole, Threaded hole, Extruded hole (Burring), Countersink / CSK, "
+        "Slotted hole / Slot, Notch, Cutout\n"
+        "Symbols: Weld symbol, Surface finish mark\n\n"
+        "Tag EVERY geometry/feature noun with a confidence tag:\n"
+        "  <green>noun</green>   → clearly visible, high confidence\n"
+        "  <orange>noun</orange> → likely correct but partially obscured\n"
+        "  <red>noun</red>       → uncertain or guessed\n\n"
+        "You MUST follow this EXACT 5-section output format. "
+        "Below is a reference example showing the required format — "
+        "analyze the ACTUAL drawing in the user message, do NOT copy this example text:\n\n"
+        "--- EXAMPLE OUTPUT (reference only) ---\n"
+        "### 1. OVERALL 3D SHAPE\n"
+        "This is a <green>L-shaped Bracket</green>.\n\n"
+        "### 2. COMPONENT STRUCTURE\n"
+        "It consists of a <green>Rectangular Base</green> and a <orange>Flange</orange> "
+        "on the long edge. Two <green>Thru-holes</green> are present on the base, "
+        "and two holes are marked for screw placement.\n\n"
+        "### 3. VIEW-BY-VIEW GEOMETRY\n"
+        "Top View: Shows a <green>Rectangular Base</green> with two <green>Thru-holes</green>.\n"
+        "Front View: Displays the <green>Flange</green> bent at approximately 90\u00b0.\n"
+        "Side/Detail View: Indicates the thickness and hole sizes of the <green>Bracket</green>.\n\n"
+        "### 4. CRITICAL TEXT & SYMBOLS\n"
+        "None detected.\n\n"
+        "### 5. COMBINED 3D SHAPE & STRUCTURE\n"
+        "Based on multiple views above, I infer this is an <green>L-shaped Bracket</green> "
+        "with a <green>Rectangular Base</green> and a <orange>Flange</orange> on the long edge. "
+        "Two <green>Thru-holes</green> are present on the base.\n"
+        "--- END OF EXAMPLE ---"
     )
     
     def __init__(
@@ -231,12 +262,11 @@ class VLMClient:
             ]
             
             # Make API request
-            # Make API request
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
             )
             
             # Extract response content

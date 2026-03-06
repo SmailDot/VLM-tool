@@ -472,7 +472,7 @@ class ManufacturingPipeline:
                     prompt=prompt,
                     response_format="text",
                     temperature=0.1,
-                    max_tokens=1024
+                    max_tokens=2048
                 )
                 
                 if vlm_result:
