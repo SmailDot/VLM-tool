@@ -508,16 +508,27 @@ with col_right:
         # === VLM 視覺描述 (主要輸出) + 信心度色彩渲染 ===
         vlm_desc = result.features.raw_vlm_description
         if vlm_desc:
-            st.markdown("### 🤖 VLM 視覺重建結果")
+            st.markdown("### \U0001f916 VLM 視覺重建結果")
 
-            # 色彩圖例
+            # 色彩圖例 + 警示說明
             st.caption(
-                "🟢 高信心，🟠 中信心，🔴 低信心 / 檢測不確定"
+                "\U0001f7e2 高信心（AI 確認可見）\u3000"
+                "\U0001f7e0 中信心（AI 存疑，建議確認）\u3000"
+                "\U0001f534 低信心（AI 沒把握，**請人工核對**）"
             )
+
+            # 若有 <red> 項目，主動顯示警示橫幅
+            import re as _re
+            _red_items = _re.findall(r'<red>(.*?)</red>', vlm_desc)
+            if _red_items:
+                st.warning(
+                    "⚠️ **AI 不確定以下項目，請人類專家務必核對：** "
+                    + "、".join(f'**{x}**' for x in _red_items)
+                )
 
             # 使用 Streamlit 原生顏色語法渲染（不需要 unsafe_allow_html）
             colored_report = format_streamlit_colors(vlm_desc)
-            st.markdown("###  VLM 視覺描述預覽")
+            st.markdown("### \u00a0VLM 視覺描述預覽")
             st.markdown(colored_report)
         else:
             st.info("⚠️ VLM 未返回效描述。請確認：① LM Studio 已啟動 ② 左侧「辨識設定」已勾選 VLM")
