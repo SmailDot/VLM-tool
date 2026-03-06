@@ -483,6 +483,11 @@ class ManufacturingPipeline:
                         vlm_result,
                         flags=re.IGNORECASE
                     )
+                    # 擴大清洗：公差符號、圓角半徑、螺紋規格、角度數值
+                    _cleaned = re.sub(r'[\u00b1]\s*\d+\.?\d*', '', _cleaned)  # ±0.1
+                    _cleaned = re.sub(r'\bR\d+\.?\d*\b', '', _cleaned)        # R3, R0.5
+                    _cleaned = re.sub(r'\bM\d+(\.\d+)?\b', '', _cleaned)      # M6, M8x1.25
+                    _cleaned = re.sub(r'\b\d+\.?\d*\s*\u00b0', '', _cleaned)  # 45°, 90°
                     # 移除纔後多餘週偵（一行空白就好）
                     _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
                     _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
