@@ -6,10 +6,12 @@ Stores image features, corrected processes, and expert reasoning.
 
 from __future__ import annotations
 
+import re as _re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 import json
+import re
 import shutil
 import hashlib
 
@@ -88,6 +90,7 @@ class KnowledgeBaseManager:
             correct_processes: Corrected process IDs.
             reasoning: Expert reasoning for correction.
             tags: Optional tags for retrieval.
+            bom_context: BOM / global notes text.
 
         Returns:
             Dict[str, Any]: The created entry.
@@ -139,19 +142,28 @@ class KnowledgeBaseManager:
         self,
         current_features: Dict[str, Any],
         image_path: str = "",
-        top_k: int = 3
+        top_k: int = 3,
+        raw_vlm_text: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        Retrieve similar cases based on simple tag/shape matching.
+        Retrieve similar cases from knowledge base.
+
+        Matching priority:
+        1. SHA-256 exact hash match (same file → score 1.0)
+        2. Keyword overlap on raw_vlm_description plain text (Jaccard similarity)
+        3. Legacy JSON shape/geometry fields (fallback for old entries)
 
         Args:
-            current_features: Current VLM features.
-            top_k: Number of cases to return.
+            current_features: Current extracted features dict.
+            image_path: Path to current image (for hash match).
+            top_k: Max number of results to return.
+            raw_vlm_text: Raw VLM plain-text output for keyword matching.
 
         Returns:
-            List[Dict[str, Any]]: Top matched entries.
+            List[Dict[str, Any]]: Top matched entries, each annotated with
+            '_match_type' and '_confidence' keys.
         """
-        # --- Hash 精確匹配優先 ---
+        # --- 1. Hash exact match ---
         if image_path and Path(image_path).exists():
             query_hash = self._calculate_hash(image_path)
             for entry in self.db:
@@ -161,25 +173,81 @@ class KnowledgeBaseManager:
                     hit["_confidence"] = 1.0
                     return [hit]
 
-        scored_entries = []
+        scored_entries: List[tuple[float, Dict[str, Any]]] = []
 
-        current_shape = current_features.get("shape_description", "")
-        current_geo = set(current_features.get("detected_features", {}).get("geometry", []))
+        # --- 2. Keyword overlap on raw_vlm_description (primary) ---
+        if raw_vlm_text.strip():
+            # Extract meaningful tokens: lowercase alpha words, length >= 4
+            query_tokens = set(
+                w.lower() for w in re.findall(r'[A-Za-z]{4,}', raw_vlm_text)
+            )
+            for entry in self.db:
+                db_vlm = (
+                    entry.get("features", {}).get("raw_vlm_description", "")
+                    or entry.get("reasoning", "")
+                )
+                if not db_vlm:
+                    continue
+                db_tokens = set(
+                    w.lower() for w in re.findall(r'[A-Za-z]{4,}', db_vlm)
+                )
+                if not db_tokens:
+                    continue
+                overlap = len(query_tokens & db_tokens)
+                union = len(query_tokens | db_tokens)
+                score = overlap / union if union else 0.0
+                if score > 0:
+                    annotated = dict(entry)
+                    annotated["_match_type"] = "text_keyword"
+                    annotated["_confidence"] = round(score, 3)
+                    scored_entries.append((score, annotated))
 
-        for entry in self.db:
-            score = 0
-
-            db_shape = entry.get("features", {}).get("shape_description", "")
-            if current_shape and db_shape:
-                if current_shape in db_shape or db_shape in current_shape:
-                    score += 3
-
-            db_geo = set(entry.get("features", {}).get("detected_features", {}).get("geometry", []))
-            overlap = len(current_geo.intersection(db_geo))
-            score += overlap
-
-            if score > 0:
-                scored_entries.append((score, entry))
+        # --- 3. Legacy JSON shape/geometry fallback ---
+        if not scored_entries:
+            current_shape = current_features.get("shape_description", "")
+            current_geo = set(
+                current_features.get("detected_features", {}).get("geometry", [])
+            )
+            for entry in self.db:
+                score = 0
+                db_shape = entry.get("features", {}).get("shape_description", "")
+                if current_shape and db_shape:
+                    if current_shape in db_shape or db_shape in current_shape:
+                        score += 3
+                db_geo = set(
+                    entry.get("features", {}).get(
+                        "detected_features", {}
+                    ).get("geometry", [])
+                )
+                score += len(current_geo.intersection(db_geo))
+                if score > 0:
+                    annotated = dict(entry)
+                    annotated["_match_type"] = "legacy_json"
+                    annotated["_confidence"] = round(score / 10, 3)
+                    scored_entries.append((float(score), annotated))
 
         scored_entries.sort(key=lambda x: x[0], reverse=True)
+        results = [entry for _, entry in scored_entries[:top_k]]
+        # Attach rag_priors to every result: geometry nouns extracted from
+        # the stored raw_vlm_description (or reasoning) for use as VLM anchors.
+        _vocab = [
+            "Flat Plate", "Rectangular Base", "L-shaped Bracket", "U-shaped Channel",
+            "Z-shaped Bracket", "Hat Channel", "Box",
+            "Flange", "Rib", "Chamfer", "Fillet", "Gusset", "Louver", "Emboss",
+            "Thru-hole", "Threaded hole", "Extruded hole", "Burring",
+            "Countersink", "CSK", "Slotted hole", "Notch", "Cutout",
+            "Weld symbol", "Surface finish mark",
+        ]
+        _vocab_lower = {v.lower(): v for v in _vocab}
+        for res in results:
+            ref_text = (
+                res.get("features", {}).get("raw_vlm_description", "")
+                or res.get("reasoning", "")
+            )
+            found: List[str] = []
+            for lower, canonical in _vocab_lower.items():
+                if lower in ref_text.lower() and canonical not in found:
+                    found.append(canonical)
+            res["rag_priors"] = found
+        return results
         return [entry for _, entry in scored_entries[:top_k]]
