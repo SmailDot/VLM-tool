@@ -340,8 +340,27 @@ with col_left:
         st.session_state.uploaded_drawings = drawing_images
 
         # Save temp image for knowledge base
+        # If multiple views are uploaded, stitch them into a 2x2 collage
+        _views = drawing_images
+        if len(_views) > 1:
+            _max_h = max(v.shape[0] for v in _views)
+            _max_w = max(v.shape[1] for v in _views)
+            # Pad each view to uniform size
+            def _pad_view(v):
+                _canvas = np.zeros((_max_h, _max_w, 3), dtype=np.uint8)
+                _canvas[:v.shape[0], :v.shape[1]] = v[:, :, :3] if v.shape[2] == 3 else cv2.cvtColor(v, cv2.COLOR_BGRA2BGR)
+                return _canvas
+            _padded = [_pad_view(v) for v in _views[:4]]
+            while len(_padded) < 4:
+                _padded.append(np.zeros((_max_h, _max_w, 3), dtype=np.uint8))
+            _row1 = np.hstack(_padded[:2])
+            _row2 = np.hstack(_padded[2:4])
+            _collage = np.vstack([_row1, _row2])
+            _save_img = _collage
+        else:
+            _save_img = drawing_images[0]
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
-            cv2.imwrite(tmp_image.name, primary_image)
+            cv2.imwrite(tmp_image.name, _save_img)
             st.session_state.temp_file_path = tmp_image.name
 
         # Preview uploaded views
@@ -565,17 +584,23 @@ with col_right:
                     image_path=tmp_path,
                     features={
                         "raw_vlm_description": _final_desc,
-                        "shape_description": _final_desc[:80] if _final_desc else "",
                     },
                     correct_processes=[],
-                    reasoning=_final_desc
+                    reasoning=_final_desc,
+                    bom_context=st.session_state.get("bom_context_text", "")
                 )
                 st.toast("✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！", icon="✅")
         if st.session_state.use_rag and result.rag_references:
+            # Hash 完全匹配提示
+            _exact = next((r for r in result.rag_references if r.get("_match_type") == "exact_hash"), None)
+            if _exact:
+                st.success("🎯 發現 100% 匹配的歷史圖面！已自動載入過往校正資訊。")
             with st.expander("本次推論參考的歷史案例 (RAG Context)"):
                 for ref in result.rag_references:
+                    _features = ref.get('features', {})
+                    _desc = _features.get('raw_vlm_description') or _features.get('shape_description', '')
                     st.info(
-                        f"參考案例：{ref['features'].get('shape_description')}\n"
+                        f"參考案例：{_desc[:120]}...…\n"
                         f"正確製程：{ref['correct_processes']}"
                     )
         

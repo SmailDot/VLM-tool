@@ -294,7 +294,7 @@ class ManufacturingPipeline:
                 from app.knowledge.manager import KnowledgeBaseManager
 
                 kb = KnowledgeBaseManager()
-                similar_cases = kb.retrieve_similar(features.vlm_analysis, top_k=3)
+                similar_cases = kb.retrieve_similar(features.vlm_analysis, image_path=image_path or "", top_k=3)
                 if similar_cases:
                     rag_references = similar_cases
                     rag_context_text = "\n".join(
