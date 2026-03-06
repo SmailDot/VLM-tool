@@ -647,9 +647,9 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     # ── Anti-Hallucination rules ─────────────────────────────────────────────
     confidence_rules = (
         "FORBIDDEN — do NOT write any of the following:\n"
-        "  • Numeric measurements of any kind (e.g., 110mm, 30mm, 4mm, 55mm)\n"
-        "  • Width / Length / Height / Thickness values in any unit\n"
-        "  • Thread specifications or tolerances (e.g., M6, R3, ±0.1)\n"
+        "  \u2022 Numeric measurements of any kind (e.g., 110mm, 30mm, 4mm, 55mm)\n"
+        "  \u2022 Width / Length / Height / Thickness values in any unit\n"
+        "  \u2022 Thread specifications or tolerances (e.g., M6, R3, \u00b10.1)\n"
         "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
         "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n\n"
     )
@@ -660,13 +660,11 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "Analyze the 2D engineering drawing(s) provided above.\n"
         "Use ONLY vocabulary from the ALLOWED VOCABULARY list.\n"
         "Tag EVERY geometry/feature noun with <green>, <orange>, or <red>.\n"
-        "NO DIMENSIONS. Follow the exact 5-section format from the system prompt.\n\n"
-        "### 1. OVERALL 3D SHAPE\n"
-        "### 2. COMPONENT STRUCTURE\n"
-        "### 3. VIEW-BY-VIEW GEOMETRY\n"
-        "### 4. CRITICAL TEXT & SYMBOLS\n"
-        "### 5. COMBINED 3D SHAPE & STRUCTURE\n"
-        "\n Begin your answer now, starting with ### 1. OVERALL 3D SHAPE:\n"
+        "NO DIMENSIONS. Follow the exact 3-section CoT format from the system prompt.\n\n"
+        "### 1. VIEW-BY-VIEW OBSERVATION\n"
+        "### 2. SYMBOL & TEXT SEARCH\n"
+        "### 3. 3D RECONSTRUCTION INFERENCE\n"
+        "\nBegin your answer now, starting with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 
 
