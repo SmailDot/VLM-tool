@@ -646,10 +646,12 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
 
     # ── Anti-Hallucination rules ─────────────────────────────────────────────
     confidence_rules = (
-        "CRITICAL RULE: DO NOT attempt to read or guess specific dimensional values\n"
-        "(e.g., 110mm, 30mm, 55mm, M6, R3). You MUST ONLY describe the relative\n"
-        "shapes and visible features. Writing specific millimeter or thread measurements\n"
-        "is a CRITICAL ERROR unless they appear verbatim in the KNOWN FACTS block above.\n\n"
+        "FORBIDDEN — do NOT write any of the following:\n"
+        "  • Numeric measurements of any kind (e.g., 110mm, 30mm, 4mm, 55mm)\n"
+        "  • Width / Length / Height / Thickness values in any unit\n"
+        "  • Thread specifications or tolerances (e.g., M6, R3, ±0.1)\n"
+        "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
+        "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n\n"
     )
 
     return (
