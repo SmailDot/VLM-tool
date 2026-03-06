@@ -300,27 +300,27 @@ class ManufacturingPipeline:
                 from app.knowledge.manager import KnowledgeBaseManager
                 kb = KnowledgeBaseManager()
                 _vlm_feats = features.vlm_analysis if isinstance(features.vlm_analysis, dict) else {}
-                similar_cases = kb.retrieve_similar(_vlm_feats, image_path=image_path or "", top_k=3)
+                similar_cases = kb.retrieve_similar(
+                    _vlm_feats,
+                    image_path=image_path or "",
+                    top_k=3,
+                    raw_vlm_text=features.raw_vlm_description or ""
+                )
                 if similar_cases:
                     rag_references = similar_cases
-                    rag_context_text = "\n".join(
-                        [
-                            (
-                                f"- 案例 {i + 1}: 形狀[{case['features'].get('shape_description')}]，"
-                                f"特徵{case['features'].get('detected_features', {}).get('geometry')}，"
-                                f"正確製程{case['correct_processes']}，"
-                                f"理由：{case['reasoning']}"
-                            )
-                            for i, case in enumerate(similar_cases)
-                        ]
+                    best_case = similar_cases[0]
+                    _ref_desc = (
+                        best_case.get("features", {}).get("raw_vlm_description", "")
+                        or best_case.get("reasoning", "")
                     )
+                    rag_context_text = _ref_desc
             except Exception as e:
                 print(f"Warning: RAG retrieval failed: {e}")
         # If RAG context exists, re-run VLM with injected prompt
         if rag_context_text and self.vlm_client:
             try:
                 input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
-                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text)
+                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text, rag_context=rag_context_text)
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (

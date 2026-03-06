@@ -598,7 +598,7 @@ with col_right:
                     },
                     correct_processes=[],
                     reasoning=_final_desc,
-                    bom_context=st.session_state.get("bom_context_text", "")
+                    bom_context=st.session_state.get("bom_context_input", "")
                 )
                 st.toast("✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！", icon="✅")
         if st.session_state.use_rag and result.rag_references:
