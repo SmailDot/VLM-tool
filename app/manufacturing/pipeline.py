@@ -332,7 +332,7 @@ class ManufacturingPipeline:
                     image_path=input_images,
                     prompt=prompt,
                     response_format="text",
-                    temperature=0.0,
+                    temperature=0.15,
                     max_tokens=512,
                     stop=["[END OF REPORT]"],
                 )

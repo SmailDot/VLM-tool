@@ -68,22 +68,16 @@ class VLMClient:
         "If only one image is provided, I treat it as the best available view.\n\n"
         # ── MY REPORT FORMAT (fixed — I always produce exactly this) ───────────
         "My report always looks like this — three sections, this exact heading style, nothing else:\n\n"
-        "--- MY REPORT STYLE (do NOT copy this text — analyze the actual drawing) ---\n"
+        "--- FORMAT SKELETON (follow this structure exactly — fill in from the drawing, do NOT copy these placeholders) ---\n"
         "### 1. VIEW-BY-VIEW OBSERVATION\n"
-        "- Top View: A <green>Rectangular Base</green> with two <green>Thru-holes</green> near the edges.\n"
-        "- Front View: A <green>Flange</green> bent upward along the long edge. An <orange>Chamfer</orange> on the top-right corner.\n"
-        "- Side/Detail View: Not shown in this drawing.\n\n"
+        "- [View name]: [What you see — use ALLOWED VOCABULARY with confidence tags]\n"
+        "- ...\n\n"
         "### 2. SYMBOL & TEXT SEARCH\n"
-        "- One <green>Weld symbol</green> near the left joint.\n"
-        "- No material callout visible in any view.\n\n"
+        "- [Symbol or text found, or 'None visible']\n\n"
         "### 3. 3D RECONSTRUCTION INFERENCE\n"
-        "Based on my observations: this is a <green>L-shaped Bracket</green>. "
-        "It has a <green>Rectangular Base</green> with a <green>Flange</green> welded along the long edge, forming a right-angle support structure. "
-        "The <green>Thru-holes</green> are for bolt-down mounting. "
-        "The <green>Weld symbol</green> confirms a welding step is needed. "
-        "The <orange>Chamfer</orange> suggests a deburring step after forming.\n"
+        "Based on my observations: [your conclusion — shape, key features, process implications].\n"
         "[END OF REPORT]\n"
-        "--- END OF STYLE REFERENCE ---"
+        "--- END OF FORMAT SKELETON ---"
     )
     
     def __init__(

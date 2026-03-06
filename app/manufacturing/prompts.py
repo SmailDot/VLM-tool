@@ -610,7 +610,7 @@ Step 3: 根據代碼表匹配製程。
 
 
 # Export main classes and functions
-def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
+def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "") -> str:
     """
     Generate a structured descriptive prompt for VLM geometry analysis.
 
@@ -629,19 +629,32 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
     known_facts_block = ""
     if bom_context.strip():
         known_facts_block = (
-            "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY — DO NOT IGNORE) ===\n"
+            "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY \u2014 DO NOT IGNORE) ===\n"
             "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
             "You MUST treat every item below as authoritative ground truth.\n"
             "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
             f"{bom_context.strip()}\n\n"
             "COMPLIANCE CHECKLIST (apply before writing each section):\n"
-            "  [1] Material / surface treatment stated above → mention it in Section 2 and 4.\n"
-            "  [2] Part name / assembly context stated above → reference it in Section 1.\n"
-            "  [3] Any dimension or thickness stated above → use it verbatim in Section 3.\n"
-            "  [4] Any finish or coating stated above → call it out explicitly in Section 4.\n"
+            "  [1] Material / surface treatment stated above \u2192 mention it in Section 2 and 4.\n"
+            "  [2] Part name / assembly context stated above \u2192 reference it in Section 1.\n"
+            "  [3] Any dimension or thickness stated above \u2192 use it verbatim in Section 3.\n"
+            "  [4] Any finish or coating stated above \u2192 call it out explicitly in Section 4.\n"
             "If a KNOWN FACT cannot be reconciled with what you see in the drawings, "
             "state the conflict explicitly (e.g., 'BOM states SUS304 but material callout not visible in views.').\n"
             "=== END OF KNOWN FACTS ===\n\n"
+        )
+
+    # \u2500\u2500 RAG few-shot reference block \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    rag_block = ""
+    if rag_context.strip():
+        rag_block = (
+            "=== VERIFIED REFERENCE CASE (similar part from past analysis) ===\n"
+            "A similar engineering drawing was analysed before and its verified description is shown below.\n"
+            "USE THIS AS A STYLE AND REASONING GUIDE ONLY.\n"
+            "DO NOT copy it word-for-word. Adapt the structure and reasoning style to what you actually see in the CURRENT drawing.\n\n"
+            f"{rag_context.strip()}\n\n"
+            "=== END OF REFERENCE CASE ===\n\n"
+            "Now analyse the CURRENT drawing provided above, using the reference case as a guide.\n\n"
         )
 
     # ── Anti-Hallucination rules ─────────────────────────────────────────────
@@ -657,20 +670,28 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "STOP after Section 3. Do NOT add Section 4, 5, or any continuation.\n\n"
     )
 
+    vocab_block = (
+        "ALLOWED VOCABULARY — use ONLY these words for shapes, features, and details:\n"
+        "  Shapes   : Flat Plate | Rectangular Base | L-shaped Bracket | U-shaped Channel | Z-shaped Bracket | Hat Channel | Box\n"
+        "  Features : Flange | Rib | Chamfer | Fillet | Gusset | Louver | Emboss\n"
+        "  Holes    : Thru-hole | Threaded hole | Extruded hole (Burring) | Countersink (CSK) | Slotted hole | Notch | Cutout\n"
+        "  Symbols  : Weld symbol | Surface finish mark\n"
+        "  Condition: <green>word</green> = clearly visible | <orange>word</orange> = partially visible | <red>word</red> = inferred\n"
+        "Do NOT invent words outside this list.\n\n"
+    )
+
     return (
         f"{known_facts_block}"
+        f"{rag_block}"
+        f"{vocab_block}"
         f"{confidence_rules}"
         "Analyze the 2D engineering drawing(s) provided above.\n"
-        "Use ONLY vocabulary from the ALLOWED VOCABULARY list.\n"
-        "Tag EVERY geometry/feature noun with <green>, <orange>, or <red>.\n"
-        "NO DIMENSIONS. Follow the exact 3-section CoT format from the system prompt.\n\n"
+        "Tag EVERY shape/feature/hole/symbol noun with <green>, <orange>, or <red>.\n"
+        "NO DIMENSIONS. Write exactly 3 sections in the format shown in your instructions.\n\n"
         "FINAL REMINDER — ZERO NUMBERS RULE:\n"
-        "Before you write anything, promise yourself: I will NOT write any digit followed by mm, cm, m, \u00b0, \u00b1, R, or M.\n"
-        "Section 3 must sound like an engineer explaining to a colleague — full sentences, cause-and-effect reasoning, process implications.\n\n"
-        "### 1. VIEW-BY-VIEW OBSERVATION\n"
-        "### 2. SYMBOL & TEXT SEARCH\n"
-        "### 3. 3D RECONSTRUCTION INFERENCE\n"
-        "\nBegin your answer now, starting with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
+        "Before you write anything: I will NOT write any digit followed by mm, cm, m, °, ±, R, or M.\n"
+        "Section 3 must sound like an engineer explaining to a colleague — full sentences, cause-and-effect reasoning.\n\n"
+        "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 
 
