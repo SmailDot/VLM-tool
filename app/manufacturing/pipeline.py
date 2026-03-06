@@ -287,14 +287,14 @@ class ManufacturingPipeline:
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
 
-        # RAG retrieval based on initial VLM analysis
-        # RAG retrieval based on initial VLM analysis (only if vlm_analysis is a dict)
-        if use_rag and isinstance(features.vlm_analysis, dict):
+        # RAG retrieval: hash 優先比對（不依賴 VLM，只要有 image_path 就能跑）
+        # 後備：vlm_analysis dict 的 shape 文字比對
+        if use_rag:
             try:
                 from app.knowledge.manager import KnowledgeBaseManager
-
                 kb = KnowledgeBaseManager()
-                similar_cases = kb.retrieve_similar(features.vlm_analysis, image_path=image_path or "", top_k=3)
+                _vlm_feats = features.vlm_analysis if isinstance(features.vlm_analysis, dict) else {}
+                similar_cases = kb.retrieve_similar(_vlm_feats, image_path=image_path or "", top_k=3)
                 if similar_cases:
                     rag_references = similar_cases
                     rag_context_text = "\n".join(
@@ -310,7 +310,6 @@ class ManufacturingPipeline:
                     )
             except Exception as e:
                 print(f"Warning: RAG retrieval failed: {e}")
-
         # If RAG context exists, re-run VLM with injected prompt
         if rag_context_text and self.vlm_client:
             try:
