@@ -848,7 +848,39 @@ with tab3:
 
 with st.sidebar:
     render_recognition_sidebar()
-    
+
+    # 🏷️ 符號庫管理員
+    _symbol_lib_dir = Path(__file__).parent / "data" / "symbol_library"
+    _symbol_lib_dir.mkdir(parents=True, exist_ok=True)
+    with st.expander("🏷️ 符號庫管理員", expanded=False):
+        st.caption("上傳去背 PNG 作為符號模板，系統將在辨識時掃描圖紙。")
+        _uploaded_sym = st.file_uploader(
+            "上傳符號模板 (去背 PNG)",
+            type=["png"],
+            accept_multiple_files=True,
+            key="symbol_lib_uploader",
+        )
+        if _uploaded_sym:
+            _saved: List[str] = []
+            for _sym_file in _uploaded_sym:
+                _save_path = _symbol_lib_dir / _sym_file.name
+                with open(_save_path, "wb") as _f:
+                    _f.write(_sym_file.getbuffer())
+                _saved.append(_sym_file.name)
+            st.success(f"已儲存 {len(_saved)} 個符號模板：{', '.join(_saved)}")
+        # 顯示目前庫中符號清單
+        _existing_syms = sorted(_symbol_lib_dir.glob("*.png"))
+        if _existing_syms:
+            st.markdown("**目前符號庫：**")
+            for _sym_path in _existing_syms:
+                col_name, col_del = st.columns([4, 1])
+                col_name.text(_sym_path.stem)
+                if col_del.button("✕", key=f"del_sym_{_sym_path.stem}"):
+                    _sym_path.unlink(missing_ok=True)
+                    st.rerun()
+        else:
+            st.info("符號庫尚無模板，請上傳去背 PNG。")
+
     # 系統狀態
     with st.expander("系統狀態", expanded=False):
         pipeline_status = "已初始化" if st.session_state.mfg_pipeline else "未初始化"
