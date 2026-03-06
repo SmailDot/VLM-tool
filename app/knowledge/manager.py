@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 import shutil
-
+import hashlib
 
 class KnowledgeBaseManager:
     """
@@ -54,13 +54,30 @@ class KnowledgeBaseManager:
         with self.db_path.open("w", encoding="utf-8") as file:
             json.dump(self.db, file, ensure_ascii=False, indent=2)
 
+    def _calculate_hash(self, image_path: str) -> str:
+        """
+        計算圖片的 SHA-256 hash 作為唯一識別碼。
+
+        Args:
+            image_path: 圖片檔案路徑。
+
+        Returns:
+            str: 十六進位 SHA-256 hash 字串。
+        """
+        h = hashlib.sha256()
+        with open(image_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     def add_entry(
         self,
         image_path: str,
         features: Dict[str, Any],
         correct_processes: List[str],
         reasoning: str,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        bom_context: str = ""
     ) -> Dict[str, Any]:
         """
         Add a new knowledge entry to the database.
@@ -81,14 +98,17 @@ class KnowledgeBaseManager:
         if not Path(image_path).exists():
             raise FileNotFoundError(f"Source image not found: {image_path}")
         shutil.copy2(image_path, target_path)
+        image_hash = self._calculate_hash(image_path)
 
         entry = {
             "id": filename.split(".")[0],
             "timestamp": timestamp.isoformat(),
             "image_rel_path": str(target_path),
+            "image_hash": image_hash,
             "features": features,
             "correct_processes": correct_processes,
             "reasoning": reasoning,
+            "bom_context": bom_context,
             "tags": tags or []
         }
 
@@ -118,6 +138,7 @@ class KnowledgeBaseManager:
     def retrieve_similar(
         self,
         current_features: Dict[str, Any],
+        image_path: str = "",
         top_k: int = 3
     ) -> List[Dict[str, Any]]:
         """
@@ -130,6 +151,16 @@ class KnowledgeBaseManager:
         Returns:
             List[Dict[str, Any]]: Top matched entries.
         """
+        # --- Hash 精確匹配優先 ---
+        if image_path and Path(image_path).exists():
+            query_hash = self._calculate_hash(image_path)
+            for entry in self.db:
+                if entry.get("image_hash") == query_hash:
+                    hit = dict(entry)
+                    hit["_match_type"] = "exact_hash"
+                    hit["_confidence"] = 1.0
+                    return [hit]
+
         scored_entries = []
 
         current_shape = current_features.get("shape_description", "")
