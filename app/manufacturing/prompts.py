@@ -650,8 +650,11 @@ def get_vlm_descriptive_prompt(bom_context: str = "") -> str:
         "  \u2022 Numeric measurements of any kind (e.g., 110mm, 30mm, 4mm, 55mm)\n"
         "  \u2022 Width / Length / Height / Thickness values in any unit\n"
         "  \u2022 Thread specifications or tolerances (e.g., M6, R3, \u00b10.1)\n"
+        "  \u2022 Dimension chains (e.g., '55mm x 10mm x 62mm', 'dimensions X x Y x Z')\n"
         "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
-        "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n\n"
+        "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n"
+        "OUTPUT STRUCTURE: Output EXACTLY 3 sections (### 1, ### 2, ### 3). "
+        "STOP after Section 3. Do NOT add Section 4, 5, or any continuation.\n\n"
     )
 
     return (
