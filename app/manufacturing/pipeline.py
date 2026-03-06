@@ -337,7 +337,7 @@ class ManufacturingPipeline:
                     stop=["[END OF REPORT]"],
                 )
                 if vlm_result and isinstance(vlm_result, str):
-                    features.raw_vlm_description = vlm_result
+                    features.raw_vlm_description = ManufacturingPipeline._clean_vlm_output(vlm_result)
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
@@ -499,54 +499,8 @@ class ManufacturingPipeline:
                 )
                 
                 if vlm_result:
-                    # 數據清洗護欄：移除尺寸數字（防止 VLM 幻覺干擾後續 LLM 判斷）
-                    _cleaned = re.sub(
-                        r'\b\d+\.?\d*\s*(?:mm|cm|m|in|inch|inches|\xb0|deg)\b',
-                        '',
-                        vlm_result,
-                        flags=re.IGNORECASE
-                    )
-                    # 擴大清洗：公差符號、圓角半徑、螺紋規格、角度數值
-                    _cleaned = re.sub(r'[\u00b1]\s*\d+\.?\d*', '', _cleaned)  # ±0.1
-                    _cleaned = re.sub(r'\bR\d+\.?\d*\b', '', _cleaned)        # R3, R0.5
-                    _cleaned = re.sub(r'\bM\d+(\.\d+)?\b', '', _cleaned)      # M6, M8x1.25
-                    _cleaned = re.sub(r'\b\d+\.?\d*\s*\u00b0', '', _cleaned)  # 45°, 90°
-                    # 清除 dimension chain 句型
-                    _cleaned = re.sub(r'\s+x\s+x\s+', ' ', _cleaned)
-                    _cleaned = re.sub(r'dimensions?\s+(\S+\s+x\s+)*\S+', '', _cleaned, flags=re.IGNORECASE)
-                    # [END OF REPORT] 偵測：切握標記之後的一切內容
-                    if '[END OF REPORT]' in _cleaned:
-                        _cleaned = _cleaned.split('[END OF REPORT]')[0]
-                    # 備援截斷：第二個 Section 3 header 之後的內容全部丟棄
-                    _parts = re.split(r'(?m)^(?:###\s+)?[3-9]\.', _cleaned)
-                    if len(_parts) > 2:
-                        _head = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
-                        _prefix = ('### 3.' if (_head and '###' in _head.group()) else '3.')
-                        _cleaned = _parts[0] + _prefix + _parts[1]
-                    # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）
-                    _sec3_match = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
-                    if _sec3_match:
-                        _before = _cleaned[:_sec3_match.end()]
-                        _sec3_body = _cleaned[_sec3_match.end():]
-                        # 用句點切句，找第一個重複的句子
-                        _sentences = [s.strip() for s in re.split(r'\.\s+', _sec3_body) if len(s.strip()) > 20]
-                        _seen: set = set()
-                        _cut_idx = len(_sec3_body)
-                        for _sent in _sentences:
-                            _key = re.sub(r'<[^>]+>', '', _sent).lower().strip()
-                            if _key in _seen:
-                                # 找到重複句，找它在 body 裡的位置然後截斷
-                                _pos = _sec3_body.find(_sent)
-                                if _pos > 0:
-                                    _cut_idx = _pos
-                                break
-                            _seen.add(_key)
-                        _cleaned = _before + _sec3_body[:_cut_idx].rstrip()
-                    # 移除多餘空白
-                    _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
-                    _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
-                    vlm_analysis = _cleaned
-                    chars = len(_cleaned)
+                    vlm_analysis = ManufacturingPipeline._clean_vlm_output(vlm_result)
+                    chars = len(vlm_analysis)
                     print(f"Info: VLM analysis completed - {chars} chars (after dimension strip)")
                 else:
                     print("Warning: VLM analysis returned None")
@@ -563,6 +517,62 @@ class ManufacturingPipeline:
             raw_vlm_description=vlm_analysis  # NEW!
         )
     
+    @staticmethod
+    def _clean_vlm_output(raw: str) -> str:
+        """
+        Post-process raw VLM output: strip dimension numbers, truncate repetition.
+
+        Args:
+            raw: Raw string from VLM API.
+
+        Returns:
+            str: Cleaned VLM description.
+        """
+        _cleaned = re.sub(
+            r'\b\d+\.?\d*\s*(?:mm|cm|m|in|inch|inches|\xb0|deg)\b',
+            '',
+            raw,
+            flags=re.IGNORECASE
+        )
+        # 擴大清洗：公差符號、圓角半徑、螺紋規格、角度數值
+        _cleaned = re.sub(r'[\u00b1]\s*\d+\.?\d*', '', _cleaned)   # ±0.1
+        _cleaned = re.sub(r'\bR\d+\.?\d*\b', '', _cleaned)         # R3, R0.5
+        _cleaned = re.sub(r'\bM\d+(\.[\d]+)?\b', '', _cleaned)     # M6, M8x1.25
+        _cleaned = re.sub(r'\b\d+\.?\d*\s*\u00b0', '', _cleaned)  # 45°, 90°
+        # 清除 dimension chain 句型
+        _cleaned = re.sub(r'\s+x\s+x\s+', ' ', _cleaned)
+        _cleaned = re.sub(r'dimensions?\s+(\S+\s+x\s+)*\S+', '', _cleaned, flags=re.IGNORECASE)
+        # [END OF REPORT] 截斷
+        if '[END OF REPORT]' in _cleaned:
+            _cleaned = _cleaned.split('[END OF REPORT]')[0]
+        # 備援截斷：第二個 Section 3 header 之後的內容全部丟棄
+        _parts = re.split(r'(?m)^(?:###\s+)?[3-9]\.', _cleaned)
+        if len(_parts) > 2:
+            _head = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
+            _prefix = ('### 3.' if (_head and '###' in _head.group()) else '3.')
+            _cleaned = _parts[0] + _prefix + _parts[1]
+        # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）
+        _sec3_match = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
+        if _sec3_match:
+            _before = _cleaned[:_sec3_match.end()]
+            _sec3_body = _cleaned[_sec3_match.end():]
+            _sentences = [s.strip() for s in re.split(r'\.\s+', _sec3_body) if len(s.strip()) > 20]
+            _seen: set = set()
+            _cut_idx = len(_sec3_body)
+            for _sent in _sentences:
+                _key = re.sub(r'<[^>]+>', '', _sent).lower().strip()
+                if _key in _seen:
+                    _pos = _sec3_body.find(_sent)
+                    if _pos >= 0:  # fix: was `> 0`, missed position-0 duplicates
+                        _cut_idx = _pos
+                    break
+                _seen.add(_key)
+            _cleaned = _before + _sec3_body[:_cut_idx].rstrip()
+        # 移除多餘空白
+        _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
+        _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
+        return _cleaned
+
     def batch_recognize(
         self,
         images: List[Union[str, np.ndarray]],
