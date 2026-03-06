@@ -327,7 +327,8 @@ class ManufacturingPipeline:
                     prompt=prompt,
                     response_format="text",
                     temperature=0.0,
-                    max_tokens=2000
+                    max_tokens=512,
+                    stop=["[END OF REPORT]"],
                 )
                 if vlm_result and isinstance(vlm_result, str):
                     features.raw_vlm_description = vlm_result
@@ -472,7 +473,8 @@ class ManufacturingPipeline:
                     prompt=prompt,
                     response_format="text",
                     temperature=0.1,
-                    max_tokens=2048
+                    max_tokens=512,
+                    stop=["[END OF REPORT]"],
                 )
                 
                 if vlm_result:
@@ -488,13 +490,15 @@ class ManufacturingPipeline:
                     _cleaned = re.sub(r'\bR\d+\.?\d*\b', '', _cleaned)        # R3, R0.5
                     _cleaned = re.sub(r'\bM\d+(\.\d+)?\b', '', _cleaned)      # M6, M8x1.25
                     _cleaned = re.sub(r'\b\d+\.?\d*\s*\u00b0', '', _cleaned)  # 45°, 90°
-                    # 清除 dimension chain 句型（e.g., '55mm x 10mm x 62mm' 殘留的 ' x  x ' 骨架）
+                    # 清除 dimension chain 句型
                     _cleaned = re.sub(r'\s+x\s+x\s+', ' ', _cleaned)
                     _cleaned = re.sub(r'dimensions?\s+(\S+\s+x\s+)*\S+', '', _cleaned, flags=re.IGNORECASE)
-                    # 截斷：第二個 '### 3.' 之後的內容全部丟棄（VLM 重複輸出防護）
+                    # [END OF REPORT] 偵測：切握標記之後的一切內容
+                    if '[END OF REPORT]' in _cleaned:
+                        _cleaned = _cleaned.split('[END OF REPORT]')[0]
+                    # 備援截斷：第二個 '### 3.' 之後的內容全部丟棄
                     _parts = re.split(r'(?m)^###\s+[3-9]\.', _cleaned)
                     if len(_parts) > 2:
-                        # 保留第一個 Section 3 及之前的內容
                         _cleaned = _parts[0] + '### 3.' + _parts[1]
                     # 移除多餘空白
                     _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)

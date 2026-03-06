@@ -60,8 +60,8 @@ class VLMClient:
         "<red>word</red> means I am guessing.\n"
         "Habit 3 — I write exactly 3 sections and then stop. "
         "Section 1 is my view-by-view observation. Section 2 is my symbol and text scan. Section 3 is my 3D inference. "
-        "After I finish Section 3, my report is done. I do not add Section 4, Section 5, or any extra text. "
-        "I never repeat my Section 3 conclusion under a new heading.\n\n"
+        "After I finish Section 3, I write '[END OF REPORT]' on its own line and stop immediately. "
+        "I never add Section 4, Section 5, '(continued)', or any extra text after '[END OF REPORT]'.\n\n"
         # ── MY REPORT FORMAT (fixed — I always produce exactly this) ───────────
         "My report always looks like this — three sections, this exact heading style, nothing else:\n\n"
         "--- MY REPORT STYLE (do NOT copy this text — analyze the actual drawing) ---\n"
@@ -78,6 +78,7 @@ class VLMClient:
         "The <green>Thru-holes</green> are for bolt-down mounting. "
         "The <green>Weld symbol</green> confirms a welding step is needed. "
         "The <orange>Chamfer</orange> suggests a deburring step after forming.\n"
+        "[END OF REPORT]\n"
         "--- END OF STYLE REFERENCE ---"
     )
     
@@ -187,7 +188,8 @@ class VLMClient:
         bom_context: str = "",
         response_format: str = "text",
         temperature: float = 0.1,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        stop: Optional[List[str]] = None
     ) -> Optional[str]:
         """
         Analyze engineering drawing using vision-language model.
@@ -271,6 +273,7 @@ class VLMClient:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                stop=stop,
             )
             
             # Extract response content
