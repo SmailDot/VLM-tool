@@ -500,6 +500,25 @@ class ManufacturingPipeline:
                     _parts = re.split(r'(?m)^###\s+[3-9]\.', _cleaned)
                     if len(_parts) > 2:
                         _cleaned = _parts[0] + '### 3.' + _parts[1]
+                    # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）
+                    _sec3_match = re.search(r'(?m)^###\s+3\.', _cleaned)
+                    if _sec3_match:
+                        _before = _cleaned[:_sec3_match.end()]
+                        _sec3_body = _cleaned[_sec3_match.end():]
+                        # 用句點切句，找第一個重複的句子
+                        _sentences = [s.strip() for s in re.split(r'\.\s+', _sec3_body) if len(s.strip()) > 20]
+                        _seen: set = set()
+                        _cut_idx = len(_sec3_body)
+                        for _sent in _sentences:
+                            _key = re.sub(r'<[^>]+>', '', _sent).lower().strip()
+                            if _key in _seen:
+                                # 找到重複句，找它在 body 裡的位置然後截斷
+                                _pos = _sec3_body.find(_sent)
+                                if _pos > 0:
+                                    _cut_idx = _pos
+                                break
+                            _seen.add(_key)
+                        _cleaned = _before + _sec3_body[:_cut_idx].rstrip()
                     # 移除多餘空白
                     _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
                     _cleaned = re.sub(r'  +', ' ', _cleaned).strip()

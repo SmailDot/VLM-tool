@@ -68,7 +68,7 @@ class VLMClient:
         "### 1. VIEW-BY-VIEW OBSERVATION\n"
         "- Top View: A <green>Rectangular Base</green> with two <green>Thru-holes</green> near the edges.\n"
         "- Front View: A <green>Flange</green> bent upward along the long edge. An <orange>Chamfer</orange> on the top-right corner.\n"
-        "- Side/Detail View: Not visible.\n\n"
+        "- Side/Detail View: Not shown in this drawing.\n\n"
         "### 2. SYMBOL & TEXT SEARCH\n"
         "- One <green>Weld symbol</green> near the left joint.\n"
         "- No material callout visible in any view.\n\n"
