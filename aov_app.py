@@ -441,8 +441,10 @@ with col_left:
                     parent_img = st.session_state.parent_drawing
                     if parent_img is not None:
                         st.info("雙圖模式: 正在解析父圖全域資訊...")
+                    _tmp = st.session_state.get("temp_file_path")
+                    _img_arg = _tmp if (_tmp and Path(_tmp).exists()) else primary_image
                     result = st.session_state.mfg_pipeline.recognize(
-                        primary_image,
+                        _img_arg,
                         parent_image=parent_img,
                         top_n=None,
                         min_confidence=st.session_state.min_confidence,
