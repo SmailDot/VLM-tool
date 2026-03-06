@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 import time
+import re
 
 from .schema import (
     ExtractedFeatures,
@@ -476,9 +477,19 @@ class ManufacturingPipeline:
                 )
                 
                 if vlm_result:
-                    vlm_analysis = vlm_result
-                    chars = len(vlm_result) if isinstance(vlm_result, str) else 0
-                    print(f"Info: VLM analysis completed - {chars} chars")
+                    # 數據清洗護欄：移除尺寸數字（防止 VLM 幻覺干擾後續 LLM 判斷）
+                    _cleaned = re.sub(
+                        r'\b\d+\.?\d*\s*(?:mm|cm|m|in|inch|inches|\xb0|deg)\b',
+                        '',
+                        vlm_result,
+                        flags=re.IGNORECASE
+                    )
+                    # 移除纔後多餘週偵（一行空白就好）
+                    _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
+                    _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
+                    vlm_analysis = _cleaned
+                    chars = len(_cleaned)
+                    print(f"Info: VLM analysis completed - {chars} chars (after dimension strip)")
                 else:
                     print("Warning: VLM analysis returned None")
             except Exception as e:
