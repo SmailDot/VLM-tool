@@ -293,6 +293,18 @@ class ManufacturingPipeline:
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
         system_anchors: List[str] = []
+        # SymbolMatcher: 掃描目標圖紙，將命中符號名稱加入 system_anchors
+        try:
+            from app.vision.symbol_matcher import SymbolMatcher
+            _sym_matcher = SymbolMatcher()
+            if _sym_matcher.symbol_names:  # 只在有模板時才掃描
+                _sm_hits = _sym_matcher.match_symbols(img_array)
+                for _hit in _sm_hits:
+                    _hname = _hit["name"]
+                    if _hname not in system_anchors:
+                        system_anchors.append(_hname)
+        except Exception as _sm_err:
+            print(f"Warning: SymbolMatcher scan failed: {_sm_err}")
 
         # RAG retrieval: hash 優先比對（不依賴 VLM，只要有 image_path 就能跑）
         # 後備：vlm_analysis dict 的 shape 文字比對
