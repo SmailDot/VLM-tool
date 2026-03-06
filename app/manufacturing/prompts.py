@@ -610,7 +610,7 @@ Step 3: 根據代碼表匹配製程。
 
 
 # Export main classes and functions
-def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "") -> str:
+def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", system_anchors: Optional[List[str]] = None) -> str:
     """
     Generate a structured descriptive prompt for VLM geometry analysis.
 
@@ -618,10 +618,14 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "") -> 
     - ALLOWED VOCABULARY (Controlled Vocabulary): 6 categories of standard sheet-metal terms
     - CONFIDENCE TAGGING rules: VLM must wrap entities with <green>, <orange>, or <red>
     - 4-section output format for structured geometry description
+    - SYSTEM ANCHORS: CV scanner + RAG prior hints for spatial relationship description
 
     Args:
         bom_context: Plain-text BOM / material facts confirmed by the user.
                      If non-empty, injected as a KNOWN FACTS preamble.
+        rag_context: Past similar case description for few-shot reference.
+        system_anchors: List of feature labels from CV scanner + RAG priors.
+                        If non-empty, injected as a SYSTEM ANCHORS block.
 
     Returns:
         Complete prompt string ready to pass to VLMClient.analyze_image().
@@ -657,6 +661,20 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "") -> 
             "Now analyse the CURRENT drawing provided above, using the reference case as a guide.\n\n"
         )
 
+    # ── System Anchors block (Task1-Step3+4) ───────────────────────
+    anchors_block = ""
+    if system_anchors:
+        _anchor_lines = "\n".join(f"  - {a}" for a in system_anchors)
+        anchors_block = (
+            "=== SYSTEM ANCHORS (high-confidence visual hints from CV scanner + past cases) ===\n"
+            "Our CV system and past verified cases suggest these features are likely present.\n"
+            "Your task: CONFIRM each one by finding it in the 2D views, then describe its SPATIAL RELATIONSHIP.\n\n"
+            f"{_anchor_lines}\n\n"
+            "Use ONLY these location words to describe position:\n"
+            "  Attached to | On the long edge of | Located inside | Perpendicular to | Centered in | Near the corner of\n"
+            "Example: '<green>Flange</green> is attached to the long edge of the <green>Rectangular Base</green>.'\n"
+            "=== END OF SYSTEM ANCHORS ===\n\n"
+        )
     # ── Anti-Hallucination rules ─────────────────────────────────────────────
     confidence_rules = (
         "FORBIDDEN — do NOT write any of the following:\n"
@@ -683,6 +701,7 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "") -> 
     return (
         f"{known_facts_block}"
         f"{rag_block}"
+        f"{anchors_block}"
         f"{vocab_block}"
         f"{confidence_rules}"
         "Analyze the 2D engineering drawing(s) provided above.\n"

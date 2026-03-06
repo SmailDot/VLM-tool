@@ -292,6 +292,7 @@ class ManufacturingPipeline:
 
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
+        system_anchors: List[str] = []
 
         # RAG retrieval: hash 優先比對（不依賴 VLM，只要有 image_path 就能跑）
         # 後備：vlm_analysis dict 的 shape 文字比對
@@ -314,13 +315,22 @@ class ManufacturingPipeline:
                         or best_case.get("reasoning", "")
                     )
                     rag_context_text = _ref_desc
+                    # 組裝 system_anchors：CV 偵測符號 + RAG rag_priors 幾何名詞
+                    _cv_symbols: List[str] = []
+                    if features.symbols:
+                        for sym in features.symbols:
+                            _label = getattr(sym, 'symbol_type', None) or sym.get('symbol_type', '') if isinstance(sym, dict) else str(sym)
+                            if _label:
+                                _cv_symbols.append(str(_label))
+                    _rag_priors: List[str] = best_case.get('rag_priors', [])
+                    system_anchors = _cv_symbols + [p for p in _rag_priors if p not in _cv_symbols]
             except Exception as e:
                 print(f"Warning: RAG retrieval failed: {e}")
         # If RAG context exists, re-run VLM with injected prompt
         if rag_context_text and self.vlm_client:
             try:
                 input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
-                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text, rag_context=rag_context_text)
+                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text, rag_context=rag_context_text, system_anchors=system_anchors)
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (
