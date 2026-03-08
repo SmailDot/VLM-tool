@@ -639,10 +639,10 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
             f"{bom_context.strip()}\n\n"
             "COMPLIANCE CHECKLIST (apply before writing each section):\n"
-            "  [1] Material / surface treatment stated above \u2192 mention it in Section 2 and 4.\n"
+            "  [1] Material / surface treatment stated above \u2192 mention it in Section 3.\n"
             "  [2] Part name / assembly context stated above \u2192 reference it in Section 1.\n"
             "  [3] Any dimension or thickness stated above \u2192 use it verbatim in Section 3.\n"
-            "  [4] Any finish or coating stated above \u2192 call it out explicitly in Section 4.\n"
+            "  [4] Any finish or coating stated above \u2192 call it out explicitly in Section 3.\n"
             "If a KNOWN FACT cannot be reconciled with what you see in the drawings, "
             "state the conflict explicitly (e.g., 'BOM states SUS304 but material callout not visible in views.').\n"
             "=== END OF KNOWN FACTS ===\n\n"
@@ -684,7 +684,8 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "  \u2022 Dimension chains (e.g., '55mm x 10mm x 62mm', 'dimensions X x Y x Z')\n"
         "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
         "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n"
-        "OUTPUT STRUCTURE: Output EXACTLY 3 sections (### 1, ### 2, ### 3). "
+        "OUTPUT STRUCTURE: Output EXACTLY 3 sections in STRICT ORDER (### 1, ### 2, ### 3). "
+        "Section 2 (SYMBOL & TEXT SEARCH) must come AFTER Section 1 and BEFORE Section 3. "
         "STOP after Section 3. Do NOT add Section 4, 5, or any continuation.\n\n"
     )
 
@@ -709,7 +710,8 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "NO DIMENSIONS. Write exactly 3 sections in the format shown in your instructions.\n\n"
         "FINAL REMINDER — ZERO NUMBERS RULE:\n"
         "Before you write anything: I will NOT write any digit followed by mm, cm, m, °, ±, R, or M.\n"
-        "Section 3 must sound like an engineer explaining to a colleague — full sentences, cause-and-effect reasoning.\n\n"
+        "Section 3 must sound like an engineer explaining to a colleague \u2014 full sentences, cause-and-effect reasoning.\n"
+        "Section 2 format REMINDER: answer True or False for each symbol category — no repetitive descriptions.\n\n"
         "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 

@@ -280,20 +280,8 @@ class ManufacturingPipeline:
             else:
                 vlm_images = [img_array]
 
-        features = self._extract_features(
-            img_array,
-            ocr_threshold,
-            symbol_threshold,
-            image_path=image_path,
-            prompt_override=parent_prompt,
-            vlm_images=vlm_images,
-            view_labels=view_labels
-        )
-
-        rag_references: List[Dict[str, Any]] = []
-        rag_context_text = ""
+        # ── BUG A 修復：SymbolMatcher 先於 VLM 執行，命中結果注入初次 prompt ────
         system_anchors: List[str] = []
-        # SymbolMatcher: 掃描目標圖紙，將命中符號名稱加入 system_anchors
         try:
             from app.vision.symbol_matcher import SymbolMatcher
             _sym_matcher = SymbolMatcher()
@@ -305,6 +293,27 @@ class ManufacturingPipeline:
                         system_anchors.append(_hname)
         except Exception as _sm_err:
             print(f"Warning: SymbolMatcher scan failed: {_sm_err}")
+
+        # 組裝初次 VLM prompt（帶入 system_anchors，不論 RAG 是否啟用）
+        if parent_prompt:
+            _initial_prompt = parent_prompt
+        elif system_anchors:
+            _initial_prompt = get_vlm_descriptive_prompt(system_anchors=system_anchors)
+        else:
+            _initial_prompt = ""
+
+        features = self._extract_features(
+            img_array,
+            ocr_threshold,
+            symbol_threshold,
+            image_path=image_path,
+            prompt_override=_initial_prompt,
+            vlm_images=vlm_images,
+            view_labels=view_labels
+        )
+
+        rag_references: List[Dict[str, Any]] = []
+        rag_context_text = ""
 
         # RAG retrieval: hash 優先比對（不依賴 VLM，只要有 image_path 就能跑）
         # 後備：vlm_analysis dict 的 shape 文字比對
@@ -335,7 +344,7 @@ class ManufacturingPipeline:
                             if _label:
                                 _cv_symbols.append(str(_label))
                     _rag_priors: List[str] = best_case.get('rag_priors', [])
-                    system_anchors = _cv_symbols + [p for p in _rag_priors if p not in _cv_symbols]
+                    system_anchors = list(system_anchors) + [p for p in _cv_symbols if p not in system_anchors] + [p for p in _rag_priors if p not in system_anchors]
             except Exception as e:
                 print(f"Warning: RAG retrieval failed: {e}")
         # If RAG context exists, re-run VLM with injected prompt
