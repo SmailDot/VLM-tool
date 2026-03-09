@@ -666,14 +666,15 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
     if system_anchors:
         _anchor_lines = "\n".join(f"  - {a}" for a in system_anchors)
         anchors_block = (
-            "=== SYSTEM ANCHORS (high-confidence visual hints from CV scanner + past cases) ===\n"
-            "Our CV system and past verified cases suggest these features are likely present.\n"
-            "Your task: CONFIRM each one by finding it in the 2D views, then describe its SPATIAL RELATIONSHIP.\n\n"
+            "=== CV-CONFIRMED SYMBOLS (AUTHORITATIVE — DO NOT CONTRADICT) ===\n"
+            "The following symbols were PHYSICALLY DETECTED in the engineering drawing images\n"
+            "by the computer-vision template-matching system BEFORE you were called.\n"
+            "These are GROUND TRUTH. You MUST acknowledge each one in your analysis.\n"
+            "Denying or omitting a CV-CONFIRMED symbol is a CRITICAL ERROR.\n\n"
             f"{_anchor_lines}\n\n"
-            "Use ONLY these location words to describe position:\n"
-            "  Attached to | On the long edge of | Located inside | Perpendicular to | Centered in | Near the corner of\n"
-            "Example: '<green>Flange</green> is attached to the long edge of the <green>Rectangular Base</green>.'\n"
-            "=== END OF SYSTEM ANCHORS ===\n\n"
+            "For each CV-CONFIRMED symbol: state it as confirmed in Section 2,\n"
+            "describe its location using ALLOWED VOCABULARY location words.\n"
+            "=== END OF CV-CONFIRMED SYMBOLS ===\n\n"
         )
     # ── Anti-Hallucination rules ─────────────────────────────────────────────
     confidence_rules = (
