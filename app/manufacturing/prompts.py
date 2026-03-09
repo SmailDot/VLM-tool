@@ -675,7 +675,20 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "Example: '<green>Flange</green> is attached to the long edge of the <green>Rectangular Base</green>.'\n"
             "=== END OF SYSTEM ANCHORS ===\n\n"
         )
-    # ── Key-Value 清單格式護欄（Task1-Step3 重構）──────────────────────────────
+    # ── Anti-Hallucination rules ─────────────────────────────────────────────
+    confidence_rules = (
+        "FORBIDDEN — do NOT write any of the following:\n"
+        "  \u2022 Numeric measurements of any kind (e.g., 110mm, 30mm, 4mm, 55mm)\n"
+        "  \u2022 Width / Length / Height / Thickness values in any unit\n"
+        "  \u2022 Thread specifications or tolerances (e.g., M6, R3, \u00b10.1)\n"
+        "  \u2022 Dimension chains (e.g., '55mm x 10mm x 62mm', 'dimensions X x Y x Z')\n"
+        "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
+        "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n"
+        "OUTPUT STRUCTURE: Output EXACTLY 3 sections in STRICT ORDER (### 1, ### 2, ### 3). "
+        "Section 2 (SYMBOL & TEXT SEARCH) must come AFTER Section 1 and BEFORE Section 3. "
+        "STOP after Section 3. Do NOT add Section 4, 5, or any continuation.\n\n"
+    )
+
     vocab_block = (
         "ALLOWED VOCABULARY — use ONLY these words for shapes, features, and details:\n"
         "  Shapes   : Flat Plate | Rectangular Base | L-shaped Bracket | U-shaped Channel | Z-shaped Bracket | Hat Channel | Box\n"
@@ -686,36 +699,20 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "Do NOT invent words outside this list.\n\n"
     )
 
-    checklist_example = (
-        "OUTPUT FORMAT — STRICT KEY-VALUE CHECKLIST ONLY:\n"
-        "You MUST output EXACTLY the following keys, one per line, in this order.\n"
-        "NO paragraphs. NO prose. NO explanations outside the values.\n\n"
-        "--- EXAMPLE OUTPUT ---\n"
-        "BASIC_GEOMETRY: <green>Rectangular Base</green>\n"
-        "BENT_EDGES: Yes, one <green>Flange</green> on the right\n"
-        "VISIBLE_HOLES: 2 <green>Thru-hole</green>s near the center\n"
-        "SURFACE_FEATURES: <orange>Emboss</orange> on the top face\n"
-        "CONFIRMED_SYMBOLS: [Check against SYSTEM ANCHORS, list exact text only]\n"
-        "MATERIAL_CALLOUT: SUS304 (from BOM) / Not visible\n"
-        "--- END EXAMPLE ---\n\n"
-        "CRITICAL RULE: STRICTLY output the checklist ONLY. NO paragraphs. "
-        "NO explaining what symbols mean. "
-        "Do NOT invent new tags. "
-        "Do NOT write any numeric measurement (mm, cm, °, ±, R, M).\n"
-        "Only CONFIRMED_SYMBOLS may reference the SYSTEM ANCHORS list above — copy the exact text.\n\n"
-    )
-
     return (
         f"{known_facts_block}"
         f"{rag_block}"
         f"{anchors_block}"
         f"{vocab_block}"
-        f"{checklist_example}"
-        "Analyze the 2D engineering drawing(s) provided above and fill in the checklist below.\n"
+        f"{confidence_rules}"
+        "Analyze the 2D engineering drawing(s) provided above.\n"
         "Tag EVERY shape/feature/hole/symbol noun with <green>, <orange>, or <red>.\n"
-        "NO DIMENSIONS. Output the checklist keys in order, nothing else.\n\n"
-        "Begin your output now:\n"
-        "BASIC_GEOMETRY:"
+        "NO DIMENSIONS. Write exactly 3 sections in the format shown in your instructions.\n\n"
+        "FINAL REMINDER — ZERO NUMBERS RULE:\n"
+        "Before you write anything: I will NOT write any digit followed by mm, cm, m, \u00b0, \u00b1, R, or M.\n"
+        "Section 3 must sound like an engineer explaining to a colleague \u2014 full sentences, cause-and-effect reasoning.\n"
+        "Section 2 format REMINDER: answer True or False for each symbol category \u2014 no repetitive descriptions.\n\n"
+        "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 
 
