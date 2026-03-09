@@ -302,21 +302,18 @@ class ManufacturingPipeline:
                 vlm_images = [img_array]
 
         # ── BUG A 修復：SymbolMatcher 先於 VLM 執行，命中結果注入初次 prompt ────
-        # 對所有視圖（vlm_images）執行掃描，彙整去重後以強訊號格式輸出
+        # 邏輯：只要任一視圖掃到符號 → 該零件確認需要此工序，立刻加入已知集合。後續視圖跳過已知符號減少重複比對消耗。
         system_anchors: List[str] = []
         try:
             from app.vision.symbol_matcher import SymbolMatcher
             _sym_matcher = SymbolMatcher()
             if _sym_matcher.symbol_names:  # 只在有模板時才掃描
-                _seen_best: Dict[str, Dict[str, Any]] = {}  # name -> {score, view_label}
+                _confirmed: set = set()  # 已確認的符號名稱集合（跨視圖去重）
                 _all_scan_targets: List[Union[str, Path, np.ndarray]] = list(vlm_images) if vlm_images else [img_array]
-                _view_labels_list: List[str] = list(view_labels) if view_labels else []
-                for _vi, _vimg in enumerate(_all_scan_targets):
-                    # 解析視圖名稱
-                    if _view_labels_list and _vi < len(_view_labels_list):
-                        _view_label = _view_labels_list[_vi]
-                    else:
-                        _view_label = f"View {_vi + 1}"
+                for _vimg in _all_scan_targets:
+                    # 若所有符號都已確認，提前結束
+                    if len(_confirmed) == len(_sym_matcher.symbol_names):
+                        break
                     # 將 path/str 轉為 np.ndarray
                     _scan_img: Optional[np.ndarray] = None
                     if isinstance(_vimg, np.ndarray):
@@ -332,15 +329,11 @@ class ManufacturingPipeline:
                     _hits = _sym_matcher.match_symbols(_scan_img)
                     for _hit in _hits:
                         _name: str = _hit["name"]
-                        _score: float = float(_hit.get("confidence", _hit.get("score", 0.0)))
-                        if _name not in _seen_best or _score > _seen_best[_name]["score"]:
-                            _seen_best[_name] = {"score": _score, "view_label": _view_label}
-                # 將命中結果轉成強訊號字串
-                for _name, _info in _seen_best.items():
-                    system_anchors.append(
-                        f"[CV-CONFIRMED] {_name} detected in {_info['view_label']}"
-                        f" (confidence={_info['score']:.2f})"
-                    )
+                        if _name not in _confirmed:
+                            _confirmed.add(_name)
+                # 將確認的符號轉成強訊號字串注入 VLM
+                for _name in _confirmed:
+                    system_anchors.append(f"[CV-CONFIRMED] {_name}")
         except Exception as _sm_err:
             print(f"Warning: SymbolMatcher scan failed: {_sm_err}")
 
