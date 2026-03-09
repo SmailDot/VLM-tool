@@ -143,6 +143,26 @@ class ManufacturingPipeline:
         else:
             self.decision_engine = DecisionEngine(process_lib_path)
     
+    def reset_vlm_client(self) -> None:
+        """
+        強制重建 VLMClient 實例，確保每次辨識都是全新連線。
+
+        用途：每次使用者按下辨識按鈕時呼叫，防止 LM Studio 端隱性
+        KV cache / session state 污染後續辨識結果。
+        """
+        if not self.use_vlm:
+            return
+        try:
+            new_client = VLMClient()
+            if new_client.is_available():
+                self.vlm_client = new_client
+                print("Info: VLMClient reset — fresh connection established")
+            else:
+                # LM Studio 暫時不可用，保留舊 client 避免崩潰
+                print("Warning: VLM service unreachable during reset — keeping previous client")
+        except Exception as e:
+            print(f"Warning: VLMClient reset failed: {e}")
+
     @property
     def total_processes(self) -> int:
         """Get total number of processes in the loaded library."""

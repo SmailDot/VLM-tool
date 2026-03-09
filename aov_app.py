@@ -437,7 +437,19 @@ with col_left:
         if st.button("▶️ 確認無誤，開始 VLM 視覺重建", type="primary", use_container_width=True):
             with st.spinner("正在分析工程圖紙..."):
                 try:
-                    if st.session_state.mfg_pipeline is None:
+                    # ── 每次按辨識強制視為「全新一輪」─────────────────────────────────
+                    # 1. 清除上一輪的辨識結果，避免 UI 殘留舊狀態
+                    st.session_state.recognition_result = None
+                    st.session_state.pop('hitl_corrected_text', None)
+                    st.session_state.pop('_hitl_result_key', None)
+
+                    # 2. 若設定改變或 pipeline 尚未初始化，重建整個 pipeline
+                    _need_rebuild = (
+                        st.session_state.mfg_pipeline is None
+                        or st.session_state.get('_last_pipeline_use_vlm') != use_vlm
+                        or st.session_state.get('_last_pipeline_use_ocr') != use_ocr
+                    )
+                    if _need_rebuild:
                         st.session_state.mfg_pipeline = ManufacturingPipeline(
                             use_ocr=use_ocr,
                             use_geometry=use_geometry,
@@ -445,6 +457,12 @@ with col_left:
                             use_visual=False,
                             use_vlm=use_vlm
                         )
+                        st.session_state['_last_pipeline_use_vlm'] = use_vlm
+                        st.session_state['_last_pipeline_use_ocr'] = use_ocr
+                    else:
+                        # 3. 設定未變：pipeline 可重用，但 VLMClient 必須重建，
+                        #    斷掉 LM Studio 端任何隱性 KV cache / session state
+                        st.session_state.mfg_pipeline.reset_vlm_client()
                     start_time = time.time()
                     parent_img = st.session_state.parent_drawing
                     if parent_img is not None:
