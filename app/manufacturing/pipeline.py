@@ -33,6 +33,7 @@ from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
 from .prompts import EngineeringPrompts, get_vlm_descriptive_prompt
 from .decision import DecisionEngine
+from .decision.rule_router import plan_vision_skills, describe_skills
 from .decision.engine_v2 import DecisionEngineV2
 from .schema import GeometryFeatures
 
@@ -293,6 +294,27 @@ class ManufacturingPipeline:
                         system_anchors.append(_hname)
         except Exception as _sm_err:
             print(f"Warning: SymbolMatcher scan failed: {_sm_err}")
+
+        # ── Rule-based 技能路由：依 BOM 文字觸發 Dummy CV 掃描 ─────────────────
+        _effective_bom = bom_context or parent_context_text
+        _routed_skills = plan_vision_skills(_effective_bom)
+        if _routed_skills:
+            print(f"Info: Rule router triggered skills: {describe_skills(_routed_skills)}")
+        # Dummy CV 執行器：將技能名稱映射為視覺錨點文字
+        _DUMMY_CV_MAP: Dict[str, str] = {
+            "scan_weld_symbols":    "Weld Symbol",
+            "scan_thread_marks":    "Thread / Tap Mark",
+            "scan_holes":           "Hole / Thru-hole",
+            "scan_bend_lines":      "Bend Line",
+            "scan_surface_marks":   "Surface Finish Mark",
+            "scan_tolerance_marks": "Tolerance Callout",
+            "scan_insert_marks":    "Insert / Rivet",
+        }
+        for _skill in _routed_skills:
+            _anchor = _DUMMY_CV_MAP.get(_skill, _skill)
+            _tagged  = f"[System] Detected {_anchor}"
+            if _tagged not in system_anchors:
+                system_anchors.append(_tagged)
 
         # 組裝初次 VLM prompt（帶入 system_anchors，不論 RAG 是否啟用）
         if parent_prompt:
