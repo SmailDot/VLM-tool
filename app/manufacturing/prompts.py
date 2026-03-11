@@ -630,12 +630,14 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
     Returns:
         Complete prompt string ready to pass to VLMClient.analyze_image().
     """
-    known_facts_block = ""
+    known_facts = ""
+    bom_instruction = ""
     if bom_context.strip():
-        known_facts_block = (
-            "=== KNOWN BOM FACTS (FOR CROSS-VERIFICATION) ===\n"
+        known_facts = (
+            "=== KNOWN BOM FACTS (FOR REFERENCE — DO NOT TREAT AS ABSOLUTE TRUTH) ===\n"
             "The following items are listed in the BOM / engineer notes.\n"
-            "Your job is to CROSS-CHECK every BOM item against the drawing views, and every drawing feature against the BOM.\n\n"
+            "Use this as a REFERENCE CHECKLIST to cross-check against the drawing views.\n"
+            "Do NOT blindly accept BOM items as ground truth — verify each one visually.\n\n"
             f"{bom_context.strip()}\n\n"
             "BOM CROSS-VERIFICATION RULES (apply in every section as you write):\n"
             "  Rule A: If you see a feature/symbol/process in the drawing views that is NOT mentioned in the BOM above,\n"
@@ -646,13 +648,10 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "  Rule D: Do NOT silently skip any BOM item — every item must be either confirmed or flagged.\n"
             "=== END OF KNOWN BOM FACTS ===\n\n"
         )
+        bom_instruction = "Verify the 2D drawing views against the KNOWN BOM FACTS (for reference)."
     else:
-        known_facts_block = (
-            "=== NO BOM PROVIDED ===\n"
-            "No BOM or engineer notes were supplied this time.\n"
-            "Describe what you observe in the drawing views freely. Do NOT invent BOM items.\n"
-            "=== END ===\n\n"
-        )
+        bom_instruction = "Analyze the 2D drawing views carefully (No BOM provided this time)."
+    known_facts_block = known_facts
 
     # \u2500\u2500 RAG few-shot reference block \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     rag_block = ""
@@ -712,13 +711,18 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         f"{anchors_block}"
         f"{vocab_block}"
         f"{confidence_rules}"
+        f"You are an experienced mechanical Quality Assurance (QA) inspector. Your job is to {bom_instruction}\n"
+        "Pay close attention to the Top View and Front View, as these two perspectives summarize 70% of the part's geometry. "
+        "The remaining 30% is supplemented by the Side View. "
+        "If an Isometric (ISO) or 3D view is provided, use it as additional reference to clarify spatial relationships — but it does not replace the orthographic views.\n\n"
         "Analyze the 2D engineering drawing(s) provided above.\n"
         "Tag EVERY shape/feature/hole/symbol noun with <green>, <orange>, or <red>.\n"
         "NO DIMENSIONS. Write exactly 3 sections in the format shown in your instructions.\n\n"
         "FINAL REMINDER — ZERO NUMBERS RULE:\n"
-        "Before you write anything: I will NOT write any digit followed by mm, cm, m, \u00b0, \u00b1, R, or M.\n"
-        "Section 3 must sound like an engineer explaining to a colleague \u2014 full sentences, cause-and-effect reasoning.\n"
-        "Section 2 format REMINDER: answer True or False for each symbol category \u2014 no repetitive descriptions.\n\n"
+        "Before you write anything: I will NOT write any digit followed by mm, cm, m, °, ±, R, or M.\n"
+        "Section 3 must synthesize observations from ALL available views (Top, Front, Side, and ISO if present) "
+        "combined with any BOM references to produce a coherent component description — full sentences, cause-and-effect reasoning.\n"
+        "Section 2 format REMINDER: answer True or False for each symbol category — no repetitive descriptions.\n\n"
         "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 
