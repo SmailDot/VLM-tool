@@ -633,19 +633,25 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
     known_facts_block = ""
     if bom_context.strip():
         known_facts_block = (
-            "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY \u2014 DO NOT IGNORE) ===\n"
-            "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
-            "You MUST treat every item below as authoritative ground truth.\n"
-            "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
+            "=== KNOWN BOM FACTS (FOR CROSS-VERIFICATION) ===\n"
+            "The following items are listed in the BOM / engineer notes.\n"
+            "Your job is to CROSS-CHECK every BOM item against the drawing views, and every drawing feature against the BOM.\n\n"
             f"{bom_context.strip()}\n\n"
-            "COMPLIANCE CHECKLIST (apply before writing each section):\n"
-            "  [1] Material / surface treatment stated above \u2192 mention it in Section 3.\n"
-            "  [2] Part name / assembly context stated above \u2192 reference it in Section 1.\n"
-            "  [3] Any dimension or thickness stated above \u2192 use it verbatim in Section 3.\n"
-            "  [4] Any finish or coating stated above \u2192 call it out explicitly in Section 3.\n"
-            "If a KNOWN FACT cannot be reconciled with what you see in the drawings, "
-            "state the conflict explicitly (e.g., 'BOM states SUS304 but material callout not visible in views.').\n"
-            "=== END OF KNOWN FACTS ===\n\n"
+            "BOM CROSS-VERIFICATION RULES (apply in every section as you write):\n"
+            "  Rule A: If you see a feature/symbol/process in the drawing views that is NOT mentioned in the BOM above,\n"
+            "          you MUST flag it inline: 'BOM 沒有提到 [XXX]，但我在視角圖上有看到，請注意確認'\n"
+            "  Rule B: If the BOM mentions an item that you CANNOT find evidence of in the drawing views,\n"
+            "          you MUST flag it inline: 'BOM 有提到 [XXX]，但我在視角圖上沒有看到，請注意確認'\n"
+            "  Rule C: If a BOM item IS confirmed in the drawing, state it normally with its location.\n"
+            "  Rule D: Do NOT silently skip any BOM item — every item must be either confirmed or flagged.\n"
+            "=== END OF KNOWN BOM FACTS ===\n\n"
+        )
+    else:
+        known_facts_block = (
+            "=== NO BOM PROVIDED ===\n"
+            "No BOM or engineer notes were supplied this time.\n"
+            "Describe what you observe in the drawing views freely. Do NOT invent BOM items.\n"
+            "=== END ===\n\n"
         )
 
     # \u2500\u2500 RAG few-shot reference block \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
