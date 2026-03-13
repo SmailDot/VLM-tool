@@ -624,11 +624,20 @@ class ManufacturingPipeline:
             str: Cleaned VLM description.
         """
         _cleaned = re.sub(
-            r'\b\d+\.?\d*\s*(?:mm|cm|m|in|inch|inches|\xb0|deg)\b',
+            r'\b\d+\.?\d*\s*(?:mm|cm|m|in|inch|inches|\xb0|deg|millimeters?|centimeters?|meters?|inches?)\b',
             '',
             raw,
             flags=re.IGNORECASE
         )
+        # 清除帶連字號的形式：e.g. "110-millimeter", "4-mm"
+        _cleaned = re.sub(
+            r'\b\d+\.?\d*[-\u2011](?:mm|cm|millimeters?|centimeters?)\b',
+            '',
+            _cleaned,
+            flags=re.IGNORECASE
+        )
+        # 清除 「數字 + 空格 + 全拼單位」殘留（避免漏掉 "110 millimeters" 後的孤立數字）
+        _cleaned = re.sub(r'\b(approximately|about|around|roughly|nearly|over|under)\s+\d+\.?\d*\b', r'\1', _cleaned, flags=re.IGNORECASE)
         # 擴大清洗：公差符號、圓角半徑、螺紋規格、角度數值
         _cleaned = re.sub(r'[\u00b1]\s*\d+\.?\d*', '', _cleaned)   # ±0.1
         _cleaned = re.sub(r'\bR\d+\.?\d*\b', '', _cleaned)         # R3, R0.5

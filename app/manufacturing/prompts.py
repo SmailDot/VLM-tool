@@ -689,7 +689,7 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "  \u2022 Thread specifications or tolerances (e.g., M6, R3, \u00b10.1)\n"
         "  \u2022 Dimension chains (e.g., '55mm x 10mm x 62mm', 'dimensions X x Y x Z')\n"
         "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
-        "Exception: only if a value appears verbatim in the KNOWN FACTS block above.\n"
+        "NO EXCEPTIONS — numeric measurements are forbidden even if they appear in the KNOWN FACTS block above. Use qualitative descriptions instead (e.g., 'thin sheet', 'narrow flange', 'large cutout').\n"
         "OUTPUT STRUCTURE: Output EXACTLY 3 sections in STRICT ORDER (### 1, ### 2, ### 3). "
         "Section 2 (SYMBOL & TEXT SEARCH) must come AFTER Section 1 and BEFORE Section 3. "
         "STOP after Section 3. Do NOT add Section 4, 5, or any continuation.\n\n"
