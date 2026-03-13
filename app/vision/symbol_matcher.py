@@ -219,8 +219,9 @@ def _load_template(png_path: Path) -> Tuple[Optional[np.ndarray], Optional[np.nd
             bgr = raw[:, :, :3]
             alpha = raw[:, :, 3]
             grey = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-            # Mask: 255 where opaque, 0 where transparent
-            mask = np.where(alpha > 0, np.uint8(255), np.uint8(0))
+            # Mask: 255 where fully/mostly opaque, 0 where transparent or anti-aliased edge.
+            # 使用 > 128 而非 > 0，避免去背工具產生的邊緣 anti-aliasing 半透明像素將奇數計入比對
+            mask = np.where(alpha > 128, np.uint8(255), np.uint8(0))
             return grey, mask
 
         # BGR without alpha
