@@ -565,13 +565,19 @@ with col_right:
                 "\U0001f534 低信心（AI 沒把握，**請人工核對**）"
             )
 
-            # 若有 <red> 項目，主動顯示警示橫幅
+            # 若有 <orange> 或 <red> 項目，主動顯示警示橫幅
             import re as _re
-            _red_items = _re.findall(r'<red>(.*?)</red>', vlm_desc)
-            if _red_items:
+            _orange_items = _re.findall(r'<orange>(.*?)</orange>', vlm_desc)
+            _red_items    = _re.findall(r'<red>(.*?)</red>', vlm_desc)
+            if _orange_items or _red_items:
+                _warn_parts = []
+                if _red_items:
+                    _warn_parts.append("🔴 沒把握（強烈建議人工核對）：" + "、".join(f'**{x}**' for x in _red_items))
+                if _orange_items:
+                    _warn_parts.append("🟠 存疑（建議確認）：" + "、".join(f'**{x}**' for x in _orange_items))
                 st.warning(
-                    "⚠️ **AI 不確定以下項目，請人類專家務必核對：** "
-                    + "、".join(f'**{x}**' for x in _red_items)
+                    "⚠️ **AI 不確定以下項目，請人類專家務必核對：**\n\n"
+                    + "\n\n".join(_warn_parts)
                 )
 
             # 使用 Streamlit 原生顏色語法渲染（不需要 unsafe_allow_html）
