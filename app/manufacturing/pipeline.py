@@ -362,9 +362,10 @@ class ManufacturingPipeline:
         if parent_prompt:
             _initial_prompt = parent_prompt
         elif system_anchors:
-            _initial_prompt = get_vlm_descriptive_prompt(system_anchors=system_anchors)
+            # fix: bom_context 必須一併帶入，避免有符號時 bom 被静默丟棄
+            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context, system_anchors=system_anchors)
         else:
-            _initial_prompt = ""
+            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context) if bom_context else ""
 
         features = self._extract_features(
             img_array,
@@ -649,27 +650,27 @@ class ManufacturingPipeline:
         # [END OF REPORT] 截斷
         if '[END OF REPORT]' in _cleaned:
             _cleaned = _cleaned.split('[END OF REPORT]')[0]
-        # 備援截斷：Section 5+ 之後的內容全部丟棄（4-section 架構，Section 4 是最後一節）
-        _parts = re.split(r'(?m)^(?:###\s+)?[5-9]\.', _cleaned)
+        # 備援截斷：Section 4+ 之後的內容全部丟棄（3-section 架構，Section 3 是最後一節）
+        _parts = re.split(r'(?m)^(?:###\s+)?[4-9]\.', _cleaned)
         if len(_parts) > 1:
             _cleaned = _parts[0].rstrip()
-        # 備援截斷：偵測 Section 4 內的重複句型（同一句出現 2 次以上即截斷）
-        _sec4_match = re.search(r'(?m)^(?:###\s+)?4\.', _cleaned)
-        if _sec4_match:
-            _before = _cleaned[:_sec4_match.end()]
-            _sec4_body = _cleaned[_sec4_match.end():]
-            _sentences = [s.strip() for s in re.split(r'\.\s+', _sec4_body) if len(s.strip()) > 20]
+        # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）
+        _sec3_match = re.search(r'(?m)^(?:###\s+)?3\.', _cleaned)
+        if _sec3_match:
+            _before = _cleaned[:_sec3_match.end()]
+            _sec3_body = _cleaned[_sec3_match.end():]
+            _sentences = [s.strip() for s in re.split(r'\.\s+', _sec3_body) if len(s.strip()) > 20]
             _seen: set = set()
-            _cut_idx = len(_sec4_body)
+            _cut_idx = len(_sec3_body)
             for _sent in _sentences:
                 _key = re.sub(r'<[^>]+>', '', _sent).lower().strip()
                 if _key in _seen:
-                    _pos = _sec4_body.find(_sent)
+                    _pos = _sec3_body.find(_sent)
                     if _pos >= 0:  # fix: was `> 0`, missed position-0 duplicates
                         _cut_idx = _pos
                     break
                 _seen.add(_key)
-            _cleaned = _before + _sec4_body[:_cut_idx].rstrip()
+            _cleaned = _before + _sec3_body[:_cut_idx].rstrip()
         # 移除多餘空白
         _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
         _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
