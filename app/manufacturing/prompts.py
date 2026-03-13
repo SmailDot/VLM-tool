@@ -697,14 +697,30 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
 
     # ── Vocabulary block ─────────────────────────────────────────────────────
     vocab_block = (
-        "ALLOWED VOCABULARY \u2014 use ONLY these words for shapes, features, and details:\n"
-        "  2D Outlines : Rectangular outline | Circular outline | L-shaped profile | U-shaped profile | Z-shaped profile | T-shaped profile | Trapezoidal profile\n"
-        "  3D Shapes   : Flat Plate | Rectangular Base | L-shaped Bracket | U-shaped Channel | Z-shaped Bracket | Hat Channel | Box | Cylinder\n"
-        "  Features   : Flange | Rib | Chamfer | Fillet | Gusset | Louver | Emboss\n"
-        "  Holes      : Thru-hole | Threaded hole | Extruded hole (Burring) | Countersink (CSK) | Slotted hole | Notch | Cutout\n"
-        "  Symbols    : Weld symbol | Surface finish mark\n"
-        "  Confidence : <green>word</green> = clearly visible | <orange>word</orange> = partially visible | <red>word</red> = inferred\n"
-        "Do NOT invent words outside this list.\n\n"
+        "SHAPE VOCABULARY — use in this priority order:\n"
+        "\n"
+        "  Tier 1 — PREFERRED TERMS (use these whenever they fit):\n"
+        "    2D Outlines : Rectangular outline | Circular outline | L-shaped profile | C-shaped profile | U-shaped profile | Z-shaped profile | S-shaped profile | T-shaped profile | Hat-shaped profile | Trapezoidal profile\n"
+        "    3D Shapes   : Flat Plate | Rectangular Base | L-shaped Bracket | C-Channel | U-shaped Channel | Hat Channel | Z-shaped Bracket | Box | Cylinder\n"
+        "    Features    : Flange | Rib | Chamfer | Fillet | Gusset | Louver | Emboss\n"
+        "    Holes       : Thru-hole | Threaded hole | Extruded hole (Burring) | Countersink (CSK) | Slotted hole | Notch | Cutout\n"
+        "    Symbols     : Weld symbol | Surface finish mark\n"
+        "    Confidence  : <green>word</green> = clearly visible | <orange>word</orange> = partially visible | <red>word</red> = inferred\n"
+        "\n"
+        "  Tier 2 — FALLBACK (only when NO Tier 1 term fits the shape):\n"
+        "    Describe the geometry in plain English.\n"
+        "    Rules:\n"
+        "      • Describe shape and geometry ONLY — no process names, no material names\n"
+        "      • No numbers, no dimensions, no units\n"
+        "      • Be concise but complete (as many words as needed to be accurate)\n"
+        "    Examples:\n"
+        "      ✓ 'Omega-shaped profile' (closed top, two downward legs)\n"
+        "      ✓ 'stepped rectangular outline with a central slot'\n"
+        "      ✓ 'partial U-shaped cutout along one edge'\n"
+        "      ✗ 'welded bracket' (contains process name)\n"
+        "      ✗ 'small hole' (no size qualifiers)\n"
+        "\n"
+        "  NEVER invent brand names, process names, material names, or dimension values.\n\n"
     )
 
     return (
