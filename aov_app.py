@@ -314,9 +314,9 @@ with col_left:
 
     # ==================== 四視圖上傳 ====================
     st.markdown("#### 📐 上傳零件四視圖 (Child Drawing)")
-    st.caption("至少上傳一張視圖，其餘可留空。第一張有效圖將作為主辨識來源。")
+    st.caption("至少上傳一張視圖，其餘可留空。第一張有效圖將作為主辨識來源。Iso / 3D 欄位可放等角視圖或立體圖，VLM 均作為輔助參考。")
 
-    _view_labels = ["Top（俯視圖）", "Front（前視圖）", "Side（側視圖）", "Iso（等角視圖）"]
+    _view_labels = ["Top（俯視圖）", "Front（前視圖）", "Side（側視圖）", "Iso / 3D（等角或立體視圖）"]
     _view_keys   = ["view_top", "view_front", "view_side", "view_iso"]
     _view_files  = []
     for _lbl, _key in zip(_view_labels, _view_keys):
