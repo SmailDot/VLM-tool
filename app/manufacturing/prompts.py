@@ -726,7 +726,12 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "Reference the BOM part name / material / context (if provided) to explain WHY features exist. "
         "Example style: 'Given this is a [BOM part name], the thru-holes visible in the Top View are likely mounting points for screws.' "
         "or: 'The weld symbol near the flange, combined with the U-shaped channel, suggests a welded bracket assembly.'\n"
-        "Section 2 format REMINDER: answer True or False for each symbol category \u2014 no repetitive descriptions.\n\n"
+        "Section 2 — SYMBOL & TEXT SEARCH format (output EXACTLY this structure):\n"
+        "### 2. SYMBOL & TEXT SEARCH\n"
+        "- Weld symbol detected: True/False (if True, state location briefly)\n"
+        "- Surface finish mark detected: True/False (if True, state location briefly)\n"
+        "- Other text annotation found: True/False (if True, describe briefly — no numbers)\n\n"
+        "Answer ONLY True or False for each item above — no substitutions, no repetitive descriptions.\n\n"
         "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
     )
 
