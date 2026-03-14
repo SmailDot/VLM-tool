@@ -1,6 +1,6 @@
 """Feature-sliced modules for project portability."""
 
-from .analysis_actions import run_analysis, save_rag_entry
+from .analysis_actions import run_analysis, save_rag_entry, build_analysis_request
 from .knowledge_admin import list_kb_entries, update_kb_entry_description
 from .symbol_library import save_symbol_templates, list_symbol_templates, delete_symbol_template
 from .upload_flow import (
@@ -13,6 +13,7 @@ from .upload_flow import (
 
 __all__ = [
     "run_analysis",
+    "build_analysis_request",
     "save_rag_entry",
     "list_kb_entries",
     "update_kb_entry_description",

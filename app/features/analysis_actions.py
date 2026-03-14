@@ -1,7 +1,7 @@
 """Analysis execution and RAG save actions."""
 
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Mapping, Optional, Tuple
 
 import time
 
@@ -16,6 +16,37 @@ def run_analysis(core_service: AOVCoreService, request: AnalysisRequest) -> Tupl
     result = core_service.analyze(request)
     elapsed = time.time() - start_time
     return result, elapsed
+
+
+def build_analysis_request(
+    image: Any,
+    parent_image: Optional[Any],
+    child_images: Optional[list],
+    view_labels: Optional[list],
+    locked_bom: str,
+    bom_context_input: str,
+    use_rag: bool,
+    use_ocr: bool,
+    use_geometry: bool,
+    use_symbols: bool,
+    use_vlm: bool,
+    min_confidence: float,
+) -> AnalysisRequest:
+    """Build VLM request with BOM + child-view injection as core responsibility."""
+    effective_bom = locked_bom or bom_context_input
+    return AnalysisRequest(
+        image=image,
+        parent_image=parent_image,
+        child_images=child_images,
+        view_labels=view_labels,
+        bom_context=effective_bom,
+        use_rag=use_rag,
+        use_ocr=use_ocr,
+        use_geometry=use_geometry,
+        use_symbols=use_symbols,
+        use_vlm=use_vlm,
+        min_confidence=min_confidence,
+    )
 
 
 def save_rag_entry(temp_file_path: str, corrected_text: str, bom_context: str) -> Tuple[bool, str]:

@@ -19,9 +19,10 @@ from typing import List
 from pathlib import Path
 
 # 工程圖分析核心模組
-from app.core import AOVCoreService, AnalysisRequest
+from app.core import AOVCoreService
 from app.features import (
     run_analysis,
+    build_analysis_request,
     save_rag_entry,
     list_kb_entries,
     update_kb_entry_description,
@@ -381,12 +382,13 @@ with col_left:
                         st.info("雙圖模式: 正在解析父圖全域資訊...")
                     _tmp = st.session_state.get("temp_file_path")
                     _img_arg = _tmp if (_tmp and Path(_tmp).exists()) else primary_image
-                    request = AnalysisRequest(
+                    request = build_analysis_request(
                         image=_img_arg,
                         parent_image=parent_img,
                         child_images=st.session_state.uploaded_drawings,
                         view_labels=st.session_state.get('uploaded_view_labels'),
-                        bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', ''),
+                        locked_bom=st.session_state.get('locked_bom', ''),
+                        bom_context_input=st.session_state.get('bom_context_input', ''),
                         use_rag=st.session_state.use_rag,
                         use_ocr=use_ocr,
                         use_geometry=use_geometry,
