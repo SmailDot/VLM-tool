@@ -40,7 +40,11 @@ from app.features import (
 from components.style import apply_custom_style
 
 from components.sidebar import render_recognition_sidebar
-from components.text_format import format_streamlit_colors, strip_confidence_tags
+from components.results_panel import (
+    render_result_summary,
+    render_vlm_description_section,
+    render_hitl_rag_section,
+)
 
 # VLM 信心度色彩渲染器 helper
 import re
@@ -442,88 +446,19 @@ with col_right:
         result = st.session_state.recognition_result
         
         # 顯示摘要資訊
-        col_info1, col_info2, col_info3 = st.columns(3)
-        
-        with col_info1:
-            st.metric(
-                "處理時間",
-                f"{result.total_time:.2f}s"
-            )
-        
-        with col_info2:
-            _vlm_desc = result.features.raw_vlm_description or ""
-            st.metric("VLM 描述字數", len(_vlm_desc))
-
-        with col_info3:
-            _orange_count = len(re.findall(r'<orange>(.*?)</orange>', result.features.raw_vlm_description or ""))
-            _red_count = len(re.findall(r'<red>(.*?)</red>', result.features.raw_vlm_description or ""))
-            st.metric("需人工覆核項目", _orange_count + _red_count)
+        render_result_summary(result)
         
         st.divider()
 
         # === VLM 視覺描述 (主要輸出) + 信心度色彩渲染 ===
-        vlm_desc = result.features.raw_vlm_description
-        if vlm_desc:
-            st.markdown("### \U0001f916 VLM 視覺重建結果")
-
-            # 色彩圖例 + 警示說明
-            st.caption(
-                "\U0001f7e2 高信心（AI 確認可見）\u3000"
-                "\U0001f7e0 中信心（AI 存疑，建議確認）\u3000"
-                "\U0001f534 低信心（AI 沒把握，**請人工核對**）"
-            )
-
-            # 若有 <orange> 或 <red> 項目，主動顯示警示橫幅
-            _orange_items = re.findall(r'<orange>(.*?)</orange>', vlm_desc)
-            _red_items    = re.findall(r'<red>(.*?)</red>', vlm_desc)
-            if _orange_items or _red_items:
-                _warn_parts = []
-                if _red_items:
-                    _warn_parts.append("🔴 沒把握（強烈建議人工核對）：" + "、".join(f'**{x}**' for x in _red_items))
-                if _orange_items:
-                    _warn_parts.append("🟠 存疑（建議確認）：" + "、".join(f'**{x}**' for x in _orange_items))
-                st.warning(
-                    "⚠️ **AI 不確定以下項目，請人類專家務必核對：**\n\n"
-                    + "\n\n".join(_warn_parts)
-                )
-
-            # 使用 Streamlit 原生顏色語法渲染（不需要 unsafe_allow_html）
-            colored_report = format_streamlit_colors(vlm_desc)
-            st.markdown("### \u00a0VLM 視覺描述預覽")
-            st.markdown(colored_report)
-        else:
-            st.info("⚠️ VLM 未返回效描述。請確認：① LM Studio 已啟動 ② 左侧「辨識設定」已勾選 VLM")
+        vlm_desc = render_vlm_description_section(result)
+        if vlm_desc is None:
+            vlm_desc = ""
 
         st.divider()
 
         # === 人類專家修正區 (HITL) + 儲存至 RAG ===
-        st.markdown("### 修正區")
-
-        # 當辨識完成新結果時，自動將原始 VLM 描述（已去標籤）填入修正區
-        _vlm_key = id(result)
-        if st.session_state.get('_hitl_result_key') != _vlm_key:
-            st.session_state['hitl_corrected_text'] = strip_confidence_tags(vlm_desc or "")
-            st.session_state['_hitl_result_key'] = _vlm_key
-
-        corrected_text = st.text_area(
-            "修正區 (可修正 AI 的錯誤描述)",
-            height=200,
-            placeholder="AI 的描述將自動填入此處，您可直接修改...",
-            key="hitl_corrected_text",
-            help="此處顯示的文字將在按下「儲存至 RAG 知識庫」時一併寫入。"
-        )
-
-        # 儲存按鈕
-        if st.button("💾 儲存至 RAG 知識庫", type="primary", key="btn_save_rag"):
-            ok, msg = save_rag_entry(
-                temp_file_path=st.session_state.get("temp_file_path", ""),
-                corrected_text=st.session_state.get("hitl_corrected_text", ""),
-                bom_context=st.session_state.get("bom_context_input", ""),
-            )
-            if ok:
-                st.toast(msg, icon="✅")
-            else:
-                st.error(msg)
+        render_hitl_rag_section(result, vlm_desc, save_rag_entry)
         if st.session_state.use_rag and result.rag_references:
             # Hash 完全匹配提示
             _exact = next((r for r in result.rag_references if r.get("_match_type") == "exact_hash"), None)
