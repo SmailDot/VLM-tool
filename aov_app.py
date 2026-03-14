@@ -452,7 +452,8 @@ with col_left:
                             use_geometry=use_geometry,
                             use_symbols=use_symbols,
                             use_visual=False,
-                            use_vlm=use_vlm
+                            use_vlm=use_vlm,
+                            enable_process_prediction=False,
                         )
                         st.session_state['_last_pipeline_use_vlm'] = use_vlm
                         st.session_state['_last_pipeline_use_ocr'] = use_ocr
@@ -475,7 +476,8 @@ with col_left:
                         use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
                         view_labels=st.session_state.get('uploaded_view_labels'),
-                        bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', '')
+                        bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', ''),
+                        enable_process_prediction=False,
                     )
                     elapsed = time.time() - start_time
                     st.session_state.recognition_result = result
@@ -848,13 +850,14 @@ with tab2:
                         key=f"edit_desc_{entry['id']}"
                     )
                     if st.button("更新此條目", key=f"btn_{entry['id']}"):
+                        _edited_desc_text = (_edited_desc or "").strip()
                         _features = dict(entry.get("features", {}))
-                        _features["raw_vlm_description"] = _edited_desc.strip()
+                        _features["raw_vlm_description"] = _edited_desc_text
                         kb_manager.update_entry(
                             entry['id'],
                             {
                                 "features": _features,
-                                "reasoning": _edited_desc.strip(),
+                                "reasoning": _edited_desc_text,
                             }
                         )
                         st.success("已更新！RAG 將優先參考修正後描述。")

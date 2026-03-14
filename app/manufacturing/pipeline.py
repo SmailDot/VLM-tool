@@ -61,7 +61,8 @@ class ManufacturingPipeline:
         use_vlm: bool = False,  # VLM analysis optional (requires LM Studio)
         template_dir: Optional[str] = None,
         process_lib_path: Optional[str] = None,
-        use_v2_engine: bool = True  # Use DecisionEngineV2 by default
+        use_v2_engine: bool = True,  # Use DecisionEngineV2 by default
+        enable_process_prediction: bool = True,
     ):
         """
         Initialize pipeline.
@@ -75,12 +76,16 @@ class ManufacturingPipeline:
             template_dir: Directory for symbol templates.
             process_lib_path: Path to process_lib.json or process_lib_v2.json.
             use_v2_engine: Use DecisionEngineV2 (supports logic rules).
+            enable_process_prediction: Enable process prediction via decision engine.
+                If False, pipeline runs in VLM-only mode and skips decision engine.
         """
         self.use_ocr = use_ocr
         self.use_geometry = use_geometry
         self.use_symbols = use_symbols
         self.use_visual = use_visual
         self.use_vlm = use_vlm
+        self.enable_process_prediction = enable_process_prediction
+        self.decision_engine: Optional[Union[DecisionEngine, DecisionEngineV2]] = None
         
         # Initialize extractors
         self.ocr_extractor = OCRExtractor() if use_ocr else None
@@ -137,11 +142,12 @@ class ManufacturingPipeline:
             except ImportError:
                 pass  # PDF功能不可用
         
-        # Initialize decision engine (v2 by default)
-        if use_v2_engine:
-            self.decision_engine = DecisionEngineV2(process_lib_path)
-        else:
-            self.decision_engine = DecisionEngine(process_lib_path)
+        # Initialize decision engine (optional in VLM-only mode)
+        if self.enable_process_prediction:
+            if use_v2_engine:
+                self.decision_engine = DecisionEngineV2(process_lib_path)
+            else:
+                self.decision_engine = DecisionEngine(process_lib_path)
     
     def reset_vlm_client(self) -> None:
         """
@@ -166,6 +172,8 @@ class ManufacturingPipeline:
     @property
     def total_processes(self) -> int:
         """Get total number of processes in the loaded library."""
+        if self.decision_engine is None:
+            return 0
         return self.decision_engine.total_processes
     
     def recognize(
@@ -180,7 +188,8 @@ class ManufacturingPipeline:
         use_rag: bool = False,
         child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
         view_labels: Optional[List[str]] = None,
-        bom_context: str = ""
+        bom_context: str = "",
+        enable_process_prediction: Optional[bool] = None,
     ) -> RecognitionResult:
         """
         Recognize manufacturing processes from engineering drawing.
@@ -201,6 +210,8 @@ class ManufacturingPipeline:
                          (e.g. ['Top', 'Front', 'Side']). Top and Front are treated
                          as primary evidence; Side/Iso as supporting reference.
             bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
+            enable_process_prediction: Per-call override for process prediction.
+                If None, uses pipeline default from constructor.
         
         Returns:
             RecognitionResult with predictions and diagnostics.
@@ -436,22 +447,29 @@ class ManufacturingPipeline:
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
-        # Run decision engine (pass parent_context if available)
-        if isinstance(self.decision_engine, DecisionEngineV2):
-            predictions = self.decision_engine.predict(
-                features,
-                parent_context=parent_context,
-                top_n=top_n,
-                min_confidence=min_confidence,
-                frequency_filter=frequency_filter
-            )
-        else:
-            fallback_top_n = top_n if top_n is not None else len(self.decision_engine.processes)
-            predictions = self.decision_engine.predict(
-                features,
-                top_n=fallback_top_n,
-                min_confidence=min_confidence
-            )
+        # Run decision engine (optional; can be disabled for VLM-only mode)
+        prediction_enabled = (
+            self.enable_process_prediction
+            if enable_process_prediction is None
+            else enable_process_prediction
+        )
+        predictions: List[ProcessPrediction] = []
+        if prediction_enabled and self.decision_engine is not None:
+            if isinstance(self.decision_engine, DecisionEngineV2):
+                predictions = self.decision_engine.predict(
+                    features,
+                    parent_context=parent_context,
+                    top_n=top_n,
+                    min_confidence=min_confidence,
+                    frequency_filter=frequency_filter
+                )
+            else:
+                fallback_top_n = top_n if top_n is not None else len(self.decision_engine.processes)
+                predictions = self.decision_engine.predict(
+                    features,
+                    top_n=fallback_top_n,
+                    min_confidence=min_confidence
+                )
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -764,7 +782,8 @@ class ManufacturingPipeline:
 # Convenience function
 def recognize(
     image: Union[str, np.ndarray],
-    top_n: int = 5
+    top_n: int = 5,
+    enable_process_prediction: bool = True,
 ) -> RecognitionResult:
     """
     Quick recognition without creating pipeline object.
@@ -772,9 +791,10 @@ def recognize(
     Args:
         image: Image file path or numpy array.
         top_n: Return top N predictions.
+        enable_process_prediction: Enable process prediction in quick call.
     
     Returns:
         RecognitionResult object.
     """
-    pipeline = ManufacturingPipeline()
-    return pipeline.recognize(image, top_n=top_n)
+    pipeline = ManufacturingPipeline(enable_process_prediction=enable_process_prediction)
+    return pipeline.recognize(image, top_n=top_n, enable_process_prediction=enable_process_prediction)
