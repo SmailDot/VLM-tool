@@ -17,9 +17,9 @@ import cv2
 import numpy as np
 from typing import List
 from pathlib import Path
+from app.core import AOVCoreService
 
 # 工程圖分析核心模組
-from app.core import AOVCoreService
 from app.features import (
     run_analysis,
     build_analysis_request,
@@ -55,8 +55,6 @@ from components.sidebar_panel import (
     render_no_result_placeholder,
 )
 
-# VLM 信心度色彩渲染器 helper
-import re
 # ==================== Page Config ====================
 
 st.set_page_config(
@@ -70,7 +68,7 @@ apply_custom_style()
 
 # ==================== Session State ====================
 
-# 初始化分析管線 (延遲載入)
+# 初始化核心服務 (延遲載入)
 if 'mfg_pipeline' not in st.session_state:
     st.session_state.mfg_pipeline = None
 
