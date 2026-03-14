@@ -1,8 +1,6 @@
 """
-NKUST 製程辨識系統 - Manufacturing Process Recognition Tool
-工程圖紙製程辨識核心應用
-
-重構版本：以製程辨識為核心，移除所有影像辨識演算法相關功能
+NKUST 工程圖分析系統 - VLM Drawing Description Tool
+工程圖紙 VLM 敘述分析核心應用
 """
 
 # ==================== 重要：PaddleOCR 環境變數設定 ====================
@@ -23,7 +21,7 @@ from typing import Dict, List
 from pathlib import Path
 from PIL import Image
 
-# 製程辨識核心模組
+# 工程圖分析核心模組
 from app.manufacturing import ManufacturingPipeline
 
 # UI 樣式
@@ -65,7 +63,7 @@ def _strip_confidence_tags(raw_text: str) -> str:
 # ==================== Page Config ====================
 
 st.set_page_config(
-    page_title="製程辨識系統",
+    page_title="工程圖分析系統",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -75,7 +73,7 @@ apply_custom_style()
 
 # ==================== Session State ====================
 
-# 初始化製程辨識管線 (延遲載入)
+# 初始化分析管線 (延遲載入)
 if 'mfg_pipeline' not in st.session_state:
     st.session_state.mfg_pipeline = None
 
@@ -131,7 +129,7 @@ st.divider()
 
 tab1, tab2 = st.tabs(["工程圖分析", "知識庫管理"])
 
-# ==================== Tab 1: 製程辨識 ====================
+# ==================== Tab 1: 工程圖分析 ====================
 
 with tab1:
     # ==================== Main Layout ====================
@@ -376,8 +374,8 @@ with col_left:
 
         st.divider()
 
-        # ==================== 辨識設定 ====================
-        st.markdown("### 辨識設定")
+        # ==================== 分析設定 ====================
+        st.markdown("### 分析設定")
 
         with st.expander("特徵提取選項", expanded=True):
             use_ocr = st.checkbox(
@@ -408,13 +406,6 @@ with col_left:
                     st.error(f"❌ VLM 初始化失敗: {str(_ve)}")
 
         with st.expander("進階選項", expanded=False):
-            st.markdown("**頻率過濾** (選擇要顯示的製程頻率)")
-            freq_options = st.multiselect(
-                "製程頻率",
-                options=["高", "中", "低", "無"],
-                default=["高", "中"],
-                help="只顯示選定頻率的製程。高=常用、中=中等、低=少用、無=未分類"
-            )
             show_visualization = st.checkbox(
                 "顯示特徵視覺化",
                 value=False,
@@ -472,7 +463,7 @@ with col_left:
                         parent_image=parent_img,
                         top_n=None,
                         min_confidence=st.session_state.min_confidence,
-                        frequency_filter=freq_options if freq_options else None,
+                        frequency_filter=None,
                         use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
                         view_labels=st.session_state.get('uploaded_view_labels'),
@@ -495,7 +486,7 @@ with col_left:
                         import traceback
                         st.code(traceback.format_exc())
     else:
-        st.info("請至少上傳一張視圖以開始製程辨識")
+        st.info("請至少上傳一張視圖以開始工程圖分析")
         with st.expander("使用說明", expanded=True):
             st.markdown("""
             ### 系統功能
@@ -503,15 +494,12 @@ with col_left:
             - 幾何特徵辨識 (線條、孔洞、折彎線)
             - 符號辨識 (焊接符號、表面處理標記)
             - OCR 文字辨識 (可選)
-            - 製程推薦 (多種製程類型)
+            - VLM 多視圖敘述與信心度標記
 
-            ### 支援製程類別
-            - **切割**: 雷射切割、水刀切割、剪板機等
-            - **折彎**: 折彎、滾圓、滾弧等
-            - **焊接**: 點焊、氬焊、電焊、CO2焊接等
-            - **表面處理**: 噴砂、烤漆、鍍鋅、陽極處理等
-            - **組裝**: 自攻牙、螺絲、鉚接、拉釘等
-            - **檢驗**: 成品全檢、尺寸檢驗、外觀檢驗等
+            ### VLM 分析重點
+            - 以 Top / Front 視角作為主要依據
+            - Side / Iso 視角作為輔助確認
+            - 可整合 BOM 與父圖全域資訊
 
             ### 建議圖紙品質
             - **解析度**: 300 DPI 以上
