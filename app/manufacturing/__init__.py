@@ -30,10 +30,6 @@ from .schema import (
 # Import pipeline for direct usage
 from .pipeline import ManufacturingPipeline, recognize
 
-# Import decision engines
-from .decision import DecisionEngine
-from .decision.engine_v2 import DecisionEngineV2
-
 __all__ = [
     # Data structures
     "ExtractedFeatures",
@@ -46,14 +42,9 @@ __all__ = [
     "GeometryFeatures",
     "FeatureType",
     "ProcessCategory",
-    
     # Main pipeline
     "ManufacturingPipeline",
     "recognize",
-    
-    # Decision engines
-    "DecisionEngine",
-    "DecisionEngineV2",
 ]
 
 __version__ = "1.0.0"
