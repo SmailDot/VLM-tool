@@ -201,7 +201,6 @@ class ManufacturingPipeline:
                          (e.g. ['Top', 'Front', 'Side']). Top and Front are treated
                          as primary evidence; Side/Iso as supporting reference.
             bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
-            bom_context: Free-text BOM / global notes typed by user (injected into VLM prompt).
         
         Returns:
             RecognitionResult with predictions and diagnostics.
