@@ -86,3 +86,106 @@ def render_hitl_rag_section(
             st.toast(msg, icon="✅")
         else:
             st.error(msg)
+
+
+def render_parent_notes_section(result) -> None:
+    """Render parent context highlights and title-block details."""
+    if not (result.parent_context and result.parent_context.important_notes):
+        return
+
+    st.warning("⚠️ 父圖重要注意事項")
+
+    if result.parent_context.detected_languages:
+        langs_display = {
+            "chinese_cht": "繁體中文",
+            "ch": "簡體中文",
+            "en": "英文",
+            "japan": "日文",
+            "korean": "韓文",
+        }
+        detected_langs = [
+            langs_display.get(lang, lang)
+            for lang in result.parent_context.detected_languages
+            if isinstance(lang, str) and lang
+        ]
+        st.info(f"🌐 檢測到語言: {', '.join(detected_langs)}")
+
+    st.markdown("**重要提醒事項:**")
+    for note in result.parent_context.important_notes:
+        note_lower = note.lower()
+        if any(kw in note_lower for kw in ["警告", "warning", "禁止"]):
+            icon = "🚫"
+        elif any(kw in note_lower for kw in ["注意", "caution", "小心"]):
+            icon = "⚠️"
+        elif any(kw in note_lower for kw in ["要求", "requirement", "必須"]):
+            icon = "✓"
+        else:
+            icon = "•"
+        st.markdown(f"{icon} {note}")
+
+    if result.parent_context.title_block_text:
+        with st.expander("📋 查看標題欄完整內容", expanded=False):
+            st.markdown("**標題欄所有文字:**")
+            for text in result.parent_context.title_block_text:
+                if text.strip():
+                    st.text(f"  {text}")
+
+    st.divider()
+
+
+def render_diagnostics_section(result) -> None:
+    """Render diagnostics and extracted-feature stats."""
+    with st.expander("診斷資訊 (Diagnostics)", expanded=False):
+        diag = {
+            "total_time": result.total_time,
+            "warnings": result.warnings,
+            "errors": result.errors,
+            "extraction_time": result.features.extraction_time,
+        }
+        st.json(diag)
+
+        if result.features.geometry:
+            st.markdown("**幾何特徵統計:**")
+            geo = result.features.geometry
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                st.metric("檢測到線條", len(geo.lines))
+                st.metric("折彎線", len(geo.bend_lines))
+            with col_d2:
+                st.metric("圓形", len(geo.circles))
+                st.metric("孔洞", len(geo.holes))
+            st.metric("總形狀數", len(geo.contours))
+
+        if result.features.ocr_results:
+            st.markdown("**OCR 文字辨識結果:**")
+            st.text(f"檢測到 {len(result.features.ocr_results)} 個文字區域")
+            for ocr in result.features.ocr_results[:5]:
+                st.caption(f"- {ocr.text} (信心度: {ocr.confidence:.2f})")
+
+        if result.features.symbols:
+            st.markdown("**符號辨識結果:**")
+            st.text(f"檢測到 {len(result.features.symbols)} 個符號")
+            for sym in result.features.symbols:
+                st.caption(f"- {sym.symbol_type} (信心度: {sym.confidence:.2f})")
+
+        if result.features.raw_vlm_description:
+            st.markdown("**🤖 VLM 視覺語言模型分析 (純文字描述):**")
+            st.markdown(result.features.raw_vlm_description)
+        elif result.features.vlm_analysis:
+            st.markdown("**🤖 VLM 分析 (文字):**")
+            st.text(str(result.features.vlm_analysis))
+
+        if result.parent_context:
+            st.markdown("**父圖上下文資訊:**")
+            parent_info = {}
+            if result.parent_context.material:
+                parent_info["材質"] = result.parent_context.material
+            if result.parent_context.customer:
+                parent_info["客戶"] = result.parent_context.customer
+            if result.parent_context.detected_languages:
+                parent_info["檢測語言"] = list(result.parent_context.detected_languages)
+            if result.parent_context.important_notes:
+                parent_info["重要注意事項數量"] = len(result.parent_context.important_notes)
+            if result.parent_context.title_block_text:
+                parent_info["標題欄文字數量"] = len(result.parent_context.title_block_text)
+            st.json(parent_info)
