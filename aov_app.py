@@ -47,6 +47,13 @@ from components.results_panel import (
     render_parent_notes_section,
     render_diagnostics_section,
 )
+from components.sidebar_panel import (
+    render_symbol_library_block,
+    render_sidebar_status_block,
+    render_sidebar_clear_button,
+    render_sidebar_about_block,
+    render_no_result_placeholder,
+)
 
 # VLM 信心度色彩渲染器 helper
 import re
@@ -506,35 +513,7 @@ with col_right:
                 st.error(f"視覺化失敗: {str(e)}")
     
     else:
-        # 無結果時顯示佔位內容
-        st.info("上傳工程圖紙並執行辨識後，結果將顯示在此處")
-        
-        # 顯示系統資訊
-        with st.expander("📈 系統資訊", expanded=False):
-            # 動態取得製程數量
-            process_count = "載入中..."
-            if st.session_state.mfg_pipeline is not None:
-                try:
-                    process_count = f"{st.session_state.mfg_pipeline.total_processes} 種"
-                except:
-                    process_count = "無法取得"
-            
-            st.markdown(f"""
-            **製程辨識系統 v2.1**
-            
-            - 支援製程: {process_count}
-            - 製程類別: 8 大類
-            - 特徵提取: OCR + 幾何 + 符號 + 視覺 + VLM
-            - 決策引擎: 綜合特徵評分
-            
-            **技術架構:**
-            - OCR: PaddleOCR (多語言支援)
-            - 幾何: OpenCV Hough + Contours
-            - 符號: Template Matching
-            - 視覺: DINOv2 (可選)
-            - VLM: Vision Language Model (實驗功能, 需 LM Studio)
-            - 決策: 規則基礎 + 綜合特徵評分
-            """)
+        render_no_result_placeholder()
 
 # ==================== Footer ====================
 
@@ -600,73 +579,26 @@ with st.sidebar:
 
     # 🏷️ 符號庫管理員
     _symbol_lib_dir = Path(__file__).parent / "data" / "symbol_library"
-    _symbol_lib_dir.mkdir(parents=True, exist_ok=True)
-    with st.expander("🏷️ 符號庫管理員", expanded=False):
-        st.caption("上傳去背 PNG 作為符號模板，系統將在辨識時掃描圖紙。")
-        _uploaded_sym = st.file_uploader(
-            "上傳符號模板 (去背 PNG)",
-            type=["png"],
-            accept_multiple_files=True,
-            key="symbol_lib_uploader",
-        )
-        if _uploaded_sym:
-            _saved = save_symbol_templates(_symbol_lib_dir, _uploaded_sym)
-            st.success(f"已儲存 {len(_saved)} 個符號模板：{', '.join(_saved)}")
-        # 顯示目前庫中符號清單
-        _existing_syms = list_symbol_templates(_symbol_lib_dir)
-        if _existing_syms:
-            st.markdown("**目前符號庫：**")
-            for _sym_path in _existing_syms:
-                col_name, col_del = st.columns([4, 1])
-                col_name.text(_sym_path.stem)
-                if col_del.button("✕", key=f"del_sym_{_sym_path.stem}"):
-                    _ok, _msg = delete_symbol_template(_sym_path)
-                    if _ok:
-                        st.rerun()
-                    else:
-                        st.warning(_msg)
-        else:
-            st.info("符號庫尚無模板，請上傳去背 PNG。")
 
-    # 系統狀態
-    with st.expander("系統狀態", expanded=False):
-        pipeline_status = "已初始化" if st.session_state.mfg_pipeline else "未初始化"
-        st.text(f"管線狀態: {pipeline_status}")
-        
-        if st.session_state.uploaded_drawing is not None:
-            h, w = st.session_state.uploaded_drawing.shape[:2]
-            st.text(f"圖紙: {w}×{h}")
-        
-        if st.session_state.recognition_result:
-            _desc_exists = bool(st.session_state.recognition_result.features.raw_vlm_description)
-            st.text(f"VLM 描述: {'已產生' if _desc_exists else '尚未產生'}")
-    
-    # 清除按鈕
-    st.divider()
-    if st.button("清除所有資料", width="stretch"):
+    render_symbol_library_block(
+        symbol_lib_dir=_symbol_lib_dir,
+        save_action=save_symbol_templates,
+        list_action=list_symbol_templates,
+        delete_action=delete_symbol_template,
+    )
+    render_sidebar_status_block()
+
+    def _clear_all_data() -> None:
         st.session_state.mfg_pipeline = None
         st.session_state.uploaded_drawing = None
         st.session_state.uploaded_drawings = []
         st.session_state.recognition_result = None
-        st.rerun()
-    
+
+    render_sidebar_clear_button(_clear_all_data)
+
     # 關於
     st.divider()
-    
-    st.markdown(f"""
-    ### ℹ️ 關於系統
-    
-    **NKUST 工程圖分析系統**專為工程圖紙分析設計，以 VLM 視覺語言模型產出結構化描述。
-    
-    **核心功能:**
-    - 工程圖紙自動分析
-    - VLM 多視圖描述 + 信心度標記
-    - BOM / 父圖全域資訊注入
-    - 人工修正與 RAG 知識庫持續增強
-    
-    **Version**: 2.1.0 (Enhanced)  
-    **Date**: 2026-02-03
-    """)
+    render_sidebar_about_block()
 
 # ==================== Main Entry Point ====================
 
