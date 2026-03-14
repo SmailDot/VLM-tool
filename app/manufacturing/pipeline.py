@@ -32,9 +32,7 @@ from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
 from .prompts import EngineeringPrompts, get_vlm_descriptive_prompt
-from .decision import DecisionEngine
 from .decision.rule_router import plan_vision_skills, describe_skills
-from .decision.engine_v2 import DecisionEngineV2
 from .schema import GeometryFeatures
 
 
@@ -60,8 +58,6 @@ class ManufacturingPipeline:
         use_visual: bool = False,  # Visual embeddings optional (expensive)
         use_vlm: bool = False,  # VLM analysis optional (requires LM Studio)
         template_dir: Optional[str] = None,
-        process_lib_path: Optional[str] = None,
-        use_v2_engine: bool = True,  # Use DecisionEngineV2 by default
         enable_process_prediction: bool = True,
     ):
         """
@@ -74,10 +70,8 @@ class ManufacturingPipeline:
             use_visual: Enable visual embedding (DINOv2).
             use_vlm: Enable VLM-based process recognition (requires LM Studio).
             template_dir: Directory for symbol templates.
-            process_lib_path: Path to process_lib.json or process_lib_v2.json.
-            use_v2_engine: Use DecisionEngineV2 (supports logic rules).
             enable_process_prediction: Enable process prediction via decision engine.
-                If False, pipeline runs in VLM-only mode and skips decision engine.
+                [Compatibility parameter] This pipeline now always runs in VLM-only mode.
         """
         self.use_ocr = use_ocr
         self.use_geometry = use_geometry
@@ -85,7 +79,6 @@ class ManufacturingPipeline:
         self.use_visual = use_visual
         self.use_vlm = use_vlm
         self.enable_process_prediction = enable_process_prediction
-        self.decision_engine: Optional[Union[DecisionEngine, DecisionEngineV2]] = None
         
         # Initialize extractors
         self.ocr_extractor = OCRExtractor() if use_ocr else None
@@ -142,13 +135,7 @@ class ManufacturingPipeline:
             except ImportError:
                 pass  # PDF功能不可用
         
-        # Initialize decision engine (optional in VLM-only mode)
-        if self.enable_process_prediction:
-            if use_v2_engine:
-                self.decision_engine = DecisionEngineV2(process_lib_path)
-            else:
-                self.decision_engine = DecisionEngine(process_lib_path)
-    
+
     def reset_vlm_client(self) -> None:
         """
         強制重建 VLMClient 實例，確保每次辨識都是全新連線。
@@ -171,10 +158,8 @@ class ManufacturingPipeline:
 
     @property
     def total_processes(self) -> int:
-        """Get total number of processes in the loaded library."""
-        if self.decision_engine is None:
-            return 0
-        return self.decision_engine.total_processes
+        """Compatibility property: process prediction is removed in VLM-only mode."""
+        return 0
     
     def recognize(
         self,
@@ -447,29 +432,16 @@ class ManufacturingPipeline:
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
-        # Run decision engine (optional; can be disabled for VLM-only mode)
+        # Process prediction has been removed; keep empty list for compatibility.
         prediction_enabled = (
             self.enable_process_prediction
             if enable_process_prediction is None
             else enable_process_prediction
         )
         predictions: List[ProcessPrediction] = []
-        if prediction_enabled and self.decision_engine is not None:
-            if isinstance(self.decision_engine, DecisionEngineV2):
-                predictions = self.decision_engine.predict(
-                    features,
-                    parent_context=parent_context,
-                    top_n=top_n,
-                    min_confidence=min_confidence,
-                    frequency_filter=frequency_filter
-                )
-            else:
-                fallback_top_n = top_n if top_n is not None else len(self.decision_engine.processes)
-                predictions = self.decision_engine.predict(
-                    features,
-                    top_n=fallback_top_n,
-                    min_confidence=min_confidence
-                )
+        warnings: List[str] = []
+        if prediction_enabled:
+            warnings.append("Process prediction is disabled in VLM-only mode.")
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -480,7 +452,8 @@ class ManufacturingPipeline:
             features=features,
             parent_context=parent_context,
             total_time=processing_time,
-            rag_references=rag_references
+            rag_references=rag_references,
+            warnings=warnings,
         )
         
         return result

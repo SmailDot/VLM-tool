@@ -1,14 +1,8 @@
-"""
-Manufacturing Decision Module.
+"""Compatibility module for lightweight rule routing utilities."""
 
-Provides decision engine for process recognition.
-"""
-
-from .rules import DecisionEngine, predict_processes
-from .engine_v2 import DecisionEngineV2
+from .rule_router import plan_vision_skills, describe_skills
 
 __all__ = [
-    "DecisionEngine",
-    "DecisionEngineV2",
-    "predict_processes",
+    "plan_vision_skills",
+    "describe_skills",
 ]
