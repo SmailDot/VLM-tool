@@ -15,11 +15,8 @@ os.environ['FLAGS_use_onednn'] = 'False'
 import streamlit as st
 import cv2
 import numpy as np
-import time
-import tempfile
-from typing import Dict, List
+from typing import List
 from pathlib import Path
-from PIL import Image
 
 # 工程圖分析核心模組
 from app.core import AOVCoreService, AnalysisRequest
@@ -31,44 +28,21 @@ from app.features import (
     save_symbol_templates,
     list_symbol_templates,
     delete_symbol_template,
+    decode_bom_uploads,
+    scan_ocr_text,
+    decode_child_views,
+    build_collage_or_single,
+    persist_temp_preview_image,
 )
 
 # UI 樣式
 from components.style import apply_custom_style
 
 from components.sidebar import render_recognition_sidebar
+from components.text_format import format_streamlit_colors, strip_confidence_tags
 
 # VLM 信心度色彩渲染器 helper
 import re
-
-
-def format_streamlit_colors(text: str) -> str:
-    """
-    將 VLM 輸出的 <green>/<orange>/<red> XML 標籤
-    轉換為 Streamlit 原生顏色語法（加粗體），不需要 unsafe_allow_html。
-
-    Args:
-        text: VLM 原始輸出字串（含 XML 信心度標籤）。
-
-    Returns:
-        str: 替換後的 Streamlit markdown 字串。
-    """
-    if not text:
-        return ""
-    # 將 XML 標籤轉換為 Streamlit 原生顏色語法 (加粗體)
-    text = re.sub(r'<green>(.*?)</green>', r':green[**\1**]', text)
-    text = re.sub(r'<orange>(.*?)</orange>', r':orange[**\1**]', text)
-    text = re.sub(r'<red>(.*?)</red>', r':red[**\1**]', text)
-    return text
-
-
-# 相容性別名，保留舊呼叫點可繼續使用
-_render_vlm_with_confidence = format_streamlit_colors
-
-
-def _strip_confidence_tags(raw_text: str) -> str:
-    """去除所有信心度 XML 標籤，返回純文字。"""
-    return re.sub(r"</?(?:green|orange|red)>", "", raw_text)
 # ==================== Page Config ====================
 
 st.set_page_config(
@@ -93,7 +67,14 @@ if 'uploaded_drawing' not in st.session_state:
     st.session_state.uploaded_drawing = None
 
 if 'uploaded_drawings' not in st.session_state:
-            st.session_state.uploaded_drawings = []
+    st.session_state.uploaded_drawings = []
+
+# Session-state compatibility map (do not rename during modular slicing)
+# - core_service, mfg_pipeline
+# - uploaded_drawing, uploaded_drawings, uploaded_view_labels
+# - parent_drawing, bom_drawings, bom_scanned_text, bom_context_input, locked_bom, _last_synced_bom
+# - temp_file_path, recognition_result, hitl_corrected_text, _hitl_result_key
+# - use_vlm, use_rag, min_confidence, last_settings
 
 # 新增父圖支援
 if 'parent_drawing' not in st.session_state:
@@ -244,12 +225,7 @@ with col_left:
     if 'bom_drawings' not in st.session_state:
         st.session_state.bom_drawings = []
 
-    _bom_imgs: List[np.ndarray] = []
-    for _bf in (bom_files or []):
-        _bb = np.asarray(bytearray(_bf.read()), dtype=np.uint8)
-        _bi = cv2.imdecode(_bb, cv2.IMREAD_COLOR)
-        if _bi is not None:
-            _bom_imgs.append(_bi)
+    _bom_imgs = decode_bom_uploads(bom_files)
 
     st.session_state.bom_drawings = _bom_imgs
 
@@ -271,20 +247,11 @@ with col_left:
         ):
             with st.spinner("正在掃描..."):
                 try:
-                    from app.manufacturing.extractors.ocr import OCRExtractor
-                    _ocr = OCRExtractor()
                     _targets = st.session_state.bom_drawings if _has_bom_imgs else [st.session_state.parent_drawing]
-                    _all_texts: List[str] = []
-                    _total_regions = 0
-                    for _page_idx, _target_img in enumerate(_targets):
-                        _page_results = _ocr.extract(_target_img)
-                        if _page_results:
-                            _total_regions += len(_page_results)
-                            if len(_targets) > 1:
-                                _all_texts.append(f"--- 第 {_page_idx+1} 頁 ---")
-                            _all_texts.extend([r.text for r in _page_results if r.text.strip()])
-                    if _all_texts:
-                        st.session_state.bom_scanned_text = "\n".join(_all_texts)
+                    _targets = [img for img in _targets if img is not None]
+                    _scanned_text, _total_regions = scan_ocr_text(_targets)
+                    if _scanned_text:
+                        st.session_state.bom_scanned_text = _scanned_text
                         st.success(f"✅ 掃描完成，共辨識到 {_total_regions} 個文字區域")
                     else:
                         st.warning("⚠️ 未掃描到任何文字，請確認圖片品質")
@@ -331,24 +298,9 @@ with col_left:
         _view_files.append(_f)
 
     # Decode uploaded views
-    drawing_images: List[np.ndarray] = []
-    drawing_names: List[str] = []
-    for _uf, _lbl in zip(_view_files, _view_labels):
-        if _uf is not None:
-            _fb = np.asarray(bytearray(_uf.read()), dtype=np.uint8)
-            _img = cv2.imdecode(_fb, cv2.IMREAD_COLOR)
-            if _img is not None:
-                drawing_images.append(_img)
-                drawing_names.append(f"{_lbl}: {_uf.name}")
+    drawing_images, drawing_names, _uploaded_labels = decode_child_views(_view_files, _view_labels)
 
     if drawing_images:
-        # 記錄每張有效圖對應的視角標籤（Top/Front/Side/Iso）
-        _uploaded_labels: List[str] = []
-        for _uf, _lbl in zip(_view_files, _view_labels):
-            if _uf is not None:
-                # 與上面 decode loop 相同順序，只收有效圖的 label
-                _short = _lbl.split('（')[0].strip()  # 'Top', 'Front', 'Side', 'Iso'
-                _uploaded_labels.append(_short)
         primary_image = drawing_images[0]
         st.session_state.uploaded_drawing = primary_image
         st.session_state.uploaded_drawings = drawing_images
@@ -356,27 +308,8 @@ with col_left:
 
         # Save temp image for knowledge base
         # If multiple views are uploaded, stitch them into a 2x2 collage
-        _views = drawing_images
-        if len(_views) > 1:
-            _max_h = max(v.shape[0] for v in _views)
-            _max_w = max(v.shape[1] for v in _views)
-            # Pad each view to uniform size
-            def _pad_view(v):
-                _canvas = np.zeros((_max_h, _max_w, 3), dtype=np.uint8)
-                _canvas[:v.shape[0], :v.shape[1]] = v[:, :, :3] if v.shape[2] == 3 else cv2.cvtColor(v, cv2.COLOR_BGRA2BGR)
-                return _canvas
-            _padded = [_pad_view(v) for v in _views[:4]]
-            while len(_padded) < 4:
-                _padded.append(np.zeros((_max_h, _max_w, 3), dtype=np.uint8))
-            _row1 = np.hstack(_padded[:2])
-            _row2 = np.hstack(_padded[2:4])
-            _collage = np.vstack([_row1, _row2])
-            _save_img = _collage
-        else:
-            _save_img = drawing_images[0]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_image:
-            cv2.imwrite(tmp_image.name, _save_img)
-            st.session_state.temp_file_path = tmp_image.name
+        _save_img = build_collage_or_single(drawing_images)
+        st.session_state.temp_file_path = persist_temp_preview_image(_save_img)
 
         # Preview uploaded views
         for idx, (_img, _name) in enumerate(zip(drawing_images, drawing_names)):
@@ -567,7 +500,7 @@ with col_right:
         # 當辨識完成新結果時，自動將原始 VLM 描述（已去標籤）填入修正區
         _vlm_key = id(result)
         if st.session_state.get('_hitl_result_key') != _vlm_key:
-            st.session_state['hitl_corrected_text'] = _strip_confidence_tags(vlm_desc or "")
+            st.session_state['hitl_corrected_text'] = strip_confidence_tags(vlm_desc or "")
             st.session_state['_hitl_result_key'] = _vlm_key
 
         corrected_text = st.text_area(
@@ -820,7 +753,7 @@ with tab2:
                         update_kb_entry_description(
                             entry_id=entry["id"],
                             original_features=entry.get("features", {}),
-                            edited_desc=_edited_desc,
+                            edited_desc=_edited_desc or "",
                         )
                         st.success("已更新！RAG 將優先參考修正後描述。")
 

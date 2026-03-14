@@ -1,6 +1,6 @@
 """Knowledge base admin feature slice."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.knowledge.manager import KnowledgeBaseManager
 
@@ -10,7 +10,11 @@ def list_kb_entries() -> List[Dict[str, Any]]:
     return KnowledgeBaseManager().db
 
 
-def update_kb_entry_description(entry_id: str, original_features: Dict[str, Any], edited_desc: str) -> None:
+def update_kb_entry_description(
+    entry_id: str,
+    original_features: Dict[str, Any],
+    edited_desc: Optional[str],
+) -> None:
     """Update entry description fields used by RAG retrieval."""
     edited_desc_text = (edited_desc or "").strip()
     features = dict(original_features or {})
