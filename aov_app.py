@@ -29,8 +29,6 @@ from app.manufacturing import ManufacturingPipeline
 # UI 樣式
 from components.style import apply_custom_style
 
-# 製程管理界面
-from components.process_manager import render_process_manager
 from components.sidebar import render_recognition_sidebar
 
 # VLM 信心度色彩渲染器 helper
@@ -131,7 +129,7 @@ st.divider()
 
 # ==================== Main Tabs ====================
 
-tab1, tab2, tab3 = st.tabs(["製程辨識", "知識庫管理", "製程管理"])
+tab1, tab2 = st.tabs(["工程圖分析", "知識庫管理"])
 
 # ==================== Tab 1: 製程辨識 ====================
 
@@ -537,18 +535,13 @@ with col_right:
             )
         
         with col_info2:
-            st.metric(
-                "檢測到製程",
-                len(result.predictions)
-            )
-        
+            _vlm_desc = result.features.raw_vlm_description or ""
+            st.metric("VLM 描述字數", len(_vlm_desc))
+
         with col_info3:
-            if result.predictions:
-                top_conf = result.predictions[0].confidence * 100
-                st.metric(
-                    "最高信心度",
-                    f"{top_conf:.1f}%"
-                )
+            _orange_count = len(re.findall(r'<orange>(.*?)</orange>', result.features.raw_vlm_description or ""))
+            _red_count = len(re.findall(r'<red>(.*?)</red>', result.features.raw_vlm_description or ""))
+            st.metric("需人工覆核項目", _orange_count + _red_count)
         
         st.divider()
 
@@ -826,23 +819,16 @@ with tab2:
     kb_manager = KnowledgeBaseManager()
     entries = kb_manager.db
 
-    pipeline = st.session_state.mfg_pipeline
-    if pipeline is not None:
-        all_process_ids = list(pipeline.decision_engine.processes.keys())
-    else:
-        try:
-            import json as _json
-            with open('app/manufacturing/process_lib_v2.json', encoding='utf-8') as _f:
-                _data = _json.load(_f)
-                all_process_ids = list(_data.get('processes', {}).keys())
-        except Exception:
-            all_process_ids = []
-
     if not entries:
         st.info("目前尚無知識庫條目")
     else:
         for entry in entries:
-            with st.expander(f"ID: {entry['id']} - {entry['features'].get('shape_description')}"):
+            _feature_title = (
+                entry.get("features", {}).get("shape_description")
+                or entry.get("features", {}).get("raw_vlm_description", "")[:40]
+                or "未命名條目"
+            )
+            with st.expander(f"ID: {entry['id']} - {_feature_title}"):
                 col_a, col_b = st.columns(2)
                 with col_a:
                     img_path = Path(entry['image_rel_path'])
@@ -851,20 +837,27 @@ with tab2:
                     else:
                         st.warning(f"⚠️ 原始圖檔已遺失：{img_path.name}")
                 with col_b:
-                    new_processes = st.multiselect(
-                        "修正製程",
-                        options=all_process_ids,
-                        default=entry.get('correct_processes', []),
-                        key=f"edit_{entry['id']}"
+                    _existing_desc = (
+                        entry.get("features", {}).get("raw_vlm_description", "")
+                        or entry.get("reasoning", "")
+                    )
+                    _edited_desc = st.text_area(
+                        "修正描述（VLM / RAG 參考主內容）",
+                        value=_existing_desc,
+                        height=180,
+                        key=f"edit_desc_{entry['id']}"
                     )
                     if st.button("更新此條目", key=f"btn_{entry['id']}"):
-                        kb_manager.update_entry(entry['id'], {"correct_processes": new_processes})
-                        st.success("已更新！下次 RAG 會參考這個新答案。")
-
-# ==================== Tab 3: 製程管理 ====================
-
-with tab3:
-    render_process_manager()
+                        _features = dict(entry.get("features", {}))
+                        _features["raw_vlm_description"] = _edited_desc.strip()
+                        kb_manager.update_entry(
+                            entry['id'],
+                            {
+                                "features": _features,
+                                "reasoning": _edited_desc.strip(),
+                            }
+                        )
+                        st.success("已更新！RAG 將優先參考修正後描述。")
 
 # ==================== Sidebar (Optional) ====================
 
@@ -913,7 +906,8 @@ with st.sidebar:
             st.text(f"圖紙: {w}×{h}")
         
         if st.session_state.recognition_result:
-            st.text(f"辨識結果: {len(st.session_state.recognition_result.predictions)} 個製程")
+            _desc_exists = bool(st.session_state.recognition_result.features.raw_vlm_description)
+            st.text(f"VLM 描述: {'已產生' if _desc_exists else '尚未產生'}")
     
     # 清除按鈕
     st.divider()
@@ -924,33 +918,19 @@ with st.sidebar:
         st.session_state.recognition_result = None
         st.rerun()
     
-    # OCR 快取清除按鈕（調試用）
-    if st.button("🔄 清除 OCR 快取", width="stretch"):
-        st.cache_resource.clear()
-        st.success("快取已清除，請重新載入頁面")
-        st.rerun()
-    
     # 關於
     st.divider()
-    
-    # 動態取得製程數量用於側邊欄
-    sidebar_process_count = "多種"
-    if st.session_state.mfg_pipeline is not None:
-        try:
-            sidebar_process_count = f"{st.session_state.mfg_pipeline.total_processes} 種"
-        except:
-            sidebar_process_count = "多種"
     
     st.markdown(f"""
     ### ℹ️ 關於系統
     
-    **NKUST 製程辨識系統**專為工程圖紙分析設計，能自動識別所需的製造製程。
+    **NKUST 工程圖分析系統**專為工程圖紙分析設計，以 VLM 視覺語言模型產出結構化描述。
     
     **核心功能:**
     - 工程圖紙自動分析
-    - {sidebar_process_count}製程自動辨識
-    - 綜合特徵融合
-    - 信心度評分與依據
+    - VLM 多視圖描述 + 信心度標記
+    - BOM / 父圖全域資訊注入
+    - 人工修正與 RAG 知識庫持續增強
     
     **Version**: 2.1.0 (Enhanced)  
     **Date**: 2026-02-03
