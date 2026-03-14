@@ -23,6 +23,15 @@ from PIL import Image
 
 # 工程圖分析核心模組
 from app.core import AOVCoreService, AnalysisRequest
+from app.features import (
+    run_analysis,
+    save_rag_entry,
+    list_kb_entries,
+    update_kb_entry_description,
+    save_symbol_templates,
+    list_symbol_templates,
+    delete_symbol_template,
+)
 
 # UI 樣式
 from components.style import apply_custom_style
@@ -434,7 +443,6 @@ with col_left:
                     st.session_state.pop('hitl_corrected_text', None)
                     st.session_state.pop('_hitl_result_key', None)
 
-                    start_time = time.time()
                     parent_img = st.session_state.parent_drawing
                     if parent_img is not None:
                         st.info("雙圖模式: 正在解析父圖全域資訊...")
@@ -453,8 +461,7 @@ with col_left:
                         use_vlm=use_vlm,
                         min_confidence=st.session_state.min_confidence,
                     )
-                    result = st.session_state.core_service.analyze(request)
-                    elapsed = time.time() - start_time
+                    result, elapsed = run_analysis(st.session_state.core_service, request)
                     st.session_state.recognition_result = result
                     if parent_img is not None:
                         st.success(f"雙圖辨識完成！處理時間: {elapsed:.2f} 秒")
@@ -573,23 +580,15 @@ with col_right:
 
         # 儲存按鈕
         if st.button("💾 儲存至 RAG 知識庫", type="primary", key="btn_save_rag"):
-            tmp_path = st.session_state.get("temp_file_path")
-            if not tmp_path or not Path(tmp_path).exists():
-                st.error("⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。")
+            ok, msg = save_rag_entry(
+                temp_file_path=st.session_state.get("temp_file_path", ""),
+                corrected_text=st.session_state.get("hitl_corrected_text", ""),
+                bom_context=st.session_state.get("bom_context_input", ""),
+            )
+            if ok:
+                st.toast(msg, icon="✅")
             else:
-                from app.knowledge.manager import KnowledgeBaseManager as _KBMgr
-                _kb = _KBMgr()
-                _final_desc = st.session_state.get("hitl_corrected_text", "").strip()
-                _kb.add_entry(
-                    image_path=tmp_path,
-                    features={
-                        "raw_vlm_description": _final_desc,
-                    },
-                    correct_processes=[],
-                    reasoning=_final_desc,
-                    bom_context=st.session_state.get("bom_context_input", "")
-                )
-                st.toast("✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！", icon="✅")
+                st.error(msg)
         if st.session_state.use_rag and result.rag_references:
             # Hash 完全匹配提示
             _exact = next((r for r in result.rag_references if r.get("_match_type") == "exact_hash"), None)
@@ -787,11 +786,7 @@ with col_footer3:
 
 with tab2:
     st.header("知識庫維護 (修正過去的錯誤)")
-
-    from app.knowledge.manager import KnowledgeBaseManager
-
-    kb_manager = KnowledgeBaseManager()
-    entries = kb_manager.db
+    entries = list_kb_entries()
 
     if not entries:
         st.info("目前尚無知識庫條目")
@@ -822,15 +817,10 @@ with tab2:
                         key=f"edit_desc_{entry['id']}"
                     )
                     if st.button("更新此條目", key=f"btn_{entry['id']}"):
-                        _edited_desc_text = (_edited_desc or "").strip()
-                        _features = dict(entry.get("features", {}))
-                        _features["raw_vlm_description"] = _edited_desc_text
-                        kb_manager.update_entry(
-                            entry['id'],
-                            {
-                                "features": _features,
-                                "reasoning": _edited_desc_text,
-                            }
+                        update_kb_entry_description(
+                            entry_id=entry["id"],
+                            original_features=entry.get("features", {}),
+                            edited_desc=_edited_desc,
                         )
                         st.success("已更新！RAG 將優先參考修正後描述。")
 
@@ -851,23 +841,21 @@ with st.sidebar:
             key="symbol_lib_uploader",
         )
         if _uploaded_sym:
-            _saved: List[str] = []
-            for _sym_file in _uploaded_sym:
-                _save_path = _symbol_lib_dir / _sym_file.name
-                with open(_save_path, "wb") as _f:
-                    _f.write(_sym_file.getbuffer())
-                _saved.append(_sym_file.name)
+            _saved = save_symbol_templates(_symbol_lib_dir, _uploaded_sym)
             st.success(f"已儲存 {len(_saved)} 個符號模板：{', '.join(_saved)}")
         # 顯示目前庫中符號清單
-        _existing_syms = sorted(_symbol_lib_dir.glob("*.png"))
+        _existing_syms = list_symbol_templates(_symbol_lib_dir)
         if _existing_syms:
             st.markdown("**目前符號庫：**")
             for _sym_path in _existing_syms:
                 col_name, col_del = st.columns([4, 1])
                 col_name.text(_sym_path.stem)
                 if col_del.button("✕", key=f"del_sym_{_sym_path.stem}"):
-                    _sym_path.unlink(missing_ok=True)
-                    st.rerun()
+                    _ok, _msg = delete_symbol_template(_sym_path)
+                    if _ok:
+                        st.rerun()
+                    else:
+                        st.warning(_msg)
         else:
             st.info("符號庫尚無模板，請上傳去背 PNG。")
 
