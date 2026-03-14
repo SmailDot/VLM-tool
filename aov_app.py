@@ -22,7 +22,7 @@ from pathlib import Path
 from PIL import Image
 
 # 工程圖分析核心模組
-from app.manufacturing import ManufacturingPipeline
+from app.core import AOVCoreService, AnalysisRequest
 
 # UI 樣式
 from components.style import apply_custom_style
@@ -76,6 +76,9 @@ apply_custom_style()
 # 初始化分析管線 (延遲載入)
 if 'mfg_pipeline' not in st.session_state:
     st.session_state.mfg_pipeline = None
+
+if 'core_service' not in st.session_state:
+    st.session_state.core_service = AOVCoreService()
 
 if 'uploaded_drawing' not in st.session_state:
     st.session_state.uploaded_drawing = None
@@ -431,45 +434,26 @@ with col_left:
                     st.session_state.pop('hitl_corrected_text', None)
                     st.session_state.pop('_hitl_result_key', None)
 
-                    # 2. 若設定改變或 pipeline 尚未初始化，重建整個 pipeline
-                    _need_rebuild = (
-                        st.session_state.mfg_pipeline is None
-                        or st.session_state.get('_last_pipeline_use_vlm') != use_vlm
-                        or st.session_state.get('_last_pipeline_use_ocr') != use_ocr
-                    )
-                    if _need_rebuild:
-                        st.session_state.mfg_pipeline = ManufacturingPipeline(
-                            use_ocr=use_ocr,
-                            use_geometry=use_geometry,
-                            use_symbols=use_symbols,
-                            use_visual=False,
-                            use_vlm=use_vlm,
-                            enable_process_prediction=False,
-                        )
-                        st.session_state['_last_pipeline_use_vlm'] = use_vlm
-                        st.session_state['_last_pipeline_use_ocr'] = use_ocr
-                    else:
-                        # 3. 設定未變：pipeline 可重用，但 VLMClient 必須重建，
-                        #    斷掉 LM Studio 端任何隱性 KV cache / session state
-                        st.session_state.mfg_pipeline.reset_vlm_client()
                     start_time = time.time()
                     parent_img = st.session_state.parent_drawing
                     if parent_img is not None:
                         st.info("雙圖模式: 正在解析父圖全域資訊...")
                     _tmp = st.session_state.get("temp_file_path")
                     _img_arg = _tmp if (_tmp and Path(_tmp).exists()) else primary_image
-                    result = st.session_state.mfg_pipeline.recognize(
-                        _img_arg,
+                    request = AnalysisRequest(
+                        image=_img_arg,
                         parent_image=parent_img,
-                        top_n=None,
-                        min_confidence=st.session_state.min_confidence,
-                        frequency_filter=None,
-                        use_rag=st.session_state.use_rag,
                         child_images=st.session_state.uploaded_drawings,
                         view_labels=st.session_state.get('uploaded_view_labels'),
                         bom_context=st.session_state.get('locked_bom') or st.session_state.get('bom_context_input', ''),
-                        enable_process_prediction=False,
+                        use_rag=st.session_state.use_rag,
+                        use_ocr=use_ocr,
+                        use_geometry=use_geometry,
+                        use_symbols=use_symbols,
+                        use_vlm=use_vlm,
+                        min_confidence=st.session_state.min_confidence,
                     )
+                    result = st.session_state.core_service.analyze(request)
                     elapsed = time.time() - start_time
                     st.session_state.recognition_result = result
                     if parent_img is not None:
