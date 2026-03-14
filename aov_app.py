@@ -181,7 +181,6 @@ with col_left:
                     parent_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
 
                     # 清理臨時檔案
-                    import os
                     os.unlink(tmp_pdf_path)
 
                     if parent_image is not None:
@@ -566,9 +565,8 @@ with col_right:
             )
 
             # 若有 <orange> 或 <red> 項目，主動顯示警示橫幅
-            import re as _re
-            _orange_items = _re.findall(r'<orange>(.*?)</orange>', vlm_desc)
-            _red_items    = _re.findall(r'<red>(.*?)</red>', vlm_desc)
+            _orange_items = re.findall(r'<orange>(.*?)</orange>', vlm_desc)
+            _red_items    = re.findall(r'<red>(.*?)</red>', vlm_desc)
             if _orange_items or _red_items:
                 _warn_parts = []
                 if _red_items:
