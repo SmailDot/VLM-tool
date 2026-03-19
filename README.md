@@ -1,55 +1,54 @@
-# AoV Tool V2 — VLM-based Engineering Drawing Analyzer
+# AoV Tool V2 — 工程圖紙 VLM 分析系統
 
-> **NKUST Vision Lab**
-> Manufacturing Process Recognition from Engineering Drawings
-> VLM-only + Multi-Model RAG Architecture
-
----
-
-## Overview
-
-AoV Tool V2 is an AI-powered engineering drawing analysis system. It uses a local Vision Language Model (VLM) to describe the geometry, features, and symbols of sheet-metal parts from 2D engineering drawings, then leverages RAG (Retrieval-Augmented Generation) with human-corrected references to progressively improve description quality.
-
-**Key design decisions:**
-- VLM outputs **English-only** structured descriptions (avoids Chinese vocabulary issues in small models)
-- VLM describes geometry — it does **not** predict manufacturing processes (that's downstream LLM's job)
-- RAG uses **dual-channel semantic search** (image + text embeddings) for accurate case retrieval
-- Human-in-the-loop (HITL) corrections accumulate into a knowledge base that makes the system smarter over time
+> **國立高雄科技大學 視覺實驗室**
+> 基於 VLM + Multi-Model RAG 的工程圖紙幾何描述系統
 
 ---
 
-## Architecture
+## 系統簡介
+
+AoV Tool V2 是專為工程圖紙分析設計的 AI 輔助工具。系統使用本地端 Vision Language Model（VLM）對板金零件的 2D 工程圖紙進行幾何描述，並透過 RAG（Retrieval-Augmented Generation）結合人工修正的歷史案例，持續提升描述品質。
+
+**核心設計原則：**
+- VLM 強制輸出**英文**結構化描述（避免小型模型中文詞彙不足的問題）
+- VLM 只負責**幾何描述**，不預測製程（製程推理由下游 LLM 負責）
+- RAG 採用**雙通道語意檢索**（圖片 embedding + 文字 embedding）提升案例召回率
+- Human-in-the-Loop（HITL）修正後的描述會累積到知識庫，系統越用越準
+
+---
+
+## 系統架構
 
 ```
-Engineering Drawing (JPG/PNG/PDF)
+工程圖紙 (JPG / PNG / PDF)
     |
     v
-[SymbolMatcher] --- CV template matching (pre-VLM)
-    |                 -> [CV-CONFIRMED] anchors
+[SymbolMatcher] --- CV 模板比對（VLM 前執行）
+    |                 -> 注入 [CV-CONFIRMED] 錨點
     v
-[VLM] --- Gemma 3 4B via LM Studio (1st call)
-    |       -> Structured 3-section geometry description
+[VLM] --- Gemma 3 4B via LM Studio（第 1 次呼叫）
+    |       -> 輸出三段式幾何描述
     v
-[RAG Retrieval] --- FAISS dual index
-    |   Image channel: DINOv2 ViT-Base (768-dim, weight 0.4)
-    |   Text channel:  multilingual-MiniLM-L12-v2 (384-dim, weight 0.6)
-    |   Fallback: SHA-256 exact match > Jaccard keyword
+[RAG 檢索] --- FAISS 雙索引
+    |   圖片通道: DINOv2 ViT-Base（768-dim，權重 0.4）
+    |   文字通道: multilingual-MiniLM-L12-v2（384-dim，權重 0.6）
+    |   快速路徑: SHA-256 精確比對 > Jaccard 關鍵字 fallback
     v
-[VLM] --- (2nd call, with reference case injected)
-    |       -> Self-corrected description
+[VLM] --- （第 2 次呼叫，注入參考案例）
+    |       -> 自我修正後的描述
     v
-[Output] --- raw_vlm_description (English structured text)
+[輸出] --- raw_vlm_description（英文結構化文字）
     |
     v
-[HITL] --- User corrects description -> saves to knowledge base
-             -> embeddings indexed in FAISS for future retrieval
+[HITL] --- 使用者修正描述 -> 存入知識庫
+             -> Embedding 同步更新至 FAISS 索引
 ```
 
-### VLM Output Format (3-section report)
+### VLM 輸出格式（三段式報告）
 
 ```
 ### 1. VIEW-BY-VIEW OBSERVATION
-  Geometry description with <green>/<orange>/<red> confidence tags
+  各視角幾何描述，以 <green>/<orange>/<red> 標記信心度
 
 ### 2. SYMBOL & TEXT SEARCH
   - Weld symbol detected: True/False
@@ -57,60 +56,62 @@ Engineering Drawing (JPG/PNG/PDF)
   - Other text annotation found: True/False
 
 ### 3. 3D RECONSTRUCTION INFERENCE
-  Engineer-style reasoning about part structure
+  工程師視角的 3D 結構推論說明
 ```
 
 ---
 
-## Quick Start
+## 快速開始
 
-### Requirements
+### 環境需求
+
 - Python 3.10+
-- [LM Studio](https://lmstudio.ai/) with a vision model loaded (e.g. `google/gemma-3-4b-it`)
+- [LM Studio](https://lmstudio.ai/)，並載入視覺模型（例如 `google/gemma-3-4b-it`）
 
-### Installation
+### 安裝
 
 ```bash
 cd AoV_Tool_V2
 pip install -r requirements.txt
 ```
 
-First run will auto-download the sentence-transformers model (~500MB, cached afterwards).
+首次執行時 `sentence-transformers` 模型會自動下載（約 500MB，下載後快取）。
 
-PaddleOCR is optional (used only for parent image / BOM OCR scanning):
+PaddleOCR 為可選功能（僅用於父圖 / BOM OCR 掃描）：
+
 ```bash
 # Windows
 pip install paddlepaddle==2.6.1 -f https://www.paddlepaddle.org.cn/whl/windows/mkl/avx/stable.html
 ```
 
-### Launch
+### 啟動
 
 ```bash
 streamlit run aov_app.py
 ```
 
-Open http://localhost:8501 in your browser.
+開啟瀏覽器至 http://localhost:8501
 
-### LM Studio Setup
+### LM Studio 設定
 
-1. Download and install [LM Studio](https://lmstudio.ai/)
-2. Load a vision model (e.g. `google/gemma-3-4b-it`)
-3. Start the local server (default: `http://localhost:1234`)
-4. The system auto-connects via OpenAI-compatible API
+1. 下載安裝 [LM Studio](https://lmstudio.ai/)
+2. 載入視覺模型（建議 `google/gemma-3-4b-it`）
+3. 啟動本地伺服器（預設 `http://localhost:1234`）
+4. 系統會透過 OpenAI-compatible API 自動連線
 
 ---
 
-## Usage
+## 使用流程
 
-### Basic Flow
+### 基本流程
 
-1. **Upload** child drawing (required) + optional parent drawing + BOM images
-2. **Multi-view** upload supported: Top / Front / Side / Isometric views
-3. **Configure** VLM and RAG settings in sidebar
-4. **Run** analysis
-5. **Review** VLM description on the right panel
-6. **Correct** the description via HITL text editor
-7. **Save** corrected description to RAG knowledge base
+1. **上傳**子圖（必填）+ 可選的父圖 + BOM 圖片
+2. **多視角**上傳：支援 Top / Front / Side / Isometric 視角
+3. **設定** VLM 與 RAG 參數（側邊欄）
+4. **執行**分析
+5. **查看**右側 VLM 幾何描述
+6. **修正**描述（HITL 文字編輯器）
+7. **儲存**修正後的描述至 RAG 知識庫
 
 ### Python API
 
@@ -120,10 +121,10 @@ from app.core import AOVCoreService, AnalysisRequest
 service = AOVCoreService()
 request = AnalysisRequest(
     image="path/to/child_drawing.jpg",
-    parent_image="path/to/parent_drawing.jpg",  # optional
+    parent_image="path/to/parent_drawing.jpg",  # 可選
     use_vlm=True,
     use_rag=True,
-    bom_context="SUS304, T1.5, Bracket",
+    bom_context="SUS304, T1.5, 耐震支架",
 )
 result = service.analyze(request)
 print(result.features.raw_vlm_description)
@@ -131,98 +132,98 @@ print(result.features.raw_vlm_description)
 
 ---
 
-## Project Structure
+## 專案結構
 
 ```
 AoV_Tool_V2/
-|-- aov_app.py                              # Streamlit UI entry point
-|-- main.py                                 # Launcher script
+|-- aov_app.py                              # Streamlit UI 主入口
+|-- main.py                                 # 啟動腳本
 |-- requirements.txt
 |
 |-- app/
-|   |-- config.py                           # Global configuration
+|   |-- config.py                           # 全域設定
 |   |
-|   |-- core/                               # Portable API facade
+|   |-- core/                               # 可移植的 API 外觀層
 |   |   |-- contracts.py                    #   AnalysisRequest dataclass
-|   |   |-- service.py                      #   AOVCoreService (main entry)
-|   |   +-- example_usage.py                #   Minimal usage example
+|   |   |-- service.py                      #   AOVCoreService（主要入口）
+|   |   +-- example_usage.py                #   最小可執行範例
 |   |
-|   |-- manufacturing/                      # VLM pipeline core
-|   |   |-- schema.py                       #   Data contracts (ExtractedFeatures, RecognitionResult)
-|   |   |-- pipeline.py                     #   Main orchestration (VLM-only)
-|   |   |-- prompts.py                      #   VLM prompt templates & vocabulary
+|   |-- manufacturing/                      # VLM Pipeline 核心
+|   |   |-- schema.py                       #   資料合約（ExtractedFeatures, RecognitionResult）
+|   |   |-- pipeline.py                     #   主流程協調（VLM-only）
+|   |   |-- prompts.py                      #   VLM Prompt 模板與詞彙控制
 |   |   |-- extractors/
-|   |   |   |-- vlm_client.py               #   LM Studio / OpenAI-compatible VLM client
-|   |   |   |-- parent_parser.py            #   Parent drawing global context parser
-|   |   |   |-- embeddings.py               #   DINOv2 / CLIP visual embeddings
-|   |   |   |-- pdf_extractor.py            #   PDF -> high-res image extraction
-|   |   |   |-- ocr.py                      #   PaddleOCR wrapper (optional)
-|   |   |   |-- geometry.py                 #   Geometry extractor (reserved)
-|   |   |   |-- symbols.py                  #   Symbol detector (reserved)
-|   |   |   +-- tolerance_parser.py         #   Tolerance spec parser (reserved)
+|   |   |   |-- vlm_client.py               #   LM Studio / OpenAI-compatible VLM Client
+|   |   |   |-- parent_parser.py            #   父圖全域資訊解析器
+|   |   |   |-- embeddings.py               #   DINOv2 / CLIP 視覺 Embedding
+|   |   |   |-- pdf_extractor.py            #   PDF 轉高解析度圖片
+|   |   |   |-- ocr.py                      #   PaddleOCR 封裝（可選）
+|   |   |   |-- geometry.py                 #   幾何特徵提取（保留備用）
+|   |   |   |-- symbols.py                  #   符號偵測（保留備用）
+|   |   |   +-- tolerance_parser.py         #   公差規格解析（保留備用）
 |   |   +-- decision/
-|   |       +-- rule_router.py              #   BOM text -> CV skill triggers (regex)
+|   |       +-- rule_router.py              #   BOM 文字 -> CV 技能觸發（正則規則）
 |   |
-|   |-- knowledge/                          # RAG knowledge base
-|   |   |-- manager.py                      #   KnowledgeBaseManager (CRUD + retrieval)
-|   |   +-- vector_store.py                 #   FAISS dual index + TextEmbedder
+|   |-- knowledge/                          # RAG 知識庫
+|   |   |-- manager.py                      #   KnowledgeBaseManager（CRUD + 語意檢索）
+|   |   +-- vector_store.py                 #   FAISS 雙索引 + TextEmbedder
 |   |
 |   |-- vision/
-|   |   +-- symbol_matcher.py               #   Multi-scale template matching
+|   |   +-- symbol_matcher.py               #   多尺度 CV 模板比對
 |   |
-|   +-- features/                           # Action handlers
-|       |-- analysis_actions.py             #   Run analysis, save RAG entry
-|       |-- upload_flow.py                  #   Image decoding (framework-agnostic)
-|       |-- knowledge_admin.py              #   KB entry CRUD
-|       +-- symbol_library.py               #   Symbol template management
+|   +-- features/                           # 功能動作層
+|       |-- analysis_actions.py             #   執行分析、儲存 RAG 案例
+|       |-- upload_flow.py                  #   圖片解碼（框架無關）
+|       |-- knowledge_admin.py              #   知識庫 CRUD
+|       +-- symbol_library.py               #   符號模板管理
 |
-+-- components/                             # Streamlit UI components (not portable)
-    |-- style.py                            #   CSS styling
-    |-- sidebar.py                          #   Sidebar configuration
-    |-- sidebar_panel.py                    #   Sidebar sub-panels
-    |-- results_panel.py                    #   Results & HITL rendering
-    |-- visualizer.py                       #   Prediction display
-    +-- text_format.py                      #   Confidence tag formatting
++-- components/                             # Streamlit UI 元件（不可移植）
+    |-- style.py                            #   CSS 樣式
+    |-- sidebar.py                          #   側邊欄
+    |-- sidebar_panel.py                    #   側邊欄子面板
+    |-- results_panel.py                    #   結果顯示 & HITL 渲染
+    |-- visualizer.py                       #   預測結果顯示
+    +-- text_format.py                      #   信心度標籤格式化
 ```
 
-### Portability
+### 模組可移植性
 
-The following modules can be directly transplanted to other projects **without Streamlit**:
+以下模組可直接移植到其他專案（不依賴 Streamlit）：
 
-| Module | What it does |
-|--------|-------------|
-| `app/core/` | Stable API facade (`AOVCoreService`, `AnalysisRequest`) |
-| `app/manufacturing/` | VLM pipeline, prompts, schema, VLM client |
-| `app/knowledge/` | RAG knowledge base + FAISS vector store |
-| `app/vision/` | Symbol template matching |
-| `app/features/analysis_actions.py` | Analysis + RAG save orchestration |
-| `app/features/upload_flow.py` | Image decoding (accepts bytes/Path/ndarray/file-like) |
+| 模組 | 功能說明 |
+|------|---------|
+| `app/core/` | 穩定的 API 外觀層（`AOVCoreService`、`AnalysisRequest`） |
+| `app/manufacturing/` | VLM Pipeline、Prompt、Schema、VLM Client |
+| `app/knowledge/` | RAG 知識庫 + FAISS 向量索引 |
+| `app/vision/` | 符號模板比對 |
+| `app/features/analysis_actions.py` | 分析執行與 RAG 儲存協調 |
+| `app/features/upload_flow.py` | 圖片解碼（支援 bytes / Path / ndarray / file-like） |
 
-`components/` and `aov_app.py` are Streamlit-specific and should be replaced with your target UI.
+`components/` 與 `aov_app.py` 為 Streamlit 專屬，移植時需替換為目標 UI。
 
 ---
 
-## RAG System
+## RAG 知識庫
 
-### How it works
+### 運作原理
 
-1. **Save**: User corrects VLM description -> HITL saves to JSON knowledge base + computes DINOv2 image embedding + multilingual text embedding -> indexes in FAISS
-2. **Retrieve**: New image comes in -> compute image embedding (DINOv2) + text embedding (from VLM initial description) -> FAISS hybrid search (0.4 image + 0.6 text) -> top-3 similar cases
-3. **Inject**: Best matching reference case injected into VLM prompt as "VERIFIED REFERENCE CASE" -> VLM self-corrects its description
+1. **儲存**：使用者修正 VLM 描述 -> HITL 存入 JSON + 計算 DINOv2 圖片 Embedding + multilingual 文字 Embedding -> 更新 FAISS 索引
+2. **檢索**：新圖進來 -> 計算圖片 Embedding（DINOv2）+ 文字 Embedding（VLM 初次描述）-> FAISS 混合搜尋（圖片 0.4 + 文字 0.6）-> 取 top-3 相似案例
+3. **注入**：最佳匹配案例注入 VLM Prompt 作為「VERIFIED REFERENCE CASE」-> VLM 第二次呼叫自我修正描述
 
-### Storage
+### 儲存位置
 
-| File/Dir | Content |
-|----------|---------|
-| `knowledge_db.json` | Entry metadata (id, hash, description, BOM context) |
-| `knowledge_images/` | Copied source images |
-| `knowledge_vectors/` | FAISS indices (`image.faiss`, `text.faiss`, `entry_ids.npy`) |
+| 路徑 | 內容 |
+|------|------|
+| `knowledge_db.json` | 案例 metadata（id、hash、描述、BOM 上下文） |
+| `knowledge_images/` | 圖片副本 |
+| `knowledge_vectors/` | FAISS 索引（`image.faiss`、`text.faiss`、`entry_ids.npy`） |
 
-All three are in `.gitignore` (local runtime data).
+以上三項皆在 `.gitignore`，屬本地運行資料，不納入版控。
 
-### Rebuilding index
+### 重建索引
 
-If you have existing `knowledge_db.json` entries without FAISS embeddings:
+若有既存的 `knowledge_db.json` 案例尚未建立 FAISS Embedding：
 
 ```python
 from app.knowledge.manager import KnowledgeBaseManager
@@ -232,50 +233,51 @@ kb.rebuild_vector_index()
 
 ---
 
-## Configuration
+## 參數設定
 
-### VLM Settings
+### VLM 設定
 
-| Setting | Default | Location |
-|---------|---------|----------|
-| VLM endpoint | `http://localhost:1234/v1` | `app/config.py` / `vlm_client.py` |
-| Temperature | 0.1 (1st call), 0.15 (RAG 2nd call) | `pipeline.py` |
+| 參數 | 預設值 | 位置 |
+|------|--------|------|
+| VLM 端點 | `http://localhost:1234/v1` | `app/config.py` / `vlm_client.py` |
+| Temperature（第 1 次呼叫） | 0.1 | `pipeline.py` |
+| Temperature（RAG 第 2 次呼叫） | 0.15 | `pipeline.py` |
 | Max tokens | 512 | `pipeline.py` |
-| Model | Auto-detect from LM Studio | `vlm_client.py` |
+| 模型 | 自動偵測 LM Studio 已載入模型 | `vlm_client.py` |
 
-### RAG Settings
+### RAG 設定
 
-| Setting | Default | Location |
-|---------|---------|----------|
-| Image embedding weight | 0.4 | `vector_store.py` |
-| Text embedding weight | 0.6 | `vector_store.py` |
-| Image embedding model | DINOv2 ViT-Base (768-dim) | `embeddings.py` |
-| Text embedding model | `paraphrase-multilingual-MiniLM-L12-v2` (384-dim) | `vector_store.py` |
-| Top-K retrieval | 3 | `pipeline.py` |
-
----
-
-## Troubleshooting
-
-### VLM not responding
-- Confirm LM Studio is running and a vision model is loaded
-- Check `http://localhost:1234/v1/models` returns a model list
-- The UI shows a warning if VLM service is unreachable
-
-### Empty or poor results
-- Lower confidence threshold (sidebar, try 0.2)
-- Ensure image is a clear engineering drawing (white background, black lines)
-- Provide BOM context for better cross-verification
-- Enable RAG if knowledge base has entries
-
-### First-time slow startup
-- `sentence-transformers` model downloads on first use (~500MB)
-- DINOv2 model downloads on first use (~350MB)
-- Both are cached in `~/.cache/` after first download
+| 參數 | 預設值 | 位置 |
+|------|--------|------|
+| 圖片 Embedding 權重 | 0.4 | `vector_store.py` |
+| 文字 Embedding 權重 | 0.6 | `vector_store.py` |
+| 圖片 Embedding 模型 | DINOv2 ViT-Base（768-dim） | `embeddings.py` |
+| 文字 Embedding 模型 | `paraphrase-multilingual-MiniLM-L12-v2`（384-dim） | `vector_store.py` |
+| Top-K 檢索數量 | 3 | `pipeline.py` |
 
 ---
 
-## Team
+## 疑難排解
 
-**Lab**: NKUST Vision Lab (National Kaohsiung University of Science and Technology)
-**Project**: AoV Tool — Manufacturing Process Recognition
+### VLM 無回應
+- 確認 LM Studio 已啟動且已載入視覺模型
+- 確認 `http://localhost:1234/v1/models` 可回傳模型清單
+- UI 側邊欄會顯示 VLM 連線狀態警告
+
+### 分析結果空白或品質差
+- 降低信心度門檻（側邊欄，建議試 0.2）
+- 確認圖紙為白底黑線的工程圖
+- 提供 BOM 上下文有助於交叉驗證
+- 若知識庫有資料，建議啟用 RAG
+
+### 首次啟動速度較慢
+- `sentence-transformers` 模型首次使用時自動下載（約 500MB）
+- DINOv2 模型首次使用時自動下載（約 350MB）
+- 下載後快取於 `~/.cache/`，之後啟動正常速度
+
+---
+
+## 開發團隊
+
+**實驗室**：國立高雄科技大學 視覺實驗室（NKUST Vision Lab）
+**專案**：AoV Tool — 工程圖紙製程辨識系統
