@@ -206,7 +206,18 @@ def _load_template(png_path: Path) -> Tuple[Optional[np.ndarray], Optional[np.nd
         (grey_img, mask) or (None, None) on failure.
     """
     try:
-        raw = cv2.imread(str(png_path), cv2.IMREAD_UNCHANGED)
+        # Use Unicode-safe loading on Windows/pathnames with non-ASCII chars.
+        # cv2.imread may fail for paths like "焊接符號.png" depending on runtime.
+        raw = None
+        try:
+            data = np.fromfile(str(png_path), dtype=np.uint8)
+            if data.size > 0:
+                raw = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
+        except Exception:
+            raw = None
+
+        if raw is None:
+            raw = cv2.imread(str(png_path), cv2.IMREAD_UNCHANGED)
         if raw is None:
             return None, None
 
