@@ -1,11 +1,11 @@
 """
-Manufacturing Process Recognition Pipeline.
+Manufacturing Process Recognition Pipeline (VLM-only).
 
 End-to-end workflow:
 1. Load image (from file or numpy array)
-2. Extract multimodal features (OCR, Geometry, Symbols, Visual embeddings)
-3. Run decision engine to predict processes
-4. Return results with confidence and evidence
+2. VLM descriptive analysis (via LM Studio)
+3. RAG retrieval & self-correction
+4. Return results with diagnostics
 """
 
 from typing import Optional, Union, List, Dict, Any, Sequence
@@ -61,19 +61,10 @@ class ManufacturingPipeline:
             enable_process_prediction: Enable process prediction via decision engine.
                 [Compatibility parameter] This pipeline now always runs in VLM-only mode.
         """
-        self.use_ocr = False
-        self.use_geometry = False
-        self.use_symbols = False
         self.use_visual = use_visual
         self.use_vlm = use_vlm
         self.enable_process_prediction = enable_process_prediction
-        
-        # Feature extractors are intentionally disabled in VLM-only mode.
-        # Keep attributes for backward compatibility with downstream code paths.
-        self.ocr_extractor = None
-        self.geometry_extractor = None
-        self.symbol_detector = None
-        
+
         # Initialize visual embedder (gracefully handle unavailability)
         self.visual_embedder = None
         if use_visual:
@@ -114,7 +105,7 @@ class ManufacturingPipeline:
                 self.use_vlm = False
         
         # Initialize parent image parser
-        self.parent_parser = ParentImageParser(self.ocr_extractor)
+        self.parent_parser = ParentImageParser()
         
         # Initialize PDF extractor (if available)
         self.pdf_extractor = None
@@ -502,18 +493,6 @@ class ManufacturingPipeline:
         Returns:
             ExtractedFeatures object.
         """
-        # OCR extraction disabled in VLM-only mode
-        ocr_results = []
-        
-        # Tolerance extraction disabled with OCR in VLM-only mode
-        tolerances = []
-        
-        # Geometry extraction disabled in VLM-only mode
-        geometry = None
-        
-        # Symbol detection disabled in VLM-only mode
-        symbols = []
-        
         # Visual embedding
         visual_embedding = None
         if self.use_visual and self.visual_embedder:
@@ -566,12 +545,12 @@ class ManufacturingPipeline:
                 vlm_analysis = None
         
         return ExtractedFeatures(
-            ocr_results=ocr_results,
-            geometry=geometry or GeometryFeatures(),
-            symbols=symbols,
+            ocr_results=[],
+            geometry=GeometryFeatures(),
+            symbols=[],
             visual_embedding=visual_embedding,
-            tolerances=tolerances,  # NEW!
-            raw_vlm_description=vlm_analysis  # NEW!
+            tolerances=[],
+            raw_vlm_description=vlm_analysis,
         )
     
     @staticmethod
