@@ -1,8 +1,12 @@
-"""Upload and preprocessing flow helpers for the Streamlit app."""
+"""Upload and preprocessing flow helpers.
+
+Accepts generic inputs (bytes, Path, ndarray, or file-like objects)
+so the module can be used outside of Streamlit.
+"""
 
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Iterable, List, Optional, Sequence, Tuple, Union
 
 import cv2
 import numpy as np
@@ -12,13 +16,58 @@ from ..manufacturing.extractors.ocr import OCRExtractor
 
 ImageArray = np.ndarray
 
+# Type alias for flexible image input
+ImageInput = Union[bytes, str, Path, np.ndarray, Any]  # Any = file-like with .read()
 
-def decode_bom_uploads(uploaded_files: Optional[Iterable[Any]]) -> List[ImageArray]:
-    """Decode uploaded BOM images into BGR arrays."""
+
+def _to_bgr_array(source: ImageInput) -> Optional[ImageArray]:
+    """Convert various image sources to a BGR numpy array.
+
+    Supported inputs:
+      - np.ndarray (returned as-is)
+      - bytes / bytearray
+      - str or Path (read from disk)
+      - file-like object with .read() method (e.g. Streamlit UploadedFile)
+    """
+    if isinstance(source, np.ndarray):
+        return source
+
+    raw: Optional[bytes] = None
+
+    if isinstance(source, (bytes, bytearray)):
+        raw = bytes(source)
+    elif isinstance(source, (str, Path)):
+        path = Path(source)
+        if path.exists():
+            raw = path.read_bytes()
+    elif hasattr(source, "read"):
+        # file-like (Streamlit UploadedFile, io.BytesIO, open(..., 'rb'), etc.)
+        raw = source.read()
+
+    if raw is None:
+        return None
+
+    arr = np.asarray(bytearray(raw), dtype=np.uint8)
+    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+
+def _get_name(source: ImageInput) -> str:
+    """Best-effort filename extraction from various input types."""
+    if isinstance(source, (str, Path)):
+        return Path(source).name
+    if hasattr(source, "name"):
+        return source.name
+    return "image"
+
+
+def decode_bom_uploads(uploaded_files: Optional[Iterable[ImageInput]]) -> List[ImageArray]:
+    """Decode uploaded BOM images into BGR arrays.
+
+    Each element can be bytes, a file path, an ndarray, or a file-like object.
+    """
     bom_imgs: List[ImageArray] = []
     for bf in (uploaded_files or []):
-        raw = np.asarray(bytearray(bf.read()), dtype=np.uint8)
-        img = cv2.imdecode(raw, cv2.IMREAD_COLOR)
+        img = _to_bgr_array(bf)
         if img is not None:
             bom_imgs.append(img)
     return bom_imgs
@@ -40,10 +89,14 @@ def scan_ocr_text(targets: Sequence[ImageArray]) -> Tuple[str, int]:
 
 
 def decode_child_views(
-    view_files: Sequence[Any],
+    view_files: Sequence[ImageInput],
     view_labels: Sequence[str],
 ) -> Tuple[List[ImageArray], List[str], List[str]]:
-    """Decode uploaded child view files and return images, preview names, and short labels."""
+    """Decode uploaded child view files and return images, preview names, and short labels.
+
+    Each element of *view_files* can be bytes, a file path, an ndarray,
+    or a file-like object (e.g. Streamlit UploadedFile).
+    """
     drawing_images: List[ImageArray] = []
     drawing_names: List[str] = []
     uploaded_labels: List[str] = []
@@ -51,11 +104,10 @@ def decode_child_views(
     for uf, lbl in zip(view_files, view_labels):
         if uf is None:
             continue
-        file_bytes = np.asarray(bytearray(uf.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        img = _to_bgr_array(uf)
         if img is not None:
             drawing_images.append(img)
-            drawing_names.append(f"{lbl}: {uf.name}")
+            drawing_names.append(f"{lbl}: {_get_name(uf)}")
             uploaded_labels.append(lbl.split('（')[0].strip())
 
     return drawing_images, drawing_names, uploaded_labels
