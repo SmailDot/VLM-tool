@@ -62,15 +62,16 @@ class ParentImageParser:
     3. 根據關鍵字觸發預設製程
     """
     
-    def __init__(self, ocr_extractor=None):
+    def __init__(self, ocr_extractor=None, vlm_client: Optional[VLMClient] = None):
         """
         初始化父圖解析器
-        
+
         Args:
-            ocr_extractor: OCR 提取器實例
+            ocr_extractor: OCR 提取器實例 (可選，VLM-only 模式下為 None)
+            vlm_client: VLM 客戶端實例 (依賴注入；若未提供則自行建立)
         """
         self.ocr_extractor = ocr_extractor
-        self.vlm_client = VLMClient()
+        self.vlm_client = vlm_client or VLMClient()
         
         # 定義關鍵字規則 (來自 ChatGPT.txt)
         self.keyword_rules = {

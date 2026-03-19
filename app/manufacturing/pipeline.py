@@ -104,8 +104,8 @@ class ManufacturingPipeline:
                 self.vlm_client = None
                 self.use_vlm = False
         
-        # Initialize parent image parser
-        self.parent_parser = ParentImageParser()
+        # Initialize parent image parser (share VLM client)
+        self.parent_parser = ParentImageParser(vlm_client=self.vlm_client)
         
         # Initialize PDF extractor (if available)
         self.pdf_extractor = None
