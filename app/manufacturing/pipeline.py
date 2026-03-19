@@ -369,7 +369,8 @@ class ManufacturingPipeline:
                     _vlm_feats,
                     image_path=image_path or "",
                     top_k=3,
-                    raw_vlm_text=features.raw_vlm_description or ""
+                    raw_vlm_text=features.raw_vlm_description or "",
+                    query_image=img_array,
                 )
                 if similar_cases:
                     rag_references = similar_cases
