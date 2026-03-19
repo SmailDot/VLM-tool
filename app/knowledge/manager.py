@@ -2,18 +2,22 @@
 Knowledge Base Manager for RAG cases.
 
 Stores image features, corrected processes, and expert reasoning.
+Supports FAISS-based semantic retrieval (image + text embeddings).
 """
 
 from __future__ import annotations
 
 import re as _re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from pathlib import Path
 import json
 import re
 import shutil
 import hashlib
+
+import numpy as np
+
 
 class KnowledgeBaseManager:
     """
@@ -24,6 +28,9 @@ class KnowledgeBaseManager:
     - extracted features (VLM analysis)
     - corrected process IDs
     - expert reasoning
+
+    Retrieval uses a dual FAISS vector store (image DINOv2 768-dim +
+    text multilingual-MiniLM 384-dim) with SHA-256 exact-match fast path.
     """
 
     def __init__(
@@ -36,13 +43,38 @@ class KnowledgeBaseManager:
         self.image_storage_dir.mkdir(parents=True, exist_ok=True)
         self.db: List[Dict[str, Any]] = self._load_db()
 
-    def _load_db(self) -> List[Dict[str, Any]]:
-        """
-        Load knowledge base data from disk.
+        # Lazy-loaded components (heavy models)
+        self._vector_store = None
+        self._text_embedder = None
+        self._image_embedder = None
 
-        Returns:
-            List[Dict[str, Any]]: Loaded entries, or empty list if missing/invalid.
-        """
+    # ------------------------------------------------------------------
+    # Lazy loaders
+    # ------------------------------------------------------------------
+
+    def _get_vector_store(self):
+        if self._vector_store is None:
+            from app.knowledge.vector_store import DualVectorStore
+            self._vector_store = DualVectorStore()
+        return self._vector_store
+
+    def _get_text_embedder(self):
+        if self._text_embedder is None:
+            from app.knowledge.vector_store import TextEmbedder
+            self._text_embedder = TextEmbedder()
+        return self._text_embedder
+
+    def _get_image_embedder(self):
+        if self._image_embedder is None:
+            from app.manufacturing.extractors.embeddings import VisualEmbedder
+            self._image_embedder = VisualEmbedder()
+        return self._image_embedder
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _load_db(self) -> List[Dict[str, Any]]:
         if not self.db_path.exists():
             return []
         try:
@@ -52,25 +84,56 @@ class KnowledgeBaseManager:
             return []
 
     def _save_db(self) -> None:
-        """Persist the in-memory database to disk."""
         with self.db_path.open("w", encoding="utf-8") as file:
             json.dump(self.db, file, ensure_ascii=False, indent=2)
 
     def _calculate_hash(self, image_path: str) -> str:
-        """
-        計算圖片的 SHA-256 hash 作為唯一識別碼。
-
-        Args:
-            image_path: 圖片檔案路徑。
-
-        Returns:
-            str: 十六進位 SHA-256 hash 字串。
-        """
         h = hashlib.sha256()
         with open(image_path, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
                 h.update(chunk)
         return h.hexdigest()
+
+    # ------------------------------------------------------------------
+    # Embedding helpers
+    # ------------------------------------------------------------------
+
+    def _compute_image_embedding(
+        self, image_path: str
+    ) -> Optional[np.ndarray]:
+        """Compute DINOv2 embedding from an image file path."""
+        try:
+            embedder = self._get_image_embedder()
+            return embedder.extract_from_file(image_path)
+        except Exception as e:
+            print(f"Warning: image embedding failed: {e}")
+            return None
+
+    def _compute_image_embedding_from_array(
+        self, image: np.ndarray
+    ) -> Optional[np.ndarray]:
+        """Compute DINOv2 embedding from a BGR numpy array."""
+        try:
+            embedder = self._get_image_embedder()
+            return embedder.extract(image)
+        except Exception as e:
+            print(f"Warning: image embedding failed: {e}")
+            return None
+
+    def _compute_text_embedding(self, text: str) -> Optional[np.ndarray]:
+        """Compute sentence-transformer embedding from text."""
+        if not text or not text.strip():
+            return None
+        try:
+            embedder = self._get_text_embedder()
+            return embedder.encode(text)
+        except Exception as e:
+            print(f"Warning: text embedding failed: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
 
     def add_entry(
         self,
@@ -84,16 +147,7 @@ class KnowledgeBaseManager:
         """
         Add a new knowledge entry to the database.
 
-        Args:
-            image_path: Path to source image file.
-            features: Extracted features (VLM analysis output).
-            correct_processes: Corrected process IDs.
-            reasoning: Expert reasoning for correction.
-            tags: Optional tags for retrieval.
-            bom_context: BOM / global notes text.
-
-        Returns:
-            Dict[str, Any]: The created entry.
+        Computes and indexes image + text embeddings for semantic retrieval.
         """
         timestamp = datetime.now()
         filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{Path(image_path).name}"
@@ -103,8 +157,10 @@ class KnowledgeBaseManager:
         shutil.copy2(image_path, target_path)
         image_hash = self._calculate_hash(image_path)
 
+        entry_id = filename.split(".")[0]
+
         entry = {
-            "id": filename.split(".")[0],
+            "id": entry_id,
             "timestamp": timestamp.isoformat(),
             "image_rel_path": str(target_path),
             "image_hash": image_hash,
@@ -117,19 +173,22 @@ class KnowledgeBaseManager:
 
         self.db.append(entry)
         self._save_db()
+
+        # --- Index embeddings in FAISS ---
+        try:
+            desc_text = features.get("raw_vlm_description", "") or reasoning
+            img_emb = self._compute_image_embedding(str(target_path))
+            txt_emb = self._compute_text_embedding(desc_text)
+
+            vs = self._get_vector_store()
+            vs.add(entry_id, image_embedding=img_emb, text_embedding=txt_emb)
+            vs.save()
+        except Exception as e:
+            print(f"Warning: vector indexing failed (entry saved to JSON): {e}")
+
         return entry
 
     def update_entry(self, entry_id: str, new_data: Dict[str, Any]) -> bool:
-        """
-        Update an existing knowledge entry by ID.
-
-        Args:
-            entry_id: Entry identifier.
-            new_data: Fields to update.
-
-        Returns:
-            bool: True if updated, False if not found.
-        """
         for i, entry in enumerate(self.db):
             if entry.get("id") == entry_id:
                 self.db[i].update(new_data)
@@ -138,31 +197,36 @@ class KnowledgeBaseManager:
                 return True
         return False
 
+    # ------------------------------------------------------------------
+    # Retrieval
+    # ------------------------------------------------------------------
+
     def retrieve_similar(
         self,
         current_features: Dict[str, Any],
         image_path: str = "",
         top_k: int = 3,
-        raw_vlm_text: str = ""
+        raw_vlm_text: str = "",
+        query_image: Optional[np.ndarray] = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve similar cases from knowledge base.
 
         Matching priority:
-        1. SHA-256 exact hash match (same file → score 1.0)
-        2. Keyword overlap on raw_vlm_description plain text (Jaccard similarity)
-        3. Legacy JSON shape/geometry fields (fallback for old entries)
+        1. SHA-256 exact hash match (same file -> score 1.0)
+        2. FAISS hybrid semantic search (image 0.4 + text 0.6)
+        3. Jaccard keyword fallback (if FAISS unavailable or empty)
 
         Args:
             current_features: Current extracted features dict.
             image_path: Path to current image (for hash match).
             top_k: Max number of results to return.
-            raw_vlm_text: Raw VLM plain-text output for keyword matching.
-
-        Returns:
-            List[Dict[str, Any]]: Top matched entries, each annotated with
-            '_match_type' and '_confidence' keys.
+            raw_vlm_text: Raw VLM plain-text output for text embedding.
+            query_image: BGR numpy array for image embedding search.
         """
+        if not self.db:
+            return []
+
         # --- 1. Hash exact match ---
         if image_path and Path(image_path).exists():
             query_hash = self._calculate_hash(image_path)
@@ -171,13 +235,66 @@ class KnowledgeBaseManager:
                     hit = dict(entry)
                     hit["_match_type"] = "exact_hash"
                     hit["_confidence"] = 1.0
+                    self._attach_rag_priors([hit])
                     return [hit]
 
-        scored_entries: List[tuple[float, Dict[str, Any]]] = []
+        # --- 2. FAISS hybrid semantic search ---
+        try:
+            vs = self._get_vector_store()
+            if len(vs) > 0:
+                img_emb = None
+                if query_image is not None:
+                    img_emb = self._compute_image_embedding_from_array(query_image)
+                elif image_path and Path(image_path).exists():
+                    img_emb = self._compute_image_embedding(image_path)
 
-        # --- 2. Keyword overlap on raw_vlm_description (primary) ---
+                txt_emb = self._compute_text_embedding(raw_vlm_text)
+
+                if img_emb is not None or txt_emb is not None:
+                    hits = vs.search(
+                        image_embedding=img_emb,
+                        text_embedding=txt_emb,
+                        top_k=top_k,
+                    )
+                    if hits:
+                        return self._hits_to_results(hits)
+        except Exception as e:
+            print(f"Warning: FAISS search failed, falling back to keyword: {e}")
+
+        # --- 3. Jaccard keyword fallback ---
+        return self._keyword_fallback(current_features, raw_vlm_text, top_k)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _hits_to_results(
+        self, hits: List[tuple]
+    ) -> List[Dict[str, Any]]:
+        """Convert FAISS (entry_id, score) hits to annotated entry dicts."""
+        id_map = {e["id"]: e for e in self.db}
+        results: List[Dict[str, Any]] = []
+        for entry_id, score in hits:
+            entry = id_map.get(entry_id)
+            if entry is None:
+                continue
+            annotated = dict(entry)
+            annotated["_match_type"] = "semantic"
+            annotated["_confidence"] = round(float(score), 3)
+            results.append(annotated)
+        self._attach_rag_priors(results)
+        return results
+
+    def _keyword_fallback(
+        self,
+        current_features: Dict[str, Any],
+        raw_vlm_text: str,
+        top_k: int,
+    ) -> List[Dict[str, Any]]:
+        """Original Jaccard + legacy JSON fallback retrieval."""
+        scored_entries: List[tuple] = []
+
         if raw_vlm_text.strip():
-            # Extract meaningful tokens: lowercase alpha words, length >= 4
             query_tokens = set(
                 w.lower() for w in re.findall(r'[A-Za-z]{4,}', raw_vlm_text)
             )
@@ -202,7 +319,6 @@ class KnowledgeBaseManager:
                     annotated["_confidence"] = round(score, 3)
                     scored_entries.append((score, annotated))
 
-        # --- 3. Legacy JSON shape/geometry fallback ---
         if not scored_entries:
             current_shape = current_features.get("shape_description", "")
             current_geo = set(
@@ -228,8 +344,12 @@ class KnowledgeBaseManager:
 
         scored_entries.sort(key=lambda x: x[0], reverse=True)
         results = [entry for _, entry in scored_entries[:top_k]]
-        # Attach rag_priors to every result: geometry nouns extracted from
-        # the stored raw_vlm_description (or reasoning) for use as VLM anchors.
+        self._attach_rag_priors(results)
+        return results
+
+    @staticmethod
+    def _attach_rag_priors(results: List[Dict[str, Any]]) -> None:
+        """Attach geometry vocabulary anchors extracted from stored descriptions."""
         _vocab = [
             "Flat Plate", "Rectangular Base", "L-shaped Bracket", "U-shaped Channel",
             "Z-shaped Bracket", "Hat Channel", "Box",
@@ -249,5 +369,53 @@ class KnowledgeBaseManager:
                 if lower in ref_text.lower() and canonical not in found:
                     found.append(canonical)
             res["rag_priors"] = found
-        return results
-        return [entry for _, entry in scored_entries[:top_k]]
+
+    # ------------------------------------------------------------------
+    # Index rebuild (for migrating existing JSON entries to FAISS)
+    # ------------------------------------------------------------------
+
+    def rebuild_vector_index(self) -> int:
+        """
+        Rebuild FAISS index from all existing JSON entries.
+
+        Use this once to migrate a pre-existing knowledge_db.json that
+        was created before vector indexing was added.
+
+        Returns:
+            Number of entries indexed.
+        """
+        from app.knowledge.vector_store import DualVectorStore
+        import faiss
+
+        vs = DualVectorStore()
+        # Reset indices
+        vs._img_index = faiss.IndexFlatIP(vs.IMAGE_DIM)
+        vs._txt_index = faiss.IndexFlatIP(vs.TEXT_DIM)
+        vs._ids = []
+
+        count = 0
+        for entry in self.db:
+            entry_id = entry.get("id", "")
+            if not entry_id:
+                continue
+
+            # Image embedding
+            img_emb = None
+            img_path = entry.get("image_rel_path", "")
+            if img_path and Path(img_path).exists():
+                img_emb = self._compute_image_embedding(img_path)
+
+            # Text embedding
+            desc = (
+                entry.get("features", {}).get("raw_vlm_description", "")
+                or entry.get("reasoning", "")
+            )
+            txt_emb = self._compute_text_embedding(desc)
+
+            vs.add(entry_id, image_embedding=img_emb, text_embedding=txt_emb)
+            count += 1
+
+        vs.save()
+        self._vector_store = vs
+        print(f"Rebuilt vector index: {count} entries indexed.")
+        return count
