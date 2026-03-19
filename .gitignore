@@ -41,3 +41,10 @@ knowledge_vectors/
 
 # Task notes (local only)
 task.txt
+
+# Documentation files (keep README.md only)
+*.md
+!README.md
+
+# Cursor / Claude local config
+.cursorrules/
