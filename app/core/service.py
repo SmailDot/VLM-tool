@@ -14,25 +14,19 @@ class AOVCoreService:
     def __init__(self) -> None:
         self._pipeline: Optional[ManufacturingPipeline] = None
         self._last_use_vlm: Optional[bool] = None
-        self._last_use_ocr: Optional[bool] = None
 
     def _ensure_pipeline(self, request: AnalysisRequest) -> ManufacturingPipeline:
         need_rebuild = (
             self._pipeline is None
             or self._last_use_vlm != request.use_vlm
-            or self._last_use_ocr != request.use_ocr
         )
         if need_rebuild:
             self._pipeline = ManufacturingPipeline(
-                use_ocr=request.use_ocr,
-                use_geometry=request.use_geometry,
-                use_symbols=request.use_symbols,
                 use_visual=False,
                 use_vlm=request.use_vlm,
                 enable_process_prediction=False,
             )
             self._last_use_vlm = request.use_vlm
-            self._last_use_ocr = request.use_ocr
         else:
             self._pipeline.reset_vlm_client()
         return self._pipeline

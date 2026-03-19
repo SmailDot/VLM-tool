@@ -26,9 +26,6 @@ def build_analysis_request(
     locked_bom: str,
     bom_context_input: str,
     use_rag: bool,
-    use_ocr: bool,
-    use_geometry: bool,
-    use_symbols: bool,
     use_vlm: bool,
     min_confidence: float,
 ) -> AnalysisRequest:
@@ -41,9 +38,6 @@ def build_analysis_request(
         view_labels=view_labels,
         bom_context=effective_bom,
         use_rag=use_rag,
-        use_ocr=use_ocr,
-        use_geometry=use_geometry,
-        use_symbols=use_symbols,
         use_vlm=use_vlm,
         min_confidence=min_confidence,
     )

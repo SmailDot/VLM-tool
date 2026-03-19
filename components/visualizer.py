@@ -102,7 +102,7 @@ def render_predictions(result: RecognitionResult, min_confidence: float) -> None
 
     if not predictions:
         st.warning("⚠️ 未找到符合條件的製程")
-        st.info("💡 **建議**:\n- 降低信心度門檻\n- 啟用更多特徵提取選項\n- 檢查圖紙品質與解析度")
+        st.info("💡 **建議**:\n- 降低信心度門檻\n- 檢查圖紙品質與解析度\n- 確認 VLM 服務連線正常")
         return
 
     for i, pred in enumerate(predictions, 1):

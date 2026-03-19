@@ -144,30 +144,6 @@ def render_diagnostics_section(result) -> None:
         }
         st.json(diag)
 
-        if result.features.geometry:
-            st.markdown("**幾何特徵統計:**")
-            geo = result.features.geometry
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                st.metric("檢測到線條", len(geo.lines))
-                st.metric("折彎線", len(geo.bend_lines))
-            with col_d2:
-                st.metric("圓形", len(geo.circles))
-                st.metric("孔洞", len(geo.holes))
-            st.metric("總形狀數", len(geo.contours))
-
-        if result.features.ocr_results:
-            st.markdown("**OCR 文字辨識結果:**")
-            st.text(f"檢測到 {len(result.features.ocr_results)} 個文字區域")
-            for ocr in result.features.ocr_results[:5]:
-                st.caption(f"- {ocr.text} (信心度: {ocr.confidence:.2f})")
-
-        if result.features.symbols:
-            st.markdown("**符號辨識結果:**")
-            st.text(f"檢測到 {len(result.features.symbols)} 個符號")
-            for sym in result.features.symbols:
-                st.caption(f"- {sym.symbol_type} (信心度: {sym.confidence:.2f})")
-
         if result.features.raw_vlm_description:
             st.markdown("**🤖 VLM 視覺語言模型分析 (純文字描述):**")
             st.markdown(result.features.raw_vlm_description)

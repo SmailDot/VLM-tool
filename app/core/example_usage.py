@@ -13,9 +13,6 @@ def run_example(image_path: str) -> str:
         image=str(Path(image_path)),
         use_vlm=True,
         use_rag=False,
-        use_ocr=False,
-        use_geometry=True,
-        use_symbols=True,
     )
     result = service.analyze(request)
     return result.features.raw_vlm_description or ""

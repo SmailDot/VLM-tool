@@ -15,7 +15,6 @@ os.environ['FLAGS_use_onednn'] = 'False'
 import streamlit as st
 import cv2
 import numpy as np
-from typing import List
 from pathlib import Path
 from app.core import AOVCoreService
 
@@ -86,7 +85,7 @@ if 'uploaded_drawings' not in st.session_state:
 # - uploaded_drawing, uploaded_drawings, uploaded_view_labels
 # - parent_drawing, bom_drawings, bom_scanned_text, bom_context_input, locked_bom, _last_synced_bom
 # - temp_file_path, recognition_result, hitl_corrected_text, _hitl_result_key
-# - use_vlm, use_rag, min_confidence, last_settings
+# - use_vlm, use_rag, min_confidence
 
 # 新增父圖支援
 if 'parent_drawing' not in st.session_state:
@@ -106,16 +105,6 @@ if 'min_confidence' not in st.session_state:
 
 if 'temp_file_path' not in st.session_state:
     st.session_state.temp_file_path = None
-
-# 儲存上次的設定 (用於特徵視覺化)
-if 'last_settings' not in st.session_state:
-    st.session_state.last_settings = {
-        'use_ocr': False,
-        'use_geometry': True,
-        'use_symbols': True,
-        'use_vlm': False,
-        'show_visualization': False
-    }
 
 # ==================== Header ====================
 
@@ -334,22 +323,7 @@ with col_left:
         # ==================== 分析設定 ====================
         st.markdown("### 分析設定")
 
-        with st.expander("特徵提取選項", expanded=True):
-            use_ocr = st.checkbox(
-                "OCR 文字辨識",
-                value=False,
-                help="需要安裝 PaddlePaddle (可選功能)"
-            )
-            use_geometry = st.checkbox(
-                "幾何特徵分析",
-                value=True,
-                help="分析線條、孔洞、折彎線等幾何特徵 (建議啟用)"
-            )
-            use_symbols = st.checkbox(
-                "符號辨識",
-                value=True,
-                help="辨識焊接符號、表面處理標記等"
-            )
+        with st.expander("VLM 設定", expanded=True):
             use_vlm = st.session_state.use_vlm
             if use_vlm:
                 from app.manufacturing.extractors.vlm_client import VLMClient
@@ -361,21 +335,6 @@ with col_left:
                         st.warning("⚠️ VLM 服務未運行 - 請確認 LM Studio 已啟動 (http://localhost:1234)")
                 except Exception as _ve:
                     st.error(f"❌ VLM 初始化失敗: {str(_ve)}")
-
-        with st.expander("進階選項", expanded=False):
-            show_visualization = st.checkbox(
-                "顯示特徵視覺化",
-                value=False,
-                help="在圖紙上標註檢測到的特徵"
-            )
-            st.session_state.last_settings = {
-                'use_ocr': use_ocr,
-                'use_geometry': use_geometry,
-                'use_symbols': use_symbols,
-                'use_vlm': use_vlm,
-                'show_visualization': show_visualization
-            }
-
         st.divider()
 
         # ==================== 執行辨識 ====================
@@ -401,9 +360,6 @@ with col_left:
                         locked_bom=st.session_state.get('locked_bom', ''),
                         bom_context_input=st.session_state.get('bom_context_input', ''),
                         use_rag=st.session_state.use_rag,
-                        use_ocr=use_ocr,
-                        use_geometry=use_geometry,
-                        use_symbols=use_symbols,
                         use_vlm=use_vlm,
                         min_confidence=st.session_state.min_confidence,
                     )
@@ -428,9 +384,6 @@ with col_left:
             st.markdown("""
             ### 系統功能
             - 自動分析工程圖紙內容
-            - 幾何特徵辨識 (線條、孔洞、折彎線)
-            - 符號辨識 (焊接符號、表面處理標記)
-            - OCR 文字辨識 (可選)
             - VLM 多視圖敘述與信心度標記
 
             ### VLM 分析重點
@@ -486,30 +439,7 @@ with col_right:
         # 診斷資訊
         render_diagnostics_section(result)
         
-        # 特徵視覺化
-        if (st.session_state.last_settings.get('show_visualization', False) 
-            and st.session_state.uploaded_drawing is not None
-            and st.session_state.mfg_pipeline is not None):
-            st.divider()
-            st.markdown("#### 特徵視覺化")
-            
-            try:
-                settings = st.session_state.last_settings
-                vis_image = st.session_state.mfg_pipeline.visualize_features(
-                    st.session_state.uploaded_drawing,
-                    show_ocr=settings.get('use_ocr', False),
-                    show_geometry=settings.get('use_geometry', True),
-                    show_symbols=settings.get('use_symbols', True)
-                )
-                
-                st.image(
-                    cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB),
-                    caption="特徵標註圖",
-                    width="stretch"
-                )
-            except Exception as e:
-                st.error(f"視覺化失敗: {str(e)}")
-    
+
     else:
         render_no_result_placeholder()
 

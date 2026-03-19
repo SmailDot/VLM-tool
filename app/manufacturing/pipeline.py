@@ -21,17 +21,13 @@ from .schema import (
     ProcessPrediction
 )
 from .extractors import (
-    OCRExtractor,
-    GeometryExtractor,
-    SymbolDetector,
     VisualEmbedder,
     PDFImageExtractor,
     is_pdf_available
 )
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
-from .extractors.tolerance_parser import ToleranceParser
 from .extractors.vlm_client import VLMClient
-from .prompts import EngineeringPrompts, get_vlm_descriptive_prompt
+from .prompts import get_vlm_descriptive_prompt
 from .decision.rule_router import plan_vision_skills, describe_skills
 from .schema import GeometryFeatures
 
@@ -52,38 +48,31 @@ class ManufacturingPipeline:
     
     def __init__(
         self,
-        use_ocr: bool = True,
-        use_geometry: bool = True,
-        use_symbols: bool = True,
         use_visual: bool = False,  # Visual embeddings optional (expensive)
         use_vlm: bool = False,  # VLM analysis optional (requires LM Studio)
-        template_dir: Optional[str] = None,
         enable_process_prediction: bool = True,
     ):
         """
         Initialize pipeline.
         
         Args:
-            use_ocr: Enable OCR text extraction.
-            use_geometry: Enable geometry analysis.
-            use_symbols: Enable symbol detection.
             use_visual: Enable visual embedding (DINOv2).
             use_vlm: Enable VLM-based process recognition (requires LM Studio).
-            template_dir: Directory for symbol templates.
             enable_process_prediction: Enable process prediction via decision engine.
                 [Compatibility parameter] This pipeline now always runs in VLM-only mode.
         """
-        self.use_ocr = use_ocr
-        self.use_geometry = use_geometry
-        self.use_symbols = use_symbols
+        self.use_ocr = False
+        self.use_geometry = False
+        self.use_symbols = False
         self.use_visual = use_visual
         self.use_vlm = use_vlm
         self.enable_process_prediction = enable_process_prediction
         
-        # Initialize extractors
-        self.ocr_extractor = OCRExtractor() if use_ocr else None
-        self.geometry_extractor = GeometryExtractor() if use_geometry else None
-        self.symbol_detector = SymbolDetector(template_dir) if use_symbols else None
+        # Feature extractors are intentionally disabled in VLM-only mode.
+        # Keep attributes for backward compatibility with downstream code paths.
+        self.ocr_extractor = None
+        self.geometry_extractor = None
+        self.symbol_detector = None
         
         # Initialize visual embedder (gracefully handle unavailability)
         self.visual_embedder = None
@@ -92,12 +81,12 @@ class ManufacturingPipeline:
                 self.visual_embedder = VisualEmbedder()
                 # Check if it actually loaded successfully
                 if self.visual_embedder.model is None:
-                    print("Info: Visual embeddings unavailable - using OCR + Geometry + Symbols")
+                    print("Info: Visual embeddings unavailable")
                     self.visual_embedder = None
                     self.use_visual = False
             except Exception as e:
                 print(f"Warning: Failed to initialize visual embedder: {e}")
-                print("   Continuing with OCR + Geometry + Symbols only")
+                print("   Continuing without visual embeddings")
                 self.visual_embedder = None
                 self.use_visual = False
         
@@ -110,7 +99,7 @@ class ManufacturingPipeline:
                 # Check if VLM service is available
                 if not self.vlm_client.is_available():
                     print("Info: VLM service not available - LM Studio may not be running")
-                    print("   Continuing with traditional feature extraction only")
+                    print("   Continuing with VLM disabled")
                     self.vlm_client = None
                     self.use_vlm = False
                 else:
@@ -120,7 +109,7 @@ class ManufacturingPipeline:
                     print("Info: VLM service connected successfully")
             except Exception as e:
                 print(f"Warning: Failed to initialize VLM client: {e}")
-                print("   Continuing with traditional feature extraction only")
+                print("   Continuing with VLM disabled")
                 self.vlm_client = None
                 self.use_vlm = False
         
@@ -167,8 +156,6 @@ class ManufacturingPipeline:
         parent_image: Optional[Union[str, np.ndarray]] = None,
         top_n: Optional[int] = None,
         min_confidence: float = 0.3,
-        ocr_threshold: float = 0.5,
-        symbol_threshold: float = 0.6,
         frequency_filter: Optional[List[str]] = None,
         use_rag: bool = False,
         child_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
@@ -185,8 +172,6 @@ class ManufacturingPipeline:
                          Contains global information (title block, technical notes, etc.)
             top_n: Return top N process predictions.
             min_confidence: Minimum confidence threshold for predictions.
-            ocr_threshold: Minimum confidence for OCR detections.
-            symbol_threshold: Minimum confidence for symbol detections.
             frequency_filter: List of frequencies to include (e.g., ["高", "中"]).
                             If None, all frequencies are included.
             use_rag: Enable RAG-based context augmentation.
@@ -227,7 +212,7 @@ class ManufacturingPipeline:
             # Parse parent image for global context
             parent_context = self.parent_parser.parse(
                 parent_img_array,
-                ocr_threshold
+                0.5
             )
             parent_context_text = self.parent_parser.analyze_parent_context(parent_img_array)
             if parent_context_text:
@@ -364,8 +349,6 @@ class ManufacturingPipeline:
 
         features = self._extract_features(
             img_array,
-            ocr_threshold,
-            symbol_threshold,
             image_path=image_path,
             prompt_override=_initial_prompt,
             vlm_images=vlm_images,
@@ -503,8 +486,6 @@ class ManufacturingPipeline:
     def _extract_features(
         self,
         image: np.ndarray,
-        ocr_threshold: float,
-        symbol_threshold: float,
         image_path: Optional[str] = None,
         prompt_override: str = "",
         vlm_images: Optional[Sequence[Union[str, Path, np.ndarray]]] = None,
@@ -515,33 +496,22 @@ class ManufacturingPipeline:
         
         Args:
             image: Input image (BGR).
-            ocr_threshold: OCR confidence threshold.
-            symbol_threshold: Symbol confidence threshold.
             image_path: Optional image file path (for VLM).
         
         Returns:
             ExtractedFeatures object.
         """
-        # OCR extraction
+        # OCR extraction disabled in VLM-only mode
         ocr_results = []
-        if self.use_ocr and self.ocr_extractor:
-            ocr_results = self.ocr_extractor.extract(image, ocr_threshold)
         
-        # Tolerance extraction from OCR results (NEW!)
+        # Tolerance extraction disabled with OCR in VLM-only mode
         tolerances = []
-        if ocr_results:
-            tolerance_parser = ToleranceParser()
-            tolerances = tolerance_parser.extract_tolerances(ocr_results)
         
-        # Geometry extraction (pass OCR results for dimension line filtering)
+        # Geometry extraction disabled in VLM-only mode
         geometry = None
-        if self.use_geometry and self.geometry_extractor:
-            geometry = self.geometry_extractor.extract(image, ocr_results=ocr_results)
         
-        # Symbol detection
+        # Symbol detection disabled in VLM-only mode
         symbols = []
-        if self.use_symbols and self.symbol_detector:
-            symbols = self.symbol_detector.detect(image, symbol_threshold)
         
         # Visual embedding
         visual_embedding = None
@@ -702,56 +672,6 @@ class ManufacturingPipeline:
         
         return results
     
-    def visualize_features(
-        self,
-        image: Union[str, np.ndarray],
-        show_ocr: bool = True,
-        show_geometry: bool = True,
-        show_symbols: bool = True
-    ) -> np.ndarray:
-        """
-        Visualize extracted features on image (for debugging).
-        
-        Args:
-            image: Input image path or numpy array.
-            show_ocr: Draw OCR bounding boxes.
-            show_geometry: Draw geometry features.
-            show_symbols: Draw symbol detections.
-        
-        Returns:
-            Image with drawn features.
-        """
-        # Load image
-        if isinstance(image, str):
-            img_array = cv2.imread(image)
-            if img_array is None:
-                raise ValueError(f"Failed to load image: {image}")
-        else:
-            img_array = image.copy()
-        
-        # Extract features
-        features = self._extract_features(
-            img_array, 
-            0.5, 
-            0.6,
-            image_path=image if isinstance(image, str) else None
-        )
-        
-        # Draw features
-        vis_image = img_array.copy()
-        
-        if show_geometry and features.geometry and self.geometry_extractor:
-            vis_image = self.geometry_extractor.visualize(vis_image, features.geometry)
-        
-        if show_symbols and features.symbols and self.symbol_detector:
-            vis_image = self.symbol_detector.visualize(vis_image, features.symbols)
-        
-        if show_ocr and features.ocr_results and self.ocr_extractor:
-            vis_image = self.ocr_extractor.visualize(vis_image, features.ocr_results)
-        
-        return vis_image
-
-
 # Convenience function
 def recognize(
     image: Union[str, np.ndarray],

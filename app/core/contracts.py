@@ -20,8 +20,5 @@ class AnalysisRequest:
     view_labels: Optional[List[str]] = None
     bom_context: str = ""
     use_rag: bool = False
-    use_ocr: bool = False
-    use_geometry: bool = True
-    use_symbols: bool = True
     use_vlm: bool = True
     min_confidence: float = 0.25
