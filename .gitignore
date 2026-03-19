@@ -37,6 +37,7 @@ Thumbs.db
 data/
 knowledge_db.json
 knowledge_images/
+knowledge_vectors/
 
 # Task notes (local only)
 task.txt
