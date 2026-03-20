@@ -188,18 +188,68 @@ class KnowledgeBaseManager:
 
         return entry
 
-    def update_entry(self, entry_id: str, new_data: Dict[str, Any]) -> bool:
+    def update_entry(
+        self,
+        entry_id: str,
+        new_data: Dict[str, Any],
+        reindex_text: bool = False,
+    ) -> bool:
+        """Update an existing entry and optionally re-index its text embedding.
+
+        Args:
+            entry_id: The entry to update.
+            new_data: Fields to merge into the entry.
+            reindex_text: If True, recompute the text embedding in FAISS
+                          from the updated description so that semantic
+                          search stays in sync with the edited text.
+        """
         for i, entry in enumerate(self.db):
             if entry.get("id") == entry_id:
                 self.db[i].update(new_data)
                 self.db[i]["updated_at"] = datetime.now().isoformat()
                 self._save_db()
+
+                if reindex_text:
+                    self._reindex_entry_text(entry_id, self.db[i])
+
                 return True
         return False
+
+    def _reindex_entry_text(self, entry_id: str, entry: Dict[str, Any]) -> None:
+        """Remove old vector and re-add with updated text embedding."""
+        try:
+            desc = (
+                entry.get("features", {}).get("raw_vlm_description", "")
+                or entry.get("reasoning", "")
+            )
+            txt_emb = self._compute_text_embedding(desc)
+
+            # Reuse existing image embedding (reconstruct from FAISS)
+            vs = self._get_vector_store()
+            img_emb = None
+            if entry_id in vs._ids:
+                idx = vs._ids.index(entry_id)
+                img_emb = vs._img_index.reconstruct(idx)
+                vs.remove(entry_id)
+            else:
+                # Entry not in FAISS yet — compute image embedding
+                img_path = entry.get("image_rel_path", "")
+                if img_path and Path(img_path).exists():
+                    img_emb = self._compute_image_embedding(img_path)
+
+            vs.add(entry_id, image_embedding=img_emb, text_embedding=txt_emb)
+            vs.save()
+        except Exception as e:
+            print(f"Warning: text re-indexing failed for {entry_id}: {e}")
 
     # ------------------------------------------------------------------
     # Retrieval
     # ------------------------------------------------------------------
+
+    # Minimum combined similarity score for FAISS results.
+    # Below this threshold, the match is too weak to be useful as RAG
+    # context and may mislead the VLM instead of helping it.
+    MIN_SIMILARITY = 0.35
 
     def retrieve_similar(
         self,
@@ -216,6 +266,9 @@ class KnowledgeBaseManager:
         1. SHA-256 exact hash match (same file -> score 1.0)
         2. FAISS hybrid semantic search (image 0.4 + text 0.6)
         3. Jaccard keyword fallback (if FAISS unavailable or empty)
+
+        Results below ``MIN_SIMILARITY`` are filtered out to prevent
+        low-quality matches from misleading the VLM.
 
         Args:
             current_features: Current extracted features dict.
@@ -271,10 +324,15 @@ class KnowledgeBaseManager:
     def _hits_to_results(
         self, hits: List[tuple]
     ) -> List[Dict[str, Any]]:
-        """Convert FAISS (entry_id, score) hits to annotated entry dicts."""
+        """Convert FAISS (entry_id, score) hits to annotated entry dicts.
+
+        Results with combined score below ``MIN_SIMILARITY`` are discarded.
+        """
         id_map = {e["id"]: e for e in self.db}
         results: List[Dict[str, Any]] = []
         for entry_id, score in hits:
+            if score < self.MIN_SIMILARITY:
+                continue
             entry = id_map.get(entry_id)
             if entry is None:
                 continue
