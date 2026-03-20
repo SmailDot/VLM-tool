@@ -25,4 +25,5 @@ def update_kb_entry_description(
             "features": features,
             "reasoning": edited_desc_text,
         },
+        reindex_text=True,
     )

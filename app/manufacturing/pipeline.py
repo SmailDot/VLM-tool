@@ -330,7 +330,25 @@ class ManufacturingPipeline:
                 system_anchors.append(_tagged)
 
         # 組裝初次 VLM prompt（帶入 system_anchors，不論 RAG 是否啟用）
-        if parent_prompt:
+        # Bug fix: parent_prompt 原本沒帶 system_anchors，導致有 BOM/父圖時
+        # CV-CONFIRMED 符號被靜默丟棄。現在統一用 get_vlm_descriptive_prompt 重建。
+        if parent_prompt and system_anchors:
+            _initial_prompt = get_vlm_descriptive_prompt(
+                bom_context=bom_context or parent_context_text,
+                system_anchors=system_anchors,
+            )
+            # 保留父圖全域背景注入
+            structure = parent_context_payload.get("3d_structure")
+            if structure:
+                _initial_prompt = (
+                    f"【全域幾何背景】 此零件為一個 {structure}。"
+                    "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                    f"{_initial_prompt}"
+                )
+            parent_report = self._build_parent_report(parent_context, parent_context_payload)
+            if parent_report:
+                _initial_prompt = f"【父圖全域分析報告】{parent_report}\n\n{_initial_prompt}"
+        elif parent_prompt:
             _initial_prompt = parent_prompt
         elif system_anchors:
             # fix: bom_context 必須一併帶入，避免有符號時 bom 被静默丟棄
@@ -386,7 +404,9 @@ class ManufacturingPipeline:
         if rag_context_text and self.vlm_client:
             try:
                 input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
-                prompt = get_vlm_descriptive_prompt(bom_context=parent_context_text, rag_context=rag_context_text, system_anchors=system_anchors)
+                # Bug fix: 原本寫死 parent_context_text，使用者手動輸入的 bom_context 會被丟棄
+                _effective_bom_2nd = bom_context or parent_context_text
+                prompt = get_vlm_descriptive_prompt(bom_context=_effective_bom_2nd, rag_context=rag_context_text, system_anchors=system_anchors)
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (
