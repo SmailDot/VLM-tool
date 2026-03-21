@@ -142,20 +142,79 @@ class KnowledgeBaseManager:
         correct_processes: List[str],
         reasoning: str,
         tags: Optional[List[str]] = None,
-        bom_context: str = ""
+        bom_context: str = "",
+        rag_metrics: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Add a new knowledge entry to the database.
+        Add or update a knowledge entry (dedup by image hash).
 
-        Computes and indexes image + text embeddings for semantic retrieval.
+        If an entry with the same SHA-256 hash already exists, the latest
+        entry is UPDATED in-place (description, reasoning, timestamp) and
+        a version link is recorded. Old duplicate entries are marked
+        ``superseded`` and removed from FAISS to keep the index clean.
+
+        Args:
+            rag_metrics: Optional RAG effectiveness scores computed at
+                         HITL save time (v1_distance, v2_distance, improvement).
         """
-        timestamp = datetime.now()
-        filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{Path(image_path).name}"
-        target_path = self.image_storage_dir / filename
         if not Path(image_path).exists():
             raise FileNotFoundError(f"Source image not found: {image_path}")
-        shutil.copy2(image_path, target_path)
+
         image_hash = self._calculate_hash(image_path)
+        timestamp = datetime.now()
+
+        # ── Dedup: find existing entries with same hash ──────────────
+        existing = [e for e in self.db if e.get("image_hash") == image_hash]
+
+        if existing:
+            # Update the LATEST existing entry instead of creating a new one
+            latest = existing[-1]
+            prev_desc = (
+                latest.get("features", {}).get("raw_vlm_description", "")
+                or latest.get("reasoning", "")
+            )
+            # Record version history
+            version_history = latest.get("version_history", [])
+            version_history.append({
+                "timestamp": latest.get("timestamp", ""),
+                "description_snapshot": prev_desc[:200],
+            })
+
+            # Merge updates
+            latest["features"] = features
+            latest["reasoning"] = reasoning
+            latest["correct_processes"] = correct_processes
+            latest["bom_context"] = bom_context
+            latest["updated_at"] = timestamp.isoformat()
+            latest["version_history"] = version_history
+            latest["version_count"] = len(version_history) + 1
+            if rag_metrics:
+                latest["rag_metrics"] = rag_metrics
+            if tags:
+                latest["tags"] = tags
+
+            # Mark older duplicates as superseded + remove from FAISS
+            for old_entry in existing[:-1]:
+                if old_entry.get("status") != "superseded":
+                    old_entry["status"] = "superseded"
+                    old_entry["superseded_by"] = latest["id"]
+                    try:
+                        vs = self._get_vector_store()
+                        vs.remove(old_entry["id"])
+                        vs.save()
+                    except Exception:
+                        pass
+
+            self._save_db()
+            # Re-index the latest entry's text embedding
+            self._reindex_entry_text(latest["id"], latest)
+            print(f"Info: KB dedup — updated existing entry {latest['id']} (v{latest['version_count']})")
+            return latest
+
+        # ── New entry (no hash match) ────────────────────────────────
+        filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{Path(image_path).name}"
+        target_path = self.image_storage_dir / filename
+        shutil.copy2(image_path, target_path)
 
         entry_id = filename.split(".")[0]
 
@@ -168,8 +227,11 @@ class KnowledgeBaseManager:
             "correct_processes": correct_processes,
             "reasoning": reasoning,
             "bom_context": bom_context,
-            "tags": tags or []
+            "tags": tags or [],
+            "version_count": 1,
         }
+        if rag_metrics:
+            entry["rag_metrics"] = rag_metrics
 
         self.db.append(entry)
         self._save_db()
@@ -280,16 +342,19 @@ class KnowledgeBaseManager:
         if not self.db:
             return []
 
-        # --- 1. Hash exact match ---
+        # --- 1. Hash exact match (use LATEST entry for same image) ---
         if image_path and Path(image_path).exists():
             query_hash = self._calculate_hash(image_path)
+            latest_hit = None
             for entry in self.db:
                 if entry.get("image_hash") == query_hash:
-                    hit = dict(entry)
-                    hit["_match_type"] = "exact_hash"
-                    hit["_confidence"] = 1.0
-                    self._attach_rag_priors([hit])
-                    return [hit]
+                    latest_hit = entry  # 持續覆寫，最終得到最新的
+            if latest_hit is not None:
+                hit = dict(latest_hit)
+                hit["_match_type"] = "exact_hash"
+                hit["_confidence"] = 1.0
+                self._attach_rag_priors([hit])
+                return [hit]
 
         # --- 2. FAISS hybrid semantic search ---
         try:
@@ -401,7 +466,11 @@ class KnowledgeBaseManager:
                     scored_entries.append((float(score), annotated))
 
         scored_entries.sort(key=lambda x: x[0], reverse=True)
-        results = [entry for _, entry in scored_entries[:top_k]]
+        # Apply MIN_SIMILARITY filter (consistent with FAISS path)
+        results = [
+            entry for score, entry in scored_entries[:top_k]
+            if entry["_confidence"] >= self.MIN_SIMILARITY
+        ]
         self._attach_rag_priors(results)
         return results
 
@@ -427,6 +496,76 @@ class KnowledgeBaseManager:
                 if lower in ref_text.lower() and canonical not in found:
                     found.append(canonical)
             res["rag_priors"] = found
+
+    # ------------------------------------------------------------------
+    # RAG effectiveness metrics
+    # ------------------------------------------------------------------
+
+    def compute_rag_metrics(
+        self,
+        v1_text: str,
+        v2_text: str,
+        hitl_text: str,
+    ) -> Dict[str, Any]:
+        """Compute RAG effectiveness by comparing VLM outputs to HITL correction.
+
+        Args:
+            v1_text: First-pass VLM output (before RAG).
+            v2_text: Second-pass VLM output (after RAG refinement).
+            hitl_text: Final human-corrected text.
+
+        Returns:
+            Dict with v1_distance, v2_distance, improvement_rate.
+            Distances are 1 - cosine_similarity (lower = closer to HITL).
+            improvement_rate > 0 means RAG helped.
+        """
+        if not hitl_text or not hitl_text.strip():
+            return {}
+
+        try:
+            embedder = self._get_text_embedder()
+            hitl_emb = embedder.encode(hitl_text)
+
+            v1_dist = 1.0
+            if v1_text and v1_text.strip():
+                v1_emb = embedder.encode(v1_text)
+                v1_sim = float(np.dot(v1_emb, hitl_emb))
+                v1_dist = round(1.0 - v1_sim, 4)
+
+            v2_dist = v1_dist
+            if v2_text and v2_text.strip() and v2_text != v1_text:
+                v2_emb = embedder.encode(v2_text)
+                v2_sim = float(np.dot(v2_emb, hitl_emb))
+                v2_dist = round(1.0 - v2_sim, 4)
+
+            improvement = round((v1_dist - v2_dist) / v1_dist, 4) if v1_dist > 0 else 0.0
+
+            return {
+                "v1_distance": v1_dist,
+                "v2_distance": v2_dist,
+                "improvement_rate": improvement,
+                "timestamp": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            print(f"Warning: RAG metrics computation failed: {e}")
+            return {}
+
+    def get_rag_metrics_history(self) -> list:
+        """Return all entries that have rag_metrics, sorted by timestamp."""
+        results = []
+        for entry in self.db:
+            m = entry.get("rag_metrics")
+            if m and "v1_distance" in m:
+                results.append({
+                    "id": entry.get("id", ""),
+                    "timestamp": m.get("timestamp", entry.get("timestamp", "")),
+                    "v1_distance": m["v1_distance"],
+                    "v2_distance": m["v2_distance"],
+                    "improvement_rate": m["improvement_rate"],
+                    "version_count": entry.get("version_count", 1),
+                })
+        results.sort(key=lambda x: x["timestamp"])
+        return results
 
     # ------------------------------------------------------------------
     # Index rebuild (for migrating existing JSON entries to FAISS)

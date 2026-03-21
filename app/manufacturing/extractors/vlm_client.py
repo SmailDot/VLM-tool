@@ -188,7 +188,6 @@ class VLMClient:
         self,
         image_path: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]],
         prompt: str,
-        bom_context: str = "",
         response_format: str = "text",
         temperature: float = 0.1,
         max_tokens: int = 1024,
@@ -198,14 +197,17 @@ class VLMClient:
         Analyze engineering drawing using vision-language model.
         Always returns a plain-text string (no JSON parsing).
 
+        BOM context should be injected via the prompt itself (use
+        ``get_vlm_descriptive_prompt(bom_context=...)``), NOT through
+        this method.
+
         Args:
             image_path: Path, OpenCV array, or list thereof.
             prompt: User prompt. Use get_vlm_descriptive_prompt() for geometry analysis.
-            bom_context: Optional plain-text BOM facts (material, thickness, part name).
-                         Prepended as KNOWN FACTS block when non-empty.
             response_format: Kept for call-site compatibility; ignored internally.
             temperature: Sampling temperature. Keep low (0.1) to reduce hallucination.
             max_tokens: Maximum tokens in response.
+            stop: Optional stop sequences.
 
         Returns:
             Plain-text description string, or None if request fails.
@@ -214,7 +216,7 @@ class VLMClient:
         if self.client is None:
             print("Error: OpenAI client not initialized")
             return None
-        
+
         # Encode image(s) to base64
         images = image_path if isinstance(image_path, list) else [image_path]
         base64_images: List[str] = []
@@ -223,23 +225,8 @@ class VLMClient:
             if base64_image is None:
                 return None
             base64_images.append(base64_image)
-        # Inject bom_context as KNOWN FACTS preamble if provided
+
         effective_prompt = prompt
-        if bom_context.strip():
-            effective_prompt = (
-                "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY — DO NOT IGNORE) ===\n"
-                "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
-                "You MUST treat every item below as authoritative ground truth.\n"
-                "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
-                f"{bom_context.strip()}\n\n"
-                "COMPLIANCE CHECKLIST (apply before writing each section):\n"
-                "  [1] Material / surface treatment stated above → mention it in Sections 2 and 4.\n"
-                "  [2] Part name / assembly context stated above → reference it in Section 1.\n"
-                "  [3] Any dimension or thickness stated above → use it verbatim in Section 3.\n"
-                "  [4] Any finish or coating stated above → call it out explicitly in Section 4.\n"
-                "If a KNOWN FACT cannot be reconciled with what you see, state the conflict explicitly.\n"
-                "=== END OF KNOWN FACTS ===\n\n"
-            ) + prompt
 
         try:
             # Construct message with image

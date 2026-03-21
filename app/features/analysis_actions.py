@@ -43,18 +43,48 @@ def build_analysis_request(
     )
 
 
-def save_rag_entry(temp_file_path: str, corrected_text: str, bom_context: str) -> Tuple[bool, str]:
-    """Persist corrected VLM description into RAG knowledge base."""
+def save_rag_entry(
+    temp_file_path: str,
+    corrected_text: str,
+    bom_context: str,
+    v1_text: str = "",
+    v2_text: str = "",
+) -> Tuple[bool, str]:
+    """Persist corrected VLM description into RAG knowledge base.
+
+    Also computes RAG effectiveness metrics (v1→HITL vs v2→HITL distance)
+    when v1/v2 texts are provided.
+
+    Args:
+        v1_text: First-pass VLM output (before RAG).
+        v2_text: Second-pass VLM output (after RAG refinement).
+    """
     if not temp_file_path or not Path(temp_file_path).exists():
         return False, "⚠️ 暫存圖檔已遺失，無法加入知識庫，請重新上傳圖紙。"
 
     kb = KnowledgeBaseManager()
     final_desc = (corrected_text or "").strip()
+
+    # Compute RAG effectiveness metrics
+    rag_metrics = {}
+    if v1_text:
+        rag_metrics = kb.compute_rag_metrics(v1_text, v2_text, final_desc)
+
     kb.add_entry(
         image_path=temp_file_path,
         features={"raw_vlm_description": final_desc},
         correct_processes=[],
         reasoning=final_desc,
         bom_context=bom_context,
+        rag_metrics=rag_metrics,
     )
-    return True, "✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！"
+
+    # Build feedback message
+    msg = "✅ 敘述已成功寫入 RAG 知識庫＆零件圖庫已更新！"
+    if rag_metrics.get("improvement_rate") is not None:
+        rate = rag_metrics["improvement_rate"]
+        if rate > 0:
+            msg += f"（RAG 改善率：{rate:.0%}）"
+        elif rate == 0 and v1_text == v2_text:
+            msg += "（本次無 RAG 參考案例）"
+    return True, msg

@@ -107,7 +107,11 @@ class ExtractedFeatures:
     
     # VLM Analysis (NEW - Vision Language Model)
     # raw_vlm_description: plain-text geometry report from VLM (primary output)
+    #   After RAG second pass, this holds the REFINED version.
     raw_vlm_description: Optional[str] = None
+    # raw_vlm_description_v1: first-pass VLM output BEFORE RAG refinement.
+    #   Comparing v1 vs raw_vlm_description shows exactly what RAG changed.
+    raw_vlm_description_v1: Optional[str] = None
     # vlm_analysis: kept as plain str for backward compat; always None in new pipeline
     vlm_analysis: Optional[str] = None
     # suggested_process_ids: always [] — VLM must NOT recommend IDs
@@ -161,6 +165,7 @@ class ExtractedFeatures:
             ],
             "vlm_analysis": self.vlm_analysis,
             "raw_vlm_description": self.raw_vlm_description,
+            "raw_vlm_description_v1": self.raw_vlm_description_v1,
             "image_shape": self.image_shape,
             "extraction_time": self.extraction_time
         }

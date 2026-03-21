@@ -25,6 +25,9 @@ from app.features import (
     save_rag_entry,
     list_kb_entries,
     update_kb_entry_description,
+    delete_kb_entry,
+    get_kb_stats,
+    get_rag_metrics_history,
     save_symbol_templates,
     list_symbol_templates,
     delete_symbol_template,
@@ -428,11 +431,33 @@ with col_right:
                 for ref in result.rag_references:
                     _features = ref.get('features', {})
                     _desc = _features.get('raw_vlm_description') or _features.get('shape_description', '')
+                    _conf = ref.get('_confidence', 0)
+                    _mtype = ref.get('_match_type', 'unknown')
+                    _type_label = {
+                        'exact_hash': '完全匹配',
+                        'semantic': '語意匹配',
+                        'text_keyword': '關鍵字匹配',
+                        'legacy_json': '特徵匹配',
+                    }.get(_mtype, _mtype)
                     st.info(
-                        f"參考案例：{_desc[:120]}...…\n"
+                        f"**相似度：{_conf:.0%}**（{_type_label}）\n\n"
+                        f"參考案例：{_desc[:120]}…\n\n"
                         f"正確製程：{ref['correct_processes']}"
                     )
         
+        # RAG 修正前後差異比較
+        _v1 = result.features.raw_vlm_description_v1
+        _v2 = result.features.raw_vlm_description
+        if _v1 and _v2 and _v1 != _v2:
+            with st.expander("RAG 修正前後差異比較"):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.caption("第一輪 VLM（修正前）")
+                    st.text_area("v1", _v1, height=250, disabled=True, label_visibility="collapsed")
+                with col_b:
+                    st.caption("第二輪 VLM（RAG 修正後）")
+                    st.text_area("v2", _v2, height=250, disabled=True, label_visibility="collapsed")
+
         # 顯示父圖注意事項（如果有的話）
         render_parent_notes_section(result)
 
@@ -461,8 +486,37 @@ with col_footer3:
 # ==================== Tab 2: 知識庫管理 ====================
 
 with tab2:
-    st.header("知識庫維護 (修正過去的錯誤)")
+    st.header("知識庫維護")
+
+    # ── 知識庫統計摘要 ──
+    _stats = get_kb_stats()
+    if _stats.get("total_entries", 0) > 0:
+        _sc1, _sc2, _sc3 = st.columns(3)
+        _sc1.metric("總條目數", _stats["total_entries"])
+        _sc2.metric("獨立圖片數", _stats.get("unique_images", 0))
+        _sc3.metric("平均描述長度", f"{_stats.get('avg_desc_length', 0)} 字")
+        _vocab = _stats.get("vocab_coverage", {})
+        if _vocab:
+            with st.expander("特徵詞彙覆蓋率"):
+                for term, count in list(_vocab.items())[:10]:
+                    st.text(f"  {term}: {count} 筆")
+
+    # ── RAG 效果趨勢圖 ──
+    _rag_history = get_rag_metrics_history()
+    if _rag_history:
+        with st.expander("RAG 修正效果趨勢", expanded=False):
+            st.caption("improvement_rate > 0 代表 RAG 讓 VLM 輸出更接近人類修正；越高越好")
+            import pandas as pd
+            _df = pd.DataFrame(_rag_history)
+            _df["index"] = range(1, len(_df) + 1)
+            st.line_chart(_df, x="index", y="improvement_rate")
+            _avg_imp = sum(r["improvement_rate"] for r in _rag_history) / len(_rag_history)
+            st.metric("平均 RAG 改善率", f"{_avg_imp:.1%}")
+
+    st.divider()
     entries = list_kb_entries()
+    # 過濾掉已被取代的條目
+    entries = [e for e in entries if e.get("status") != "superseded"]
 
     if not entries:
         st.info("目前尚無知識庫條目")
@@ -473,14 +527,16 @@ with tab2:
                 or entry.get("features", {}).get("raw_vlm_description", "")[:40]
                 or "未命名條目"
             )
-            with st.expander(f"ID: {entry['id']} - {_feature_title}"):
+            _ver = entry.get("version_count", 1)
+            _ver_tag = f" (v{_ver})" if _ver > 1 else ""
+            with st.expander(f"ID: {entry['id']}{_ver_tag} - {_feature_title}"):
                 col_a, col_b = st.columns(2)
                 with col_a:
                     img_path = Path(entry['image_rel_path'])
                     if img_path.exists():
                         st.image(str(img_path), caption="原始圖檔")
                     else:
-                        st.warning(f"⚠️ 原始圖檔已遺失：{img_path.name}")
+                        st.warning(f"原始圖檔已遺失：{img_path.name}")
                 with col_b:
                     _existing_desc = (
                         entry.get("features", {}).get("raw_vlm_description", "")
@@ -492,13 +548,21 @@ with tab2:
                         height=180,
                         key=f"edit_desc_{entry['id']}"
                     )
-                    if st.button("更新此條目", key=f"btn_{entry['id']}"):
-                        update_kb_entry_description(
-                            entry_id=entry["id"],
-                            original_features=entry.get("features", {}),
-                            edited_desc=_edited_desc or "",
-                        )
-                        st.success("已更新！RAG 將優先參考修正後描述。")
+                    _btn_col1, _btn_col2 = st.columns(2)
+                    with _btn_col1:
+                        if st.button("更新", key=f"btn_{entry['id']}"):
+                            update_kb_entry_description(
+                                entry_id=entry["id"],
+                                original_features=entry.get("features", {}),
+                                edited_desc=_edited_desc or "",
+                            )
+                            st.success("已更新！")
+                            st.rerun()
+                    with _btn_col2:
+                        if st.button("刪除", key=f"del_{entry['id']}", type="secondary"):
+                            delete_kb_entry(entry["id"])
+                            st.warning("已刪除此條目")
+                            st.rerun()
 
 # ==================== Sidebar (Optional) ====================
 
