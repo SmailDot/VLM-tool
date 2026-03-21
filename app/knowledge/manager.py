@@ -7,7 +7,6 @@ Supports FAISS-based semantic retrieval (image + text embeddings).
 
 from __future__ import annotations
 
-import re as _re
 from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 from pathlib import Path

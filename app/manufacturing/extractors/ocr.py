@@ -13,7 +13,6 @@ from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import cv2
 from pathlib import Path
-import os
 
 # 不需要額外的環境變數設定
 # PaddleOCR 2.7.0.3 + PaddlePaddle 2.6.2 開箱即用
@@ -442,19 +441,3 @@ class OCRExtractor:
             'region': region,
             'important_notes': important_notes
         }
-
-
-# Convenience function for quick usage
-def extract_text(image: np.ndarray, confidence_threshold: float = 0.5) -> List[OCRResult]:
-    """
-    Quick OCR extraction without creating extractor object.
-    
-    Args:
-        image: Input image.
-        confidence_threshold: Minimum confidence to include result.
-    
-    Returns:
-        List of OCRResult objects.
-    """
-    extractor = OCRExtractor()
-    return extractor.extract(image, confidence_threshold)

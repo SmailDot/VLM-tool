@@ -1,7 +1,7 @@
 """Analysis execution and RAG save actions."""
 
 from pathlib import Path
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import time
 
