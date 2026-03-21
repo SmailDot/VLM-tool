@@ -476,15 +476,8 @@ class KnowledgeBaseManager:
     @staticmethod
     def _attach_rag_priors(results: List[Dict[str, Any]]) -> None:
         """Attach geometry vocabulary anchors extracted from stored descriptions."""
-        _vocab = [
-            "Flat Plate", "Rectangular Base", "L-shaped Bracket", "U-shaped Channel",
-            "Z-shaped Bracket", "Hat Channel", "Box",
-            "Flange", "Rib", "Chamfer", "Fillet", "Gusset", "Louver", "Emboss",
-            "Thru-hole", "Threaded hole", "Extruded hole", "Burring",
-            "Countersink", "CSK", "Slotted hole", "Notch", "Cutout",
-            "Weld symbol", "Surface finish mark",
-        ]
-        _vocab_lower = {v.lower(): v for v in _vocab}
+        from app.manufacturing.schema import TIER1_VOCABULARY
+        _vocab_lower = {v.lower(): v for v in TIER1_VOCABULARY}
         for res in results:
             ref_text = (
                 res.get("features", {}).get("raw_vlm_description", "")

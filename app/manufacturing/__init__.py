@@ -13,6 +13,7 @@ Main components:
 """
 
 from .schema import (
+    TIER1_VOCABULARY,
     ExtractedFeatures,
     ProcessPrediction,
     RecognitionResult,

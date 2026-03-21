@@ -17,6 +17,7 @@ import re
 import json
 
 from .schema import (
+    TIER1_VOCABULARY,
     ExtractedFeatures,
     GeometryFeatures,
     RecognitionResult,
@@ -712,14 +713,8 @@ class ManufacturingPipeline:
                 issues.append("Section 2 缺少 True/False 判斷")
 
         # Tier-1 vocabulary check
-        _tier1 = [
-            "flat plate", "rectangular", "l-shaped", "u-shaped", "z-shaped",
-            "hat channel", "box", "flange", "rib", "chamfer", "fillet",
-            "thru-hole", "threaded hole", "countersink", "weld symbol",
-            "surface finish", "notch", "cutout", "emboss", "louver",
-        ]
         text_lower = text.lower()
-        if not any(term in text_lower for term in _tier1):
+        if not any(term.lower() in text_lower for term in TIER1_VOCABULARY):
             issues.append("未使用任何 Tier-1 標準詞彙")
 
         return issues

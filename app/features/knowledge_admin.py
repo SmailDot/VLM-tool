@@ -53,14 +53,8 @@ def get_kb_stats() -> Dict[str, Any]:
     desc_lengths = []
     vocab_counts: Dict[str, int] = {}
 
-    # Same vocabulary list used by manager._attach_rag_priors
-    _vocab = [
-        "Flat Plate", "L-shaped Bracket", "U-shaped Channel",
-        "Z-shaped Bracket", "Hat Channel", "Box",
-        "Flange", "Thru-hole", "Threaded hole", "Weld symbol",
-        "Surface finish mark", "Countersink", "Notch", "Cutout",
-        "Chamfer", "Fillet", "Emboss", "Louver",
-    ]
+    from app.manufacturing.schema import TIER1_VOCABULARY
+    _vocab = TIER1_VOCABULARY
 
     for entry in entries:
         desc = (

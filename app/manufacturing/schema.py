@@ -18,6 +18,23 @@ if TYPE_CHECKING:
     from .extractors.parent_parser import ParentImageContext
 
 
+# ── Controlled Vocabulary (single source of truth) ──────────────────
+# Used by: prompts.py (VLM prompt), pipeline.py (validation),
+#          knowledge/manager.py (RAG priors), features/knowledge_admin.py (stats)
+TIER1_VOCABULARY: List[str] = [
+    # 3D Shapes
+    "Flat Plate", "Rectangular Base", "L-shaped Bracket", "C-Channel",
+    "U-shaped Channel", "Hat Channel", "Z-shaped Bracket", "Box", "Cylinder",
+    # Features
+    "Flange", "Rib", "Chamfer", "Fillet", "Gusset", "Louver", "Emboss",
+    # Holes
+    "Thru-hole", "Threaded hole", "Extruded hole", "Countersink", "CSK",
+    "Slotted hole", "Notch", "Cutout",
+    # Symbols
+    "Weld symbol", "Surface finish mark",
+]
+
+
 class FeatureType(Enum):
     """Feature type enumeration"""
     VISUAL = "visual"  # 圖像特徵 (embeddings, geometry)
