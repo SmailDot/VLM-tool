@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import cv2
 
+from app.config import VLM_BASE_URL, VLM_MODEL
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -87,9 +89,9 @@ class VLMClient:
     
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = VLM_BASE_URL,
         api_key: str = "not-needed",
-        model: str = "local-model",
+        model: str = VLM_MODEL,
         timeout: int = 60,
         max_retries: int = 2
     ):
