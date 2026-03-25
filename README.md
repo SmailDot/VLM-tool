@@ -148,6 +148,259 @@ vlm_tool/
 
 ---
 
+## 模組化移植指南
+
+以下各模組可獨立抽取使用，依據需求挑選即可。
+
+### 1. VLM Client — 視覺語言模型呼叫
+
+> **檔案**：`app/manufacturing/extractors/vlm_client.py`
+> **用途**：對任何圖片發送 prompt 給 LM Studio / OpenAI-compatible VLM，取得文字回應
+> **pip 依賴**：`openai>=1.0.0`, `opencv-python`, `numpy`
+> **內部依賴**：`app/config.py`（僅讀 `VLM_BASE_URL`，可直接改寫）
+
+```python
+from app.manufacturing.extractors.vlm_client import VLMClient
+
+client = VLMClient(base_url="http://localhost:1234/v1")
+if client.is_available():
+    result = client.analyze_image(
+        image_path="drawing.jpg",
+        prompt="描述這張圖片的內容",
+        temperature=0.1,
+        max_tokens=512,
+    )
+    print(result)
+```
+
+**移植方式**：複製 `vlm_client.py`，將 `from app.config import ...` 改為直接寫死或讀環境變數。
+
+---
+
+### 2. Visual Embedder — DINOv2 圖片向量化
+
+> **檔案**：`app/manufacturing/extractors/embeddings.py`
+> **用途**：將圖片轉為 768 維向量（DINOv2 ViT-Base），適用於圖片相似度比對
+> **pip 依賴**：`torch`, `timm`, `Pillow`, `opencv-python`, `numpy`
+> **內部依賴**：無
+
+```python
+from app.manufacturing.extractors.embeddings import VisualEmbedder
+
+embedder = VisualEmbedder(model_type="dinov2")
+vec = embedder.extract_from_file("drawing.jpg")  # shape: (768,)
+```
+
+**移植方式**：直接複製 `embeddings.py`，零修改可用。
+
+---
+
+### 3. RAG 知識庫 — FAISS 雙通道檢索 + HITL 儲存
+
+> **檔案**：`app/knowledge/manager.py` + `app/knowledge/vector_store.py`
+> **用途**：儲存人工修正案例，雙通道（圖片 + 文字）語意檢索最相似案例
+> **pip 依賴**：`faiss-cpu>=1.7.4`, `sentence-transformers>=3.0.0`, `numpy`
+> **內部依賴**：`embeddings.py`（圖片向量化）
+
+```python
+from app.knowledge.manager import KnowledgeBaseManager
+
+kb = KnowledgeBaseManager(db_path="my_kb.json", image_storage_dir="my_images")
+
+# 新增案例
+kb.add_entry(
+    image_path="drawing.jpg",
+    features={"raw_vlm_description": "corrected description here"},
+    correct_processes=[],
+    reasoning="人工修正備註",
+    bom_context="SUS304, T1.5",
+)
+
+# 檢索相似案例
+results = kb.retrieve_similar(
+    vlm_feats=None,
+    image_path="new_drawing.jpg",
+    raw_vlm_text="VLM first-pass output",
+    top_k=3,
+)
+```
+
+**向量索引細節**（`vector_store.py`）：
+
+| 通道 | 模型 | 維度 | 權重 |
+|------|------|------|------|
+| 圖片 | DINOv2 ViT-Base | 768 | 0.4 |
+| 文字 | `paraphrase-multilingual-MiniLM-L12-v2` | 384 | 0.6 |
+
+**移植方式**：複製 `knowledge/` 資料夾 + `embeddings.py`，共 3 個檔案。
+
+---
+
+### 4. Symbol Matcher — CV 模板比對
+
+> **檔案**：`app/vision/symbol_matcher.py`
+> **用途**：多尺度模板比對，偵測工程圖紙上的焊接符號、表面處理標記等
+> **pip 依賴**：`opencv-python`, `numpy`
+> **內部依賴**：無
+
+```python
+from app.vision.symbol_matcher import SymbolMatcher
+
+matcher = SymbolMatcher(library_dir="data/symbol_library", threshold=0.70)
+hits = matcher.match_symbols(target_img)
+# [{"name": "weld_v", "confidence": 0.85, "location": (x, y, w, h)}, ...]
+```
+
+**特性**：多尺度掃描（0.2x–1.0x）、支援 alpha 遮罩 PNG、NCC 評分
+
+**移植方式**：直接複製 `symbol_matcher.py` + 模板圖片資料夾，零修改可用。
+
+---
+
+### 5. PDF Extractor — PDF 轉高解析度圖片
+
+> **檔案**：`app/manufacturing/extractors/pdf_extractor.py`
+> **用途**：將 PDF 頁面轉為高 DPI 的 numpy array，支援全頁或區域擷取
+> **pip 依賴**：`PyMuPDF>=1.26.0`, `Pillow`, `opencv-python`, `numpy`
+> **內部依賴**：無
+
+```python
+from app.manufacturing.extractors.pdf_extractor import PDFImageExtractor
+
+extractor = PDFImageExtractor(target_dpi=300)
+img = extractor.extract_full_page("drawing.pdf", page_num=0)  # np.ndarray (BGR)
+```
+
+**移植方式**：直接複製 `pdf_extractor.py`，零修改可用。
+
+---
+
+### 6. OCR Extractor — PaddleOCR 中英文辨識
+
+> **檔案**：`app/manufacturing/extractors/ocr.py`
+> **用途**：對圖片進行 OCR 文字辨識，支援中英日韓多語系
+> **pip 依賴**：`paddleocr>=3.4.0`, `paddlepaddle>=2.6.2`, `opencv-python`, `numpy`
+> **內部依賴**：`app/manufacturing/schema.py`（僅用 `OCRResult` dataclass，可自行定義替代）
+
+```python
+from app.manufacturing.extractors.ocr import OCRExtractor
+
+ocr = OCRExtractor(lang="ch")
+results = ocr.extract(image, confidence_threshold=0.6)
+# [OCRResult(text="SUS304", confidence=0.95, bbox=[...]), ...]
+```
+
+**移植方式**：複製 `ocr.py`，將 `OCRResult` import 改為自定義 dataclass 或直接用 dict。
+
+---
+
+### 7. Parent Image Parser — 父圖 BOM 資訊解析
+
+> **檔案**：`app/manufacturing/extractors/parent_parser.py`
+> **用途**：解析父圖（組立圖）中的材質、板厚、客戶、表面處理等 BOM 資訊
+> **pip 依賴**：`openai>=1.0.0`, `opencv-python`, `numpy`
+> **內部依賴**：`vlm_client.py`（VLM 呼叫）、`ocr.py`（可選）
+
+```python
+from app.manufacturing.extractors.parent_parser import ParentImageParser
+
+parser = ParentImageParser(vlm_client=my_vlm_client)
+ctx = parser.parse(parent_image)
+# ctx.material = "SUS304", ctx.thickness = "T1.5", ctx.customer = "ASML"
+```
+
+**內建關鍵字規則**：材質（白鐵/鋁板/鐵板）、客戶（ASML/日本）、潔淨室等級、表面處理
+
+**移植方式**：複製 `parent_parser.py` + `vlm_client.py`。
+
+---
+
+### 8. Rule Router — BOM 文字觸發 CV 技能
+
+> **檔案**：`app/manufacturing/decision/rule_router.py`
+> **用途**：根據 BOM 文字內容（焊接、攻牙、折彎等關鍵字）決定需啟動哪些 CV 掃描技能
+> **pip 依賴**：無（純 Python `re`）
+> **內部依賴**：無
+
+```python
+from app.manufacturing.decision.rule_router import plan_vision_skills, describe_skills
+
+skills = plan_vision_skills("材質: SUS304, 製程: 焊接, 攻牙M6")
+# ['scan_weld_symbols', 'scan_thread_marks']
+
+print(describe_skills(skills))
+# "焊接符號掃描、螺紋標記掃描"
+```
+
+**移植方式**：直接複製 `rule_router.py`，零依賴。
+
+---
+
+### 9. Prompt Builder — VLM Prompt 模板生成
+
+> **檔案**：`app/manufacturing/prompts.py`
+> **用途**：組裝 VLM prompt，包含 BOM 事實、RAG 參考案例、CV 錨點、anti-hallucination 規則
+> **pip 依賴**：無（純字串組裝）
+> **內部依賴**：無
+
+```python
+from app.manufacturing.prompts import get_vlm_descriptive_prompt
+
+prompt = get_vlm_descriptive_prompt(
+    bom_context="SUS304, T1.5, 耐震支架",
+    rag_context="[參考案例描述]",
+    system_anchors=["[CV-CONFIRMED] weld_v_groove detected"],
+)
+```
+
+**移植方式**：直接複製 `prompts.py`，零依賴。
+
+---
+
+### 10. Schema — 資料合約與詞彙表
+
+> **檔案**：`app/manufacturing/schema.py`
+> **用途**：定義所有資料結構（`ExtractedFeatures`, `RecognitionResult`, `OCRResult` 等）與 Tier-1 標準詞彙表
+> **pip 依賴**：`numpy`
+> **內部依賴**：無
+
+**主要 dataclass**：
+
+| Class | 用途 |
+|-------|------|
+| `ExtractedFeatures` | VLM 輸出 + 嵌入向量 + 符號偵測結果 |
+| `RecognitionResult` | 最終分析結果（features + 時間 + 警告 + RAG 參考） |
+| `OCRResult` | OCR 辨識結果（文字 + 信心度 + bbox） |
+| `SymbolDetection` | 符號偵測結果 |
+| `TIER1_VOCABULARY` | 35 個板金標準英文術語 |
+
+**移植方式**：直接複製 `schema.py`，零依賴。
+
+---
+
+### 模組依賴關係圖
+
+```
+[schema] [prompts] [rule_router]        ← 零依賴，可獨立使用
+    |        |          |
+    v        v          v
+[vlm_client] [embeddings] [ocr] [pdf_extractor] [symbol_matcher]  ← 單一功能模組
+    |             |         |
+    v             v         v
+[parent_parser]  [vector_store]         ← 組合模組
+                      |
+                      v
+                 [kb_manager]           ← RAG 完整功能
+                      |
+                      v
+                  [pipeline]            ← 主流程（組裝以上全部）
+                      |
+                      v
+                [core/service]          ← 對外 Facade
+```
+
+---
+
 ## RAG 知識庫
 
 ### 運作原理
@@ -194,5 +447,5 @@ vlm_tool/
 
 ## 開發團隊
 
-**實驗室**：國立高雄科技大學 AIIA實驗室
+**實驗室**：國立高雄科技大學 AIIAStudents（NKUST AIIAStudents）
 **專案**：VLM Tool — 工業製程圖紙辨識工具
