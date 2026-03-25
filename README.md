@@ -1,6 +1,6 @@
 # VLM Tool — 工業製程圖紙辨識工具
 
-> **國立高雄科技大學 視覺實驗室**
+> **國立高雄科技大學 AIIAStudents**
 > 基於 VLM + Multi-Model RAG 的工業製程圖紙幾何描述系統
 
 ---
