@@ -46,7 +46,7 @@ def cleanup_ngrok():
             from pyngrok import ngrok
             ngrok.disconnect(ngrok_tunnel.public_url)
             print("\n[ngrok] Tunnel closed.")
-        except:
+        except Exception:
             pass
 
 

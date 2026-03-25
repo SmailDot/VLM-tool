@@ -18,6 +18,23 @@ if TYPE_CHECKING:
     from .extractors.parent_parser import ParentImageContext
 
 
+# ── Controlled Vocabulary (single source of truth) ──────────────────
+# Used by: prompts.py (VLM prompt), pipeline.py (validation),
+#          knowledge/manager.py (RAG priors), features/knowledge_admin.py (stats)
+TIER1_VOCABULARY: List[str] = [
+    # 3D Shapes
+    "Flat Plate", "Rectangular Base", "L-shaped Bracket", "C-Channel",
+    "U-shaped Channel", "Hat Channel", "Z-shaped Bracket", "Box", "Cylinder",
+    # Features
+    "Flange", "Rib", "Chamfer", "Fillet", "Gusset", "Louver", "Emboss",
+    # Holes
+    "Thru-hole", "Threaded hole", "Extruded hole", "Countersink", "CSK",
+    "Slotted hole", "Notch", "Cutout",
+    # Symbols
+    "Weld symbol", "Surface finish mark",
+]
+
+
 class FeatureType(Enum):
     """Feature type enumeration"""
     VISUAL = "visual"  # 圖像特徵 (embeddings, geometry)
@@ -107,7 +124,11 @@ class ExtractedFeatures:
     
     # VLM Analysis (NEW - Vision Language Model)
     # raw_vlm_description: plain-text geometry report from VLM (primary output)
+    #   After RAG second pass, this holds the REFINED version.
     raw_vlm_description: Optional[str] = None
+    # raw_vlm_description_v1: first-pass VLM output BEFORE RAG refinement.
+    #   Comparing v1 vs raw_vlm_description shows exactly what RAG changed.
+    raw_vlm_description_v1: Optional[str] = None
     # vlm_analysis: kept as plain str for backward compat; always None in new pipeline
     vlm_analysis: Optional[str] = None
     # suggested_process_ids: always [] — VLM must NOT recommend IDs
@@ -161,97 +182,9 @@ class ExtractedFeatures:
             ],
             "vlm_analysis": self.vlm_analysis,
             "raw_vlm_description": self.raw_vlm_description,
+            "raw_vlm_description_v1": self.raw_vlm_description_v1,
             "image_shape": self.image_shape,
             "extraction_time": self.extraction_time
-        }
-
-
-@dataclass
-class ProcessDefinition:
-    """
-    Manufacturing process definition (from process_lib.json)
-    製程定義
-    """
-    process_id: str              # e.g., "D01", "F01"
-    name: str                    # e.g., "折彎", "焊接"
-    category: ProcessCategory
-    frequency: str               # "低", "中", "高"
-    
-    # Decision factors (決定性因素)
-    decision_factors: str = ""
-    
-    # Required cues (必要線索)
-    required_text: List[str] = field(default_factory=list)      # Text tokens that indicate this process
-    required_symbols: List[str] = field(default_factory=list)   # Symbol types needed
-    required_geometry: List[str] = field(default_factory=list)  # Geometry flags (e.g., "holes", "bend_lines")
-    
-    # Exclusions (排除條件)
-    excludes: List[str] = field(default_factory=list)  # Processes that exclude this one
-    
-    # Weights for scoring
-    confidence_weights: Dict[str, float] = field(default_factory=lambda: {
-        "text": 0.4,
-        "symbol": 0.3,
-        "geometry": 0.2,
-        "visual": 0.1
-    })
-    
-    def to_dict(self) -> Dict:
-        """Convert to JSON-serializable dict"""
-        return {
-            "process_id": self.process_id,
-            "name": self.name,
-            "category": self.category.value,
-            "frequency": self.frequency,
-            "decision_factors": self.decision_factors,
-            "required_text": self.required_text,
-            "required_symbols": self.required_symbols,
-            "required_geometry": self.required_geometry,
-            "excludes": self.excludes,
-            "confidence_weights": self.confidence_weights
-        }
-
-
-@dataclass
-class ManufacturingCase:
-    """
-    Knowledge base case for manufacturing process recognition
-    製程辨識知識庫案例
-    """
-    case_id: str
-    description: str
-    
-    # Raw data
-    image_path: str
-    
-    # Extracted features
-    features: ExtractedFeatures
-    
-    # Ground truth labels
-    confirmed_processes: List[str]  # Process IDs (e.g., ["D01", "F01"])
-    
-    # Metadata
-    author: str = "Unknown"
-    created_at: str = ""
-    notes: str = ""
-    
-    # User feedback
-    user_confirmed: bool = False
-    correction_notes: str = ""
-    
-    def to_dict(self) -> Dict:
-        """Convert to JSON-serializable dict"""
-        return {
-            "case_id": self.case_id,
-            "description": self.description,
-            "image_path": self.image_path,
-            "features": self.features.to_dict(),
-            "confirmed_processes": self.confirmed_processes,
-            "author": self.author,
-            "created_at": self.created_at,
-            "notes": self.notes,
-            "user_confirmed": self.user_confirmed,
-            "correction_notes": self.correction_notes
         }
 
 

@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import cv2
 
+from app.config import VLM_BASE_URL, VLM_MODEL
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -87,9 +89,9 @@ class VLMClient:
     
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = VLM_BASE_URL,
         api_key: str = "not-needed",
-        model: str = "local-model",
+        model: str = VLM_MODEL,
         timeout: int = 60,
         max_retries: int = 2
     ):
@@ -188,7 +190,6 @@ class VLMClient:
         self,
         image_path: Union[str, Path, np.ndarray, List[Union[str, Path, np.ndarray]]],
         prompt: str,
-        bom_context: str = "",
         response_format: str = "text",
         temperature: float = 0.1,
         max_tokens: int = 1024,
@@ -198,14 +199,17 @@ class VLMClient:
         Analyze engineering drawing using vision-language model.
         Always returns a plain-text string (no JSON parsing).
 
+        BOM context should be injected via the prompt itself (use
+        ``get_vlm_descriptive_prompt(bom_context=...)``), NOT through
+        this method.
+
         Args:
             image_path: Path, OpenCV array, or list thereof.
             prompt: User prompt. Use get_vlm_descriptive_prompt() for geometry analysis.
-            bom_context: Optional plain-text BOM facts (material, thickness, part name).
-                         Prepended as KNOWN FACTS block when non-empty.
             response_format: Kept for call-site compatibility; ignored internally.
             temperature: Sampling temperature. Keep low (0.1) to reduce hallucination.
             max_tokens: Maximum tokens in response.
+            stop: Optional stop sequences.
 
         Returns:
             Plain-text description string, or None if request fails.
@@ -214,7 +218,7 @@ class VLMClient:
         if self.client is None:
             print("Error: OpenAI client not initialized")
             return None
-        
+
         # Encode image(s) to base64
         images = image_path if isinstance(image_path, list) else [image_path]
         base64_images: List[str] = []
@@ -223,23 +227,8 @@ class VLMClient:
             if base64_image is None:
                 return None
             base64_images.append(base64_image)
-        # Inject bom_context as KNOWN FACTS preamble if provided
+
         effective_prompt = prompt
-        if bom_context.strip():
-            effective_prompt = (
-                "=== KNOWN FACTS FROM BOM / GLOBAL NOTES (MANDATORY — DO NOT IGNORE) ===\n"
-                "The following information was confirmed by the engineer and carries the HIGHEST PRIORITY.\n"
-                "You MUST treat every item below as authoritative ground truth.\n"
-                "Violating or contradicting any item below is a CRITICAL ERROR.\n\n"
-                f"{bom_context.strip()}\n\n"
-                "COMPLIANCE CHECKLIST (apply before writing each section):\n"
-                "  [1] Material / surface treatment stated above → mention it in Sections 2 and 4.\n"
-                "  [2] Part name / assembly context stated above → reference it in Section 1.\n"
-                "  [3] Any dimension or thickness stated above → use it verbatim in Section 3.\n"
-                "  [4] Any finish or coating stated above → call it out explicitly in Section 4.\n"
-                "If a KNOWN FACT cannot be reconciled with what you see, state the conflict explicitly.\n"
-                "=== END OF KNOWN FACTS ===\n\n"
-            ) + prompt
 
         try:
             # Construct message with image
@@ -380,54 +369,3 @@ def analyze_engineering_drawing(
     
     return client.analyze_image(image_path, question)
 
-
-# Example usage
-if __name__ == "__main__":
-    """
-    Test script to verify VLM client functionality.
-    
-    Prerequisites:
-    1. Install LM Studio: https://lmstudio.ai/
-    2. Download a vision-language model (e.g., LLaVA, Qwen-VL)
-    3. Start local server in LM Studio (default: http://localhost:1234)
-    4. Load the model in LM Studio UI
-    """
-    
-    # Initialize client
-    client = VLMClient(
-        base_url="http://localhost:1234/v1",
-        model="local-model"
-    )
-    
-    # Check if service is available
-    print("Checking VLM service availability...")
-    if not client.is_available():
-        print("❌ VLM service is not available.")
-        print("\nSetup instructions:")
-        print("1. Download and install LM Studio from https://lmstudio.ai/")
-        print("2. Load a vision-language model (e.g., LLaVA)")
-        print("3. Start the local server (Server tab)")
-        print("4. Ensure it's running on http://localhost:1234")
-        exit(1)
-    
-    print("✅ VLM service is available!\n")
-    
-    # Test with sample image (you need to provide a real image path)
-    test_image = "test_drawing.jpg"
-    
-    if Path(test_image).exists():
-        print(f"Analyzing image: {test_image}")
-        result = client.analyze_image(
-            image_path=test_image,
-            prompt="請分析這張工程圖，描述其形狀、特徵與可能需要的製程類型。請用純文字描述，不要輸出 JSON。",
-            response_format="text",
-            temperature=0.1
-        )
-        if result:
-            print("\n✅ Analysis successful!")
-            print(result)
-        else:
-            print("\n❌ Analysis failed.")
-    else:
-        print(f"⚠️  Test image not found: {test_image}")
-        print("Please provide a valid engineering drawing image to test.")

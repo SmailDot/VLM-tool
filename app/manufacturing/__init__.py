@@ -7,19 +7,16 @@ from engineering drawings.
 
 Main components:
 - schema: Data structures
-- ingestion: PDF/Image preprocessing
-- extractors: OCR, symbols, geometry, embeddings
-- rag: Knowledge base and retrieval
+- extractors: OCR, embeddings, PDF
 - decision: Process scoring and prediction
 - pipeline: End-to-end recognition orchestration
 """
 
 from .schema import (
+    TIER1_VOCABULARY,
     ExtractedFeatures,
-    ManufacturingCase,
     ProcessPrediction,
     RecognitionResult,
-    ProcessDefinition,
     OCRResult,
     SymbolDetection,
     GeometryFeatures,
@@ -33,10 +30,8 @@ from .pipeline import ManufacturingPipeline, recognize
 __all__ = [
     # Data structures
     "ExtractedFeatures",
-    "ManufacturingCase",
     "ProcessPrediction",
     "RecognitionResult",
-    "ProcessDefinition",
     "OCRResult",
     "SymbolDetection",
     "GeometryFeatures",

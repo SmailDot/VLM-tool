@@ -77,10 +77,15 @@ def render_hitl_rag_section(
     )
 
     if st.button("💾 儲存至 RAG 知識庫", type="primary", key="btn_save_rag"):
+        # 傳入 v1/v2 文字以計算 RAG 效果指標
+        _v1 = getattr(result.features, "raw_vlm_description_v1", "") or ""
+        _v2 = result.features.raw_vlm_description or ""
         ok, msg = save_action(
             st.session_state.get("temp_file_path", ""),
             st.session_state.get("hitl_corrected_text", ""),
             st.session_state.get("bom_context_input", ""),
+            v1_text=_v1,
+            v2_text=_v2,
         )
         if ok:
             st.toast(msg, icon="✅")

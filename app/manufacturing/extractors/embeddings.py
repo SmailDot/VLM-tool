@@ -249,19 +249,3 @@ class VisualEmbedder:
             return 512
         else:
             raise ValueError(f"Unknown model_type: {self.model_type}")
-
-
-# Convenience function
-def extract_embedding(image: np.ndarray, model_type: str = "dinov2") -> Optional[np.ndarray]:
-    """
-    Quick embedding extraction without creating embedder object.
-    
-    Args:
-        image: Input image (BGR format).
-        model_type: "dinov2" or "clip".
-    
-    Returns:
-        Embedding vector (numpy array) or None if unavailable.
-    """
-    embedder = VisualEmbedder(model_type=model_type)
-    return embedder.extract(image)

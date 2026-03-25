@@ -14,9 +14,12 @@ import numpy as np
 import cv2
 import time
 import re
+import json
 
 from .schema import (
+    TIER1_VOCABULARY,
     ExtractedFeatures,
+    GeometryFeatures,
     RecognitionResult,
     ProcessPrediction
 )
@@ -29,7 +32,6 @@ from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.vlm_client import VLMClient
 from .prompts import get_vlm_descriptive_prompt
 from .decision.rule_router import plan_vision_skills, describe_skills
-from .schema import GeometryFeatures
 
 
 class ManufacturingPipeline:
@@ -83,7 +85,6 @@ class ManufacturingPipeline:
         
         # Initialize VLM client (gracefully handle unavailability)
         self.vlm_client = None
-        self.vlm_prompt_template = None
         if use_vlm:
             try:
                 self.vlm_client = VLMClient()
@@ -94,9 +95,6 @@ class ManufacturingPipeline:
                     self.vlm_client = None
                     self.use_vlm = False
                 else:
-                    # Prompt template is no longer used; get_vlm_descriptive_prompt()
-                    # is called at analysis time so the latest vocabulary is always used.
-                    self.vlm_prompt_template = True  # marker: VLM is ready
                     print("Info: VLM service connected successfully")
             except Exception as e:
                 print(f"Warning: Failed to initialize VLM client: {e}")
@@ -207,7 +205,10 @@ class ManufacturingPipeline:
             )
             parent_context_text = self.parent_parser.analyze_parent_context(parent_img_array)
             if parent_context_text:
-                parent_context_payload = {}
+                try:
+                    parent_context_payload = json.loads(parent_context_text)
+                except (json.JSONDecodeError, TypeError):
+                    parent_context_payload = {}
                 parent_context.vlm_context = parent_context_payload
 
             if image is None:
@@ -329,6 +330,40 @@ class ManufacturingPipeline:
             if _tagged not in system_anchors:
                 system_anchors.append(_tagged)
 
+        # ── RAG 快速路徑：hash 命中 → 直接回傳知識庫修正結果，跳過 VLM ──
+        if use_rag and image_path:
+            try:
+                from app.knowledge.manager import KnowledgeBaseManager
+                _kb_early = KnowledgeBaseManager()
+                _early_hash = _kb_early._calculate_hash(image_path)
+                _hash_entry = None
+                for _e in _kb_early.db:
+                    if _e.get("image_hash") == _early_hash:
+                        _hash_entry = _e
+                if _hash_entry is not None:
+                    _cached_desc = (
+                        _hash_entry.get("features", {}).get("raw_vlm_description", "")
+                        or _hash_entry.get("reasoning", "")
+                    )
+                    print(f"Info: RAG exact hash hit — skipping VLM, returning cached description ({len(_cached_desc)} chars)")
+                    _hit = dict(_hash_entry)
+                    _hit["_match_type"] = "exact_hash"
+                    _hit["_confidence"] = 1.0
+                    _kb_early._attach_rag_priors([_hit])
+                    processing_time = time.time() - start_time
+                    return RecognitionResult(
+                        predictions=[],
+                        features=ExtractedFeatures(
+                            raw_vlm_description=_cached_desc,
+                        ),
+                        parent_context=parent_context,
+                        total_time=processing_time,
+                        rag_references=[_hit],
+                        warnings=["RAG exact hash match — 使用知識庫已修正描述（跳過 VLM）"],
+                    )
+            except Exception as _hash_err:
+                print(f"Warning: RAG early hash check failed: {_hash_err}")
+
         # 組裝初次 VLM prompt（帶入 system_anchors，不論 RAG 是否啟用）
         # Bug fix: parent_prompt 原本沒帶 system_anchors，導致有 BOM/父圖時
         # CV-CONFIRMED 符號被靜默丟棄。現在統一用 get_vlm_descriptive_prompt 重建。
@@ -367,8 +402,7 @@ class ManufacturingPipeline:
         rag_references: List[Dict[str, Any]] = []
         rag_context_text = ""
 
-        # RAG retrieval: hash 優先比對（不依賴 VLM，只要有 image_path 就能跑）
-        # 後備：vlm_analysis dict 的 shape 文字比對
+        # RAG retrieval: FAISS 語意搜尋（hash 已在上方快速路徑處理過）
         if use_rag:
             try:
                 from app.knowledge.manager import KnowledgeBaseManager
@@ -400,6 +434,10 @@ class ManufacturingPipeline:
                     system_anchors = list(system_anchors) + [p for p in _cv_symbols if p not in system_anchors] + [p for p in _rag_priors if p not in system_anchors]
             except Exception as e:
                 print(f"Warning: RAG retrieval failed: {e}")
+        # 保存第一輪 VLM 輸出，供 diff 比較用
+        if features.raw_vlm_description:
+            features.raw_vlm_description_v1 = features.raw_vlm_description
+
         # If RAG context exists, re-run VLM with injected prompt
         if rag_context_text and self.vlm_client:
             try:
@@ -437,6 +475,11 @@ class ManufacturingPipeline:
         warnings: List[str] = []
         if prediction_enabled:
             warnings.append("Process prediction is disabled in VLM-only mode.")
+        # VLM 品質驗證 warning（最終版本，可能經過 RAG 修正）
+        if features.raw_vlm_description:
+            _final_issues = ManufacturingPipeline._validate_vlm_output(features.raw_vlm_description)
+            for issue in _final_issues:
+                warnings.append(f"VLM 輸出品質：{issue}")
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -558,6 +601,10 @@ class ManufacturingPipeline:
                     vlm_analysis = ManufacturingPipeline._clean_vlm_output(vlm_result)
                     chars = len(vlm_analysis)
                     print(f"Info: VLM analysis completed - {chars} chars (after dimension strip)")
+                    # 結構驗證：檢查 VLM 輸出是否符合 3-section 格式
+                    _issues = ManufacturingPipeline._validate_vlm_output(vlm_analysis)
+                    if _issues:
+                        print(f"Warning: VLM output quality issues: {_issues}")
                 else:
                     print("Warning: VLM analysis returned None")
             except Exception as e:
@@ -635,6 +682,42 @@ class ManufacturingPipeline:
         _cleaned = re.sub(r'[ \t]+', ' ', _cleaned)
         _cleaned = re.sub(r'  +', ' ', _cleaned).strip()
         return _cleaned
+
+    @staticmethod
+    def _validate_vlm_output(text: str) -> List[str]:
+        """Validate VLM output structure and return a list of issues (empty = OK).
+
+        Checks:
+        1. All 3 required sections present (### 1, ### 2, ### 3)
+        2. Section 2 contains True/False answers
+        3. At least one Tier-1 vocabulary term appears
+        """
+        issues: List[str] = []
+        if not text or len(text.strip()) < 50:
+            issues.append("VLM 輸出過短（< 50 字元）")
+            return issues
+
+        # Section presence check
+        for sec_num in [1, 2, 3]:
+            pattern = rf'(?m)^(?:###?\s*)?{sec_num}\.'
+            if not re.search(pattern, text):
+                issues.append(f"缺少 Section {sec_num}")
+
+        # Section 2: should contain True or False
+        sec2_match = re.search(r'(?m)^(?:###?\s*)?2\.', text)
+        if sec2_match:
+            sec3_match = re.search(r'(?m)^(?:###?\s*)?3\.', text)
+            sec2_end = sec3_match.start() if sec3_match else len(text)
+            sec2_body = text[sec2_match.end():sec2_end]
+            if not re.search(r'\b(True|False)\b', sec2_body):
+                issues.append("Section 2 缺少 True/False 判斷")
+
+        # Tier-1 vocabulary check
+        text_lower = text.lower()
+        if not any(term.lower() in text_lower for term in TIER1_VOCABULARY):
+            issues.append("未使用任何 Tier-1 標準詞彙")
+
+        return issues
 
     def batch_recognize(
         self,
