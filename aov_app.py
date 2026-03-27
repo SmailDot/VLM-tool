@@ -169,12 +169,13 @@ with col_left:
                         tmp_file.write(parent_file.read())
                         tmp_pdf_path = tmp_file.name
 
-                    # 提取高解析度圖片
-                    pdf_extractor = PDFImageExtractor(target_dpi=300)
-                    parent_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
-
-                    # 清理臨時檔案
-                    os.unlink(tmp_pdf_path)
+                    try:
+                        # 提取高解析度圖片
+                        pdf_extractor = PDFImageExtractor(target_dpi=300)
+                        parent_image = pdf_extractor.extract_full_page(tmp_pdf_path, page_num=0)
+                    finally:
+                        # 無論成功或發生例外都清理臨時檔案
+                        os.unlink(tmp_pdf_path)
 
                     if parent_image is not None:
                         st.session_state.parent_drawing = parent_image
@@ -313,6 +314,9 @@ with col_left:
         # Save temp image for knowledge base
         # If multiple views are uploaded, stitch them into a 2x2 collage
         _save_img = build_collage_or_single(drawing_images)
+        _old_tmp = st.session_state.get("temp_file_path")
+        if _old_tmp and os.path.exists(_old_tmp):
+            os.unlink(_old_tmp)
         st.session_state.temp_file_path = persist_temp_preview_image(_save_img)
 
         # Preview uploaded views
