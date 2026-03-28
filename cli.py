@@ -7,6 +7,8 @@ VLM Tool CLI — 工業製程圖紙辨識工具命令列介面
   python cli.py symbol-check --list-all
   python cli.py batch        --dir ./drawings/ [--bom "SUS304"] [--rag] [--output batch.json] [--vlm]
   python cli.py query        --image drawing.jpg --ask "這張圖有焊接符號嗎?" --vlm
+  python cli.py crop         --image full_drawing.jpg --prefix "PART001" --output-dir ./cropped/
+  python cli.py crop         --image full_drawing.jpg --prefix "PART001" --output-dir ./cropped/ --show-bbox --verify-views --vlm
 
 所有子命令共用:
   --vlm      啟用 VLM（預設關閉，啟用需要 LM Studio 執行中）
@@ -82,6 +84,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         use_rag=args.rag,
         use_vlm=args.vlm,
         min_confidence=0.25,
+        auto_crop=getattr(args, "auto_crop", False),
     )
 
     _log("Running analysis...", args.verbose, args.quiet)
@@ -225,6 +228,7 @@ def cmd_batch(args: argparse.Namespace) -> int:
         return 1
 
     service = AOVCoreService()
+    auto_crop: bool = getattr(args, "auto_crop", False)
     entries = []
     total = len(image_files)
 
@@ -233,11 +237,27 @@ def cmd_batch(args: argparse.Namespace) -> int:
             print(f"[{idx}/{total}] {img_path.name} ...", file=sys.stderr)
 
         try:
+            child_images = None
+            view_labels = None
+
+            if auto_crop:
+                from app.vision.drawing_cropper import DrawingCropper
+                cropper = DrawingCropper()
+                views = cropper.crop_from_file(str(img_path), prefix="AUTO")
+                if len(views) >= 2:
+                    child_images = [v.image for v in views]
+                    view_labels = [v.view_label for v in views]
+                    if not args.quiet:
+                        print(
+                            f"  → 自動切圖：偵測到 {len(views)} 個視角",
+                            file=sys.stderr,
+                        )
+
             request = build_analysis_request(
                 image=str(img_path),
                 parent_image=None,
-                child_images=None,
-                view_labels=None,
+                child_images=child_images,
+                view_labels=view_labels,
                 locked_bom="",
                 bom_context_input=args.bom or "",
                 use_rag=args.rag,
@@ -276,6 +296,57 @@ def cmd_batch(args: argparse.Namespace) -> int:
         _out_json(report)
 
     return 0 if report["failed"] == 0 else 1
+
+
+# ── crop ────────────────────────────────────────────────────────────────────
+
+def cmd_crop(args: argparse.Namespace) -> int:
+    from app.vision.drawing_cropper import DrawingCropper
+    from app.vision.view_metadata import save_cropped_views
+
+    img_path = Path(args.image)
+    if not img_path.exists():
+        _err(f"Image not found: {args.image}")
+        return 1
+
+    output_dir = Path(args.output_dir)
+    prefix = args.prefix or "PART"
+
+    _log(f"Loading image: {img_path}", args.verbose, args.quiet)
+
+    cropper = DrawingCropper()
+    views = cropper.crop_from_file(str(img_path), prefix=prefix)
+
+    if not views:
+        _err("切圖失敗：未偵測到任何視角（請確認輸入為多視角工程圖）")
+        return 1
+
+    # Layer 2: VLM view verification (opt-in)
+    if getattr(args, "verify_views", False):
+        if not args.vlm:
+            _err("--verify-views 需要搭配 --vlm（需要 LM Studio 執行中）")
+            return 1
+        _log("使用 VLM 驗證視角標籤...", args.verbose, args.quiet)
+        views = cropper.verify_views_with_vlm(views)
+
+    # Save images + metadata.json
+    meta_path = save_cropped_views(views, str(output_dir), img_path.name)
+
+    if not args.quiet:
+        print(f"切圖完成：{len(views)} 個視角")
+        for i, v in enumerate(views, 1):
+            line = (
+                f"  [{i}] {v.suggested_filename}"
+                f"  {v.view_label_zh}"
+                f"  信心度: {v.confidence:.2f}"
+            )
+            if getattr(args, "show_bbox", False):
+                x, y, w, h = v.bbox
+                line += f"  bbox=({x},{y},{w},{h})"
+            _safe_print(line)
+        print(f"metadata.json 已寫入 {meta_path}", file=sys.stderr)
+
+    return 0
 
 
 # ── query ───────────────────────────────────────────────────────────────────
@@ -442,6 +513,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_analyze.add_argument("--bom", metavar="TEXT", help="BOM 字串，例如 'SUS304, T1.5'")
     p_analyze.add_argument("--rag", action="store_true", help="啟用 RAG 知識庫檢索")
     p_analyze.add_argument(
+        "--auto-crop",
+        dest="auto_crop",
+        action="store_true",
+        help="自動切割多視角工程圖再分析（寬高比 > 1.2 才觸發）",
+    )
+    p_analyze.add_argument(
         "--output", metavar="FILE", help="輸出 JSON 寫入此檔案（預設 stdout）"
     )
     p_analyze.set_defaults(func=cmd_analyze)
@@ -501,6 +578,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_batch.add_argument("--bom", metavar="TEXT", help="套用至所有圖片的 BOM 字串")
     p_batch.add_argument("--rag", action="store_true", help="啟用 RAG 知識庫檢索")
     p_batch.add_argument(
+        "--auto-crop",
+        dest="auto_crop",
+        action="store_true",
+        help="對每張圖先自動切圖再分析（切出 2 張以上才啟用多視角模式）",
+    )
+    p_batch.add_argument(
         "--output", metavar="FILE", help="輸出 JSON 寫入此檔案（預設 stdout）"
     )
     p_batch.set_defaults(func=cmd_batch)
@@ -534,6 +617,58 @@ def build_parser() -> argparse.ArgumentParser:
         "--ask", required=True, metavar="QUESTION", help="是非題問題（例如 '這張圖有焊接符號嗎?'）"
     )
     p_query.set_defaults(func=cmd_query)
+
+    # ── crop ──────────────────────────────────────────────────────────────
+    p_crop = sub.add_parser(
+        "crop",
+        parents=[shared],
+        help="自動切割多視角工程圖（俯視 / 前視 / 側視 / 等角）",
+        description=(
+            "偵測工程圖的多個視角並各自切割儲存，同時輸出 metadata.json。\n"
+            "視角辨識採三層架構：位置規則 → VLM 確認（--verify-views）→ HITL（Streamlit）。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "用法:\n"
+            "  python cli.py crop --image drawing.jpg --prefix \"PART001\" --output-dir ./cropped/\n"
+            "  python cli.py crop --image drawing.jpg --prefix \"PART001\" --output-dir ./cropped/ --show-bbox\n"
+            "  python cli.py crop --image drawing.jpg --prefix \"PART001\" --output-dir ./cropped/ --verify-views --vlm\n"
+            "\n"
+            "輸出:\n"
+            "  切圖完成：4 個視角\n"
+            "    [1] PART001-01_Top.png  俯視圖  信心度: 0.85\n"
+            "    [2] PART001-02_Front.png  前視圖  信心度: 0.85\n"
+            "    [3] PART001-03_Side.png  側視圖  信心度: 0.85\n"
+            "    [4] PART001-04_Iso.png  等角視圖  信心度: 0.65\n"
+            "  metadata.json 已寫入 ./cropped/metadata.json\n"
+        ),
+    )
+    p_crop.add_argument(
+        "--image", required=True, metavar="PATH", help="輸入圖片路徑（JPG / PNG）"
+    )
+    p_crop.add_argument(
+        "--prefix", default="PART", metavar="PREFIX", help="輸出檔名前綴（例如 PART001）"
+    )
+    p_crop.add_argument(
+        "--output-dir",
+        required=True,
+        dest="output_dir",
+        metavar="DIR",
+        help="切圖輸出目錄（若不存在則自動建立）",
+    )
+    p_crop.add_argument(
+        "--show-bbox",
+        dest="show_bbox",
+        action="store_true",
+        help="輸出每個視角在原圖的 bbox 座標",
+    )
+    p_crop.add_argument(
+        "--verify-views",
+        dest="verify_views",
+        action="store_true",
+        help="啟用第二層 VLM 視角確認（需搭配 --vlm）",
+    )
+    p_crop.set_defaults(func=cmd_crop)
 
     return parser
 

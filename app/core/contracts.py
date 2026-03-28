@@ -22,3 +22,4 @@ class AnalysisRequest:
     use_rag: bool = False
     use_vlm: bool = True
     min_confidence: float = 0.25
+    auto_crop: bool = False

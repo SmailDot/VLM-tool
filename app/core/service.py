@@ -19,12 +19,14 @@ class AOVCoreService:
         need_rebuild = (
             self._pipeline is None
             or self._last_use_vlm != request.use_vlm
+            or getattr(self._pipeline, "auto_crop", False) != request.auto_crop
         )
         if need_rebuild:
             self._pipeline = ManufacturingPipeline(
                 use_visual=False,
                 use_vlm=request.use_vlm,
                 enable_process_prediction=False,
+                auto_crop=request.auto_crop,
             )
             self._last_use_vlm = request.use_vlm
         else:

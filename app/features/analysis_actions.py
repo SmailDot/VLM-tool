@@ -28,6 +28,7 @@ def build_analysis_request(
     use_rag: bool,
     use_vlm: bool,
     min_confidence: float,
+    auto_crop: bool = False,
 ) -> AnalysisRequest:
     """Build VLM request with BOM + child-view injection as core responsibility."""
     effective_bom = locked_bom or bom_context_input
@@ -40,6 +41,7 @@ def build_analysis_request(
         use_rag=use_rag,
         use_vlm=use_vlm,
         min_confidence=min_confidence,
+        auto_crop=auto_crop,
     )
 
 

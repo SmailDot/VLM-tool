@@ -53,19 +53,25 @@ class ManufacturingPipeline:
         use_visual: bool = False,  # Visual embeddings optional (expensive)
         use_vlm: bool = False,  # VLM analysis optional (requires LM Studio)
         enable_process_prediction: bool = True,
+        auto_crop: bool = False,
     ):
         """
         Initialize pipeline.
-        
+
         Args:
             use_visual: Enable visual embedding (DINOv2).
             use_vlm: Enable VLM-based process recognition (requires LM Studio).
             enable_process_prediction: Enable process prediction via decision engine.
                 [Compatibility parameter] This pipeline now always runs in VLM-only mode.
+            auto_crop: If True, automatically segment multi-view drawings with
+                DrawingCropper before feature extraction.  Activates only when
+                no child_images are supplied and the image aspect ratio suggests
+                a multi-view layout (width > height × 1.2).  Default False.
         """
         self.use_visual = use_visual
         self.use_vlm = use_vlm
         self.enable_process_prediction = enable_process_prediction
+        self.auto_crop = auto_crop
 
         # Initialize visual embedder (gracefully handle unavailability)
         self.visual_embedder = None
@@ -263,6 +269,21 @@ class ManufacturingPipeline:
                 )
             if parent_report:
                 parent_prompt = f"【父圖全域分析報告】{parent_report}\n\n{parent_prompt}"
+
+        # ── auto_crop：當未傳入 child_images 且圖寬比符合多視角特徵時，自動切圖 ──
+        if not child_images and self.auto_crop:
+            h, w = img_array.shape[:2]
+            if w > h * 1.2:
+                try:
+                    from app.vision.drawing_cropper import DrawingCropper
+                    _cropper = DrawingCropper()
+                    _views = _cropper.crop_views(img_array, prefix="AUTO")
+                    if len(_views) >= 2:
+                        child_images = [v.image for v in _views]
+                        view_labels = [v.view_label for v in _views]
+                        print(f"Info: 自動切圖完成，偵測到 {len(_views)} 個視角")
+                except Exception as _e:
+                    print(f"Warning: auto_crop failed, using original image: {_e}")
 
         vlm_images: List[Union[str, Path, np.ndarray]] = []
         if child_images:
