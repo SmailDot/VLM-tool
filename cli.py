@@ -35,6 +35,16 @@ def _err(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr)
 
 
+def _safe_print(text: str) -> None:
+    """Print text, replacing unencodable characters so Windows consoles don't crash."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
+            sys.stdout.encoding or "utf-8"
+        ))
+
+
 def _out_json(data: Any) -> None:
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
@@ -94,8 +104,31 @@ def cmd_analyze(args: argparse.Namespace) -> int:
 
 # ── symbol-check ────────────────────────────────────────────────────────────
 
-def cmd_symbol_check(args: argparse.Namespace) -> int:
+def _load_image_or_pdf(path: Path):
+    """Return list of (label, np.ndarray) frames from an image or PDF file."""
     import cv2
+
+    if path.suffix.lower() == ".pdf":
+        try:
+            from app.manufacturing.extractors.pdf_extractor import PDFImageExtractor
+            extractor = PDFImageExtractor(target_dpi=150)
+            import fitz
+            doc = fitz.open(str(path))
+            frames = []
+            for page_num in range(len(doc)):
+                img = extractor.extract_full_page(str(path), page_num=page_num)
+                label = f"{path.name} (page {page_num + 1})"
+                frames.append((label, img))
+            doc.close()
+            return frames
+        except Exception as exc:
+            return [(str(path), None, str(exc))]
+
+    img = cv2.imread(str(path))
+    return [(path.name, img)]
+
+
+def cmd_symbol_check(args: argparse.Namespace) -> int:
     from app.vision.symbol_matcher import SymbolMatcher
 
     matcher = SymbolMatcher()
@@ -121,33 +154,47 @@ def cmd_symbol_check(args: argparse.Namespace) -> int:
             exit_code = 1
             continue
 
-        img = cv2.imread(str(img_path))
-        if img is None:
-            print(f"{img_path_str}: Error (cannot load image)", file=sys.stderr)
-            exit_code = 1
-            continue
+        frames = _load_image_or_pdf(img_path)
 
-        _log(f"Scanning: {img_path.name}", args.verbose, args.quiet)
-        matches = matcher.match_symbols(img)
+        for frame in frames:
+            if len(frame) == 3:  # error tuple
+                label, img, err = frame
+                print(f"{label}: Error ({err})", file=sys.stderr)
+                exit_code = 1
+                continue
+            label, img = frame
 
-        if args.symbol:
-            target = args.symbol.lower()
-            hits = [m for m in matches if m["name"].lower() == target]
-            if hits:
-                print(
-                    f"{img_path_str}: True (confidence: {hits[0]['confidence']:.2f})"
-                )
+            if img is None:
+                print(f"{label}: Error (cannot load)", file=sys.stderr)
+                exit_code = 1
+                continue
+
+            _log(f"Scanning: {label}", args.verbose, args.quiet)
+            matches = matcher.match_symbols(img)
+
+            # Filter out inf/nan confidence values.
+            # TM_CCOEFF_NORMED with a sparse alpha mask produces inf when the image
+            # patch under the mask has near-zero std (e.g. blank white paper).
+            # These are false positives — discard them.
+            import math
+            matches = [m for m in matches if math.isfinite(m["confidence"])]
+
+            if args.symbol:
+                target = args.symbol.lower()
+                hits = [m for m in matches if m["name"].lower() == target]
+                if hits:
+                    _safe_print(f"{label}: True (confidence: {hits[0]['confidence']:.2f})")
+                else:
+                    _safe_print(f"{label}: False")
             else:
-                print(f"{img_path_str}: False")
-        else:
-            if matches:
-                for m in matches:
-                    print(
-                        f"{img_path_str}: {m['name']} = True"
-                        f" (confidence: {m['confidence']:.2f})"
-                    )
-            else:
-                print(f"{img_path_str}: no symbols detected")
+                if matches:
+                    for m in matches:
+                        _safe_print(
+                            f"{label}: {m['name']} = True"
+                            f" (confidence: {m['confidence']:.2f})"
+                        )
+                else:
+                    _safe_print(f"{label}: no symbols detected")
 
     return exit_code
 
