@@ -60,7 +60,8 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "=== VERIFIED REFERENCE CASE (similar part from past analysis) ===\n"
             "A similar engineering drawing was analysed before and its verified description is shown below.\n"
             "USE THIS AS A STYLE AND REASONING GUIDE ONLY.\n"
-            "DO NOT copy it word-for-word. Adapt the structure and reasoning style to what you actually see in the CURRENT drawing.\n\n"
+            "DO NOT copy it word-for-word. Adapt the structure and reasoning style to what you actually see in the CURRENT drawing.\n"
+            "IMPORTANT: If the reference case contains any numeric measurements (e.g. 110mm, T1.5, M6), IGNORE those numbers entirely — the ZERO NUMBERS RULE above applies here too.\n\n"
             f"{rag_context.strip()}\n\n"
             "=== END OF REFERENCE CASE ===\n\n"
             "Now analyse the CURRENT drawing provided above, using the reference case as a guide.\n\n"
@@ -124,11 +125,13 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
     )
 
     return (
+        # FORBIDDEN rules come FIRST — before any BOM/RAG content that may contain numbers,
+        # so the model internalises the constraint before it ever reads dimension-bearing text.
+        f"{confidence_rules}"
         f"{known_facts_block}"
         f"{rag_block}"
         f"{anchors_block}"
         f"{vocab_block}"
-        f"{confidence_rules}"
         f"You are an experienced mechanical Quality Assurance (QA) inspector. Your job is to {bom_instruction}\n"
         "Pay close attention to the Top View and Front View, as these two perspectives summarize 70% of the part's geometry. "
         "The remaining 30% is supplemented by the Side View. "

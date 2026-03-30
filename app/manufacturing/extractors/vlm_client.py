@@ -12,9 +12,22 @@ Compatible with:
 
 from typing import Optional, Union, List, Dict, Any
 import base64
+import re
 from pathlib import Path
 import numpy as np
 import cv2
+
+# Regex that catches leaked dimension strings such as "110mm", "T1.5", "M6", "±0.1", "R3"
+_DIMENSION_PATTERN = re.compile(
+    r"\b\d+(\.\d+)?\s*(mm|cm|m\b|inch|\")|"   # e.g. 110mm / 1.5 cm / 30 inch
+    r"\bT\s*\d+(\.\d+)?\b|"                    # e.g. T1.5 (plate thickness)
+    r"[±]\s*\d+(\.\d+)?|"                      # e.g. ±0.1
+    r"\bR\s*\d+(\.\d+)?\b|"                    # e.g. R3 (radius)
+    r"\bM\d+\b|"                               # e.g. M6 (thread)
+    r"\bΦ\s*\d+(\.\d+)?|"                      # e.g. Φ8
+    r"\b\d+(\.\d+)?\s*°",                      # e.g. 45°
+    re.IGNORECASE,
+)
 
 from app.config import VLM_BASE_URL, VLM_MODEL
 
@@ -276,6 +289,16 @@ class VLMClient:
                 print("Warning: Model returned empty response")
                 return None
             
+            # Output-level dimension leak detector — log a warning so the caller
+            # knows the model violated the ZERO NUMBERS RULE without crashing.
+            leaked = _DIMENSION_PATTERN.findall(content)
+            if leaked:
+                print(
+                    f"[VLM-WARN] Dimension leak detected in output "
+                    f"({len(leaked)} match(es)). "
+                    "Model violated ZERO NUMBERS RULE — review output before use."
+                )
+
             # Return plain text directly — no JSON parsing
             return content
         

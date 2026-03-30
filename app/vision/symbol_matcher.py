@@ -169,6 +169,11 @@ class SymbolMatcher:
                 scale += _SCALE_STEP
                 continue
 
+            # TM_CCOEFF_NORMED with a sparse alpha mask can yield inf when the
+            # target patch has near-zero std (e.g. blank white paper).  Filter
+            # out non-finite values before threshold comparison.
+            result_map = np.where(np.isfinite(result_map), result_map, np.float32(0.0))
+
             # Collect all peaks above threshold
             loc_y, loc_x = np.where(result_map >= self.threshold)
             scores = result_map[loc_y, loc_x]
@@ -222,8 +227,11 @@ def _load_template(png_path: Path) -> Tuple[Optional[np.ndarray], Optional[np.nd
             return None, None
 
         if raw.ndim == 2:
-            # Already greyscale
-            return raw, None
+            # Already greyscale — auto-mask non-white pixels so white background is ignored
+            mask = np.where(raw < 200, np.uint8(255), np.uint8(0))
+            if mask.sum() == 0:
+                return raw, None
+            return raw, mask
 
         if raw.shape[2] == 4:
             # BGRA — split alpha as mask
@@ -235,9 +243,13 @@ def _load_template(png_path: Path) -> Tuple[Optional[np.ndarray], Optional[np.nd
             mask = np.where(alpha > 128, np.uint8(255), np.uint8(0))
             return grey, mask
 
-        # BGR without alpha
+        # BGR without alpha — auto-mask non-white ink pixels so white background
+        # does not inflate TM_CCOEFF_NORMED scores on white-background drawings.
         grey = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
-        return grey, None
+        mask = np.where(grey < 200, np.uint8(255), np.uint8(0))
+        if mask.sum() == 0:
+            return grey, None
+        return grey, mask
 
     except Exception:
         return None, None
