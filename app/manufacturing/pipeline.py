@@ -197,8 +197,9 @@ class ManufacturingPipeline:
                     except Exception as e:
                         raise ValueError(f"Failed to extract parent image from PDF: {e}")
                 else:
-                    # 一般圖片檔案
-                    parent_img_array = cv2.imread(parent_image)
+                    # 一般圖片檔案（np.fromfile+imdecode 支援 Windows 中文路徑）
+                    _buf = np.fromfile(parent_image, dtype=np.uint8)
+                    parent_img_array = cv2.imdecode(_buf, cv2.IMREAD_COLOR)
                     if parent_img_array is None:
                         raise ValueError(f"Failed to load parent image: {parent_image}")
             else:
@@ -246,8 +247,9 @@ class ManufacturingPipeline:
                 except Exception as e:
                     raise ValueError(f"Failed to extract image from PDF: {e}")
             else:
-                # 一般圖片檔案
-                img_array = cv2.imread(image)
+                # 一般圖片檔案（np.fromfile+imdecode 支援 Windows 中文路徑）
+                _buf = np.fromfile(image, dtype=np.uint8)
+                img_array = cv2.imdecode(_buf, cv2.IMREAD_COLOR)
                 if img_array is None:
                     raise ValueError(f"Failed to load image: {image}")
         else:
@@ -314,7 +316,8 @@ class ManufacturingPipeline:
                     else:
                         try:
                             import cv2 as _cv2
-                            _scan_img = _cv2.imread(str(_vimg))
+                            _vbuf = np.fromfile(str(_vimg), dtype=np.uint8)
+                            _scan_img = _cv2.imdecode(_vbuf, _cv2.IMREAD_COLOR)
                         except Exception:
                             pass
                     if _scan_img is None:

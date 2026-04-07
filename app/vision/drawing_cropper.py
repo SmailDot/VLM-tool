@@ -208,14 +208,24 @@ class DrawingCropper:
     def _detect_view_bboxes(
         self, image: np.ndarray
     ) -> List[Tuple[int, int, int, int]]:
-        """偵測視角區域的 bounding boxes。優先使用投影法，失敗則退回連通元件法。"""
-        bboxes = self._projection_split(image)
-        if len(bboxes) < 2:
-            bboxes = self._component_split(image)
+        """
+        偵測視角區域的 bounding boxes。優先使用投影法，失敗則退回連通元件法。
 
+        Fallback 觸發條件：先過濾小格後有效 bbox < 2（而非判斷原始數量），
+        避免 projection_split 把密集線條切成上千個破碎小格後誤判為「已找到視圖」。
+        """
         img_area = image.shape[0] * image.shape[1]
         min_area = img_area * self.min_view_area_ratio
-        return [b for b in bboxes if b[2] * b[3] >= min_area]
+
+        proj_bboxes = self._projection_split(image)
+        valid_proj = [b for b in proj_bboxes if b[2] * b[3] >= min_area]
+
+        if len(valid_proj) >= 2:
+            return valid_proj
+
+        # projection 結果不足，改用連通元件法
+        comp_bboxes = self._component_split(image)
+        return [b for b in comp_bboxes if b[2] * b[3] >= min_area]
 
     def _projection_split(
         self, image: np.ndarray

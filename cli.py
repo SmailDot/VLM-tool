@@ -110,6 +110,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
 def _load_image_or_pdf(path: Path):
     """Return list of (label, np.ndarray) frames from an image or PDF file."""
     import cv2
+    import numpy as np
 
     if path.suffix.lower() == ".pdf":
         try:
@@ -127,7 +128,8 @@ def _load_image_or_pdf(path: Path):
         except Exception as exc:
             return [(str(path), None, str(exc))]
 
-    img = cv2.imread(str(path))
+    _buf = np.fromfile(str(path), dtype=np.uint8)
+    img = cv2.imdecode(_buf, cv2.IMREAD_COLOR)
     return [(path.name, img)]
 
 
@@ -379,6 +381,7 @@ def _query_via_vlm(
     free-form questions concisely.
     """
     import cv2
+    import numpy as np
     from app.config import VLM_BASE_URL, VLM_MODEL
 
     try:
@@ -386,7 +389,8 @@ def _query_via_vlm(
     except ImportError:
         return {"answer": False, "reason": "openai package not installed", "confidence": "low"}
 
-    img = cv2.imread(image_path)
+    _buf = np.fromfile(image_path, dtype=np.uint8)
+    img = cv2.imdecode(_buf, cv2.IMREAD_COLOR)
     if img is None:
         return {"answer": False, "reason": f"Cannot load image: {image_path}", "confidence": "low"}
 

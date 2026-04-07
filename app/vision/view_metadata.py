@@ -46,7 +46,7 @@ def build_view_metadata(views: "List[CroppedView]", source_filename: str) -> dic
                 "role": "primary" if v.view_label in ("Top", "Front") else "supporting",
                 "filename": v.suggested_filename,
                 "confidence": round(v.confidence, 2),
-                "bbox": list(v.bbox),
+                "bbox": [int(x) for x in v.bbox],
             }
             for i, v in enumerate(views)
         ],
@@ -126,7 +126,7 @@ def record_view_correction(
         "sha256": sha256,
         "original_label": original_label,
         "corrected_label": corrected_label,
-        "bbox": list(bbox),
+        "bbox": [int(x) for x in bbox],
         "corrected_at": datetime.utcnow().isoformat() + "Z",
     }
 
