@@ -453,9 +453,7 @@ DINOv2 屬於**自監督學習（Self-Supervised Learning, SSL）**模型，使�
 
 FAISS 使用 `IndexFlatIP`（Inner Product，內積）。由於向量已 L2 正規化，單位向量的內積等於 Cosine Similarity：
 
-```
-dot(v₁, v₂) = |v₁||v₂|cos(θ) = cos(θ)   （當 |v₁|=|v₂|=1 時）
-```
+$$\text{Score} = \vec{v_1} \cdot \vec{v_2} = |\vec{v_1}||\vec{v_2}|\cos(\theta) = \cos(\theta)$$
 
 結果值域為 `[0, 1]`，精確搜索（非近似），適合中小型知識庫（< 10,000 筆）。
 
@@ -463,9 +461,7 @@ dot(v₁, v₂) = |v₁||v₂|cos(θ) = cos(θ)   （當 |v₁|=|v₂|=1 時）
 
 ### 4. 雙通道加權融合（Late Fusion）
 
-```
-combined_score = image_score × 0.4 + text_score × 0.6
-```
+$$\text{Combined Score} = S_{image} \times 0.4 + S_{text} \times 0.6$$
 
 **為什麼文字權重（0.6）高於圖片（0.4）？**
 
@@ -506,11 +502,11 @@ VLM 第一次輸出的幾何描述文字是**領域對齊的語意表達**，比
 
 每次人工修正後，系統自動計算本次 RAG 的幫助程度：
 
-```python
-v1_distance  = cosine_distance(vlm_v1_text, human_correction)   # 第一次 VLM vs 人工
-v2_distance  = cosine_distance(vlm_v2_text, human_correction)   # RAG 後 VLM vs 人工
-improvement_rate = (v1_distance - v2_distance) / v1_distance    # > 0 表示 RAG 有正面貢獻
-```
+| 指標 | 說明 |
+|------|------|
+| $v1\_distance$ | 第一次 VLM 輸出 vs 人工修正的 Cosine 距離 |
+| $v2\_distance$ | RAG 後 VLM 輸出 vs 人工修正的 Cosine 距離 |
+| $\text{Improvement Rate}$ | $(v1\_dist - v2\_dist)\ /\ v1\_dist$ — 大於 0 表示 RAG 有正面貢獻 |
 
 ---
 
