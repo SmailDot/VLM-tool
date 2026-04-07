@@ -202,8 +202,19 @@ class DualVectorStore:
                 if j >= 0:
                     txt_scores[j] = max(scores_t[0][rank], 0.0)
 
-        # Weighted combination
-        combined = image_weight * img_scores + text_weight * txt_scores
+        # Weighted combination with dynamic normalisation:
+        # When only one channel has data (e.g. image-only retrieval before
+        # VLM produces text), the absent channel contributes 0 to the sum.
+        # Normalise the effective weights so the present channel uses its
+        # full score range instead of being scaled down (e.g. 0.4×) and
+        # inadvertently failing the MIN_SIMILARITY threshold.
+        eff_img_w = image_weight if image_embedding is not None else 0.0
+        eff_txt_w = text_weight if text_embedding is not None else 0.0
+        total_w = eff_img_w + eff_txt_w
+        if total_w > 0:
+            eff_img_w /= total_w
+            eff_txt_w /= total_w
+        combined = eff_img_w * img_scores + eff_txt_w * txt_scores
         top_indices = np.argsort(-combined)[:k]
 
         results: List[Tuple[str, float]] = []

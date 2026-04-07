@@ -401,21 +401,163 @@ prompt = get_vlm_descriptive_prompt(
 
 ---
 
-## RAG 知識庫
+## Multi-Modal RAG 架構詳解
 
-### 運作原理
+本專案的核心競爭力在於其針對工業圖紙開發的 **Multi-Modal Retrieval-Augmented Generation（多模態檢索增強生成）** 系統。該系統允許 VLM 在分析新圖面時，自動檢索並參考「過去專家修正過」的相似案例，從而大幅提升辨識精準度並降低幻覺（Hallucination）。
 
-1. **儲存**：使用者修正 VLM 描述 -> 存入 JSON + 計算 DINOv2 圖片 Embedding + multilingual 文字 Embedding -> 更新 FAISS 索引
-2. **檢索**：新圖進來 -> 計算圖片 Embedding + 文字 Embedding -> FAISS 混合搜尋（圖片 0.4 + 文字 0.6）-> 取 top-3 相似案例
-3. **注入**：最佳匹配案例注入 VLM Prompt 作為參考 -> VLM 第二次呼叫自我修正描述
+---
 
-### 儲存位置
+### 1. 視覺特徵提取：DINOv2（自監督學習）
+
+系統採用 **Meta AI** 發表的 **DINOv2** 作為視覺特徵提取器，規格為 `ViT-Base / patch14`，輸出特徵維度 **768-dim**。
+
+**DINOv2 是什麼？**
+
+DINOv2 屬於**自監督學習（Self-Supervised Learning, SSL）**模型，使用 DINO（Self-DIstillation with NO Labels）框架訓練。其最大特點是**完全不需要人工標記資料**，模型透過對同一張圖的不同裁切版本互相蒸餾（Self-Distillation），自行學習視覺特徵，因此能捕捉到極細微的幾何結構與空間關係。
+
+**為什麼選 DINOv2 而不選 CLIP？**
+
+| 比較維度 | DINOv2 | CLIP |
+|----------|--------|------|
+| 訓練目標 | 幾何與結構特徵（SSL） | 圖文語意對齊 |
+| 對線條、輪廓的敏感度 | 高 | 低 |
+| 適合場景 | 工程圖、線稿、幾何圖形 | 自然語言描述的照片 |
+
+工程圖紙是黑白線稿，核心資訊由幾何特徵（線條、圓弧、倒角、孔位、拓撲關係）組成，幾乎沒有 CLIP 所擅長的語意色彩。DINOv2 在此類場景的表現遠優於 CLIP。
+
+---
+
+### 2. 文字語意提取：Multilingual MiniLM
+
+系統使用 **`paraphrase-multilingual-MiniLM-L12-v2`**（sentence-transformers 系列）對 VLM 輸出的幾何描述做語意向量化，輸出 **384-dim**。
+
+- **MiniLM 知識蒸餾**：以大型語言模型為教師模型蒸餾而來，推理速度快、記憶體佔用小
+- **多語言支援（50+ 語言）**：工業圖紙常涉及中英混雜術語（如 `SUS304 拋光處理`、`Chamfer 0.5`），此模型能跨語言對齊語意
+- **L2 正規化**：向量寫入 FAISS 前強制正規化，確保相似度計算一致
+
+---
+
+### 3. 向量索引：FAISS IndexFlatIP
+
+兩種向量分別存入**兩個獨立的 FAISS 索引**：
+
+| 索引 | 存放向量 | 維度 |
+|------|---------|------|
+| `image.faiss` | DINOv2 視覺向量 | 768 |
+| `text.faiss` | MiniLM 文字向量 | 384 |
+
+> **為什麼要兩個獨立索引？**
+> 視覺向量（768-dim）與文字向量（384-dim）維度不同，**無法直接拼接或存入同一個索引**。正確做法是各自獨立搜索後，在**分數層級（Score Level）**做加權融合，即標準的 **Late Fusion** 架構。
+
+**相似度計算原理：**
+
+FAISS 使用 `IndexFlatIP`（Inner Product，內積）。由於向量已 L2 正規化，單位向量的內積等於 Cosine Similarity：
+
+```
+dot(v₁, v₂) = |v₁||v₂|cos(θ) = cos(θ)   （當 |v₁|=|v₂|=1 時）
+```
+
+結果值域為 `[0, 1]`，精確搜索（非近似），適合中小型知識庫（< 10,000 筆）。
+
+---
+
+### 4. 雙通道加權融合（Late Fusion）
+
+```
+combined_score = image_score × 0.4 + text_score × 0.6
+```
+
+**為什麼文字權重（0.6）高於圖片（0.4）？**
+
+VLM 第一次輸出的幾何描述文字是**領域對齊的語意表達**，比圖片像素更穩定地反映幾何結構（例如「L-shaped Bracket with two flanges」這類描述比像素分佈更具判斷力）。文字向量補足了圖片向量在圖面排版差異上的不穩定性。
+
+**相似度閾值：** `MIN_SIMILARITY = 0.35`，低於此值的結果直接丟棄，避免低品質匹配誤導 VLM 的第二次推理。
+
+> ⚠️ **閾值調校提醒**：在高維度空間（768-dim）中，Cosine Similarity 可能出現「維度擠壓（Hubness Problem）」，導致不相干的向量分數也落在 0.5–0.7 之間。建議上線前收集 100 張工程圖，觀察相似與不相似圖的分數分佈，再調整最適合的切割點。
+
+---
+
+### 5. 三層 Fallback 鏈
+
+```
+┌─────────────────────────────────────────────┐
+│  層 1：SHA-256 精確雜湊比對  (score = 1.0)  │  ← 最快，O(1)
+│  相同圖片直接命中，略過所有向量計算          │
+└──────────────────┬──────────────────────────┘
+                   │ 未命中
+                   ▼
+┌─────────────────────────────────────────────┐
+│  層 2：FAISS 雙通道語義搜索（Late Fusion）   │  ← 主力
+│  image×0.4 + text×0.6，閾值 0.35           │
+└──────────────────┬──────────────────────────┘
+                   │ FAISS 不可用 / 索引為空
+                   ▼
+┌─────────────────────────────────────────────┐
+│  層 3：Jaccard 關鍵詞 Fallback              │  ← 保底
+│  4+ 字元詞彙的 Jaccard Index，純文字比對    │
+└─────────────────────────────────────────────┘
+```
+
+每層都套用相同的閾值過濾（0.35），保證任何情況下都有確定性的輸出。
+
+---
+
+### 6. RAG 有效性量化
+
+每次人工修正後，系統自動計算本次 RAG 的幫助程度：
+
+```python
+v1_distance  = cosine_distance(vlm_v1_text, human_correction)   # 第一次 VLM vs 人工
+v2_distance  = cosine_distance(vlm_v2_text, human_correction)   # RAG 後 VLM vs 人工
+improvement_rate = (v1_distance - v2_distance) / v1_distance    # > 0 表示 RAG 有正面貢獻
+```
+
+---
+
+### 7. 其他機制
+
+- **條目去重**：以 SHA-256 辨識重複上傳，同一圖的新版本會將舊版標記為 `superseded` 並從 FAISS 移除，避免索引膨脹
+- **Tier-1 詞彙錨（Vocab Anchors）**：Retrieval 結果附加 35 個預定義的板金標準術語注入 VLM Prompt，抑制幻覺輸出
+
+---
+
+### RAG 完整流程圖
+
+```mermaid
+graph TD
+    A[新工程圖上傳] --> B[DINOv2 提取視覺向量 768-dim]
+    A --> C[VLM 第一次推理 → 幾何描述文字]
+    C --> D[MiniLM 提取文字向量 384-dim]
+
+    B --> E{SHA-256 精確比對？}
+    E -- 命中 --> G[取得歷史人工修正描述]
+    E -- 未命中 --> F[FAISS 雙通道搜索 Late Fusion]
+    F -- 分數 ≥ 0.35 --> G
+    F -- 索引為空/失敗 --> H[Jaccard 關鍵詞 Fallback]
+    H --> G
+
+    D --> F
+
+    G --> I[注入 VLM Prompt 作為參考案例]
+    I --> J[VLM 第二次推理 → 修正後描述]
+    J --> K[輸出最終幾何描述]
+    K --> L{人工 HITL 修正？}
+    L -- 是 --> M[儲存修正案例至 knowledge_db.json]
+    M --> N[更新 FAISS image & text 索引]
+    N --> O[計算 improvement_rate 量化 RAG 效益]
+```
+
+---
+
+### RAG 儲存位置
 
 | 路徑 | 內容 |
 |------|------|
-| `knowledge_db.json` | 案例 metadata（id、hash、描述、BOM 上下文） |
+| `knowledge_db.json` | 案例 metadata（id、SHA-256、描述、BOM 上下文） |
 | `knowledge_images/` | 圖片副本 |
-| `knowledge_vectors/` | FAISS 索引（`image.faiss`、`text.faiss`、`entry_ids.npy`） |
+| `knowledge_vectors/image.faiss` | DINOv2 768-dim 視覺索引 |
+| `knowledge_vectors/text.faiss` | MiniLM 384-dim 文字索引 |
+| `knowledge_vectors/entry_ids.npy` | 索引 ID 對照表 |
 
 以上皆在 `.gitignore`，屬本地運行資料，不納入版控。
 
