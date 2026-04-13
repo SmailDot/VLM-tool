@@ -19,18 +19,16 @@ from pathlib import Path
 from app.core import AOVCoreService
 
 # 工程圖分析核心模組
-from app.features import (
-    run_analysis,
-    build_analysis_request,
-    save_rag_entry,
+from app.features.analysis_actions import run_analysis, build_analysis_request, save_rag_entry
+from app.features.knowledge_admin import (
     list_kb_entries,
     update_kb_entry_description,
     delete_kb_entry,
     get_kb_stats,
     get_rag_metrics_history,
-    save_symbol_templates,
-    list_symbol_templates,
-    delete_symbol_template,
+)
+from app.features.symbol_library import save_symbol_templates, list_symbol_templates, delete_symbol_template
+from app.features.upload_flow import (
     decode_bom_uploads,
     scan_ocr_text,
     decode_child_views,
@@ -157,7 +155,7 @@ with col_left:
             # PDF 檔案 → 使用 PDFImageExtractor
             st.info("📄 偵測到 PDF 檔案，正在以高解析度（300 DPI）渲染...")
             try:
-                from app.manufacturing.extractors import PDFImageExtractor, is_pdf_available
+                from app.manufacturing.extractors.pdf_extractor import PDFImageExtractor, is_pdf_available
 
                 if not is_pdf_available():
                     st.error("PyMuPDF 未安裝，無法處理 PDF。請執行：pip install pymupdf")

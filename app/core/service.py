@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from app.manufacturing import ManufacturingPipeline
+from app.manufacturing.pipeline import ManufacturingPipeline
 from app.manufacturing.schema import RecognitionResult
 
 from .contracts import AnalysisRequest

@@ -24,11 +24,21 @@ from .schema import (
     ProcessCategory
 )
 
-# Import pipeline for direct usage
-from .pipeline import ManufacturingPipeline, recognize
+# NOTE: pipeline / extractors are NOT eagerly imported here.
+# They carry heavy optional dependencies (torch, paddle, openai, cv2).
+# Import them directly when needed:
+#   from app.manufacturing.pipeline import ManufacturingPipeline
+#   from app.manufacturing.process_brain import ProcessBrain
+# This keeps lightweight modules (schema, process_brain) fast to import.
+
+def get_pipeline():
+    """Lazy accessor — returns ManufacturingPipeline without triggering
+    torch/paddle/openai at module load time."""
+    from .pipeline import ManufacturingPipeline
+    return ManufacturingPipeline
 
 __all__ = [
-    # Data structures
+    # Data structures (always safe to import)
     "ExtractedFeatures",
     "ProcessPrediction",
     "RecognitionResult",
@@ -37,9 +47,8 @@ __all__ = [
     "GeometryFeatures",
     "FeatureType",
     "ProcessCategory",
-    # Main pipeline
-    "ManufacturingPipeline",
-    "recognize",
+    # Lazy accessor
+    "get_pipeline",
 ]
 
 __version__ = "1.0.0"

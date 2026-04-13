@@ -23,11 +23,8 @@ from .schema import (
     RecognitionResult,
     ProcessPrediction
 )
-from .extractors import (
-    VisualEmbedder,
-    PDFImageExtractor,
-    is_pdf_available
-)
+from .extractors.embeddings import VisualEmbedder
+from .extractors.pdf_extractor import PDFImageExtractor, is_pdf_available
 from .extractors.parent_parser import ParentImageParser, ParentImageContext
 from .extractors.vlm_client import VLMClient
 from .prompts import get_vlm_descriptive_prompt
