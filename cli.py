@@ -48,14 +48,21 @@ def _safe_print(text: str) -> None:
 
 
 def _out_json(data: Any) -> None:
-    print(json.dumps(data, ensure_ascii=False, indent=2))
+    """Write JSON to stdout as UTF-8 bytes, bypassing Windows console encoding."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    try:
+        sys.stdout.buffer.write((text + "\n").encode("utf-8"))
+        sys.stdout.buffer.flush()
+    except AttributeError:
+        # Fallback for environments without buffer (e.g. StringIO redirect)
+        print(text)
 
 
 # ── analyze ─────────────────────────────────────────────────────────────────
 
 def cmd_analyze(args: argparse.Namespace) -> int:
     from app.core import AOVCoreService
-    from app.features import run_analysis, build_analysis_request
+    from app.features.analysis_actions import run_analysis, build_analysis_request
     from app.cli.formatters import to_cli_json
 
     image_path = Path(args.image)
@@ -211,7 +218,7 @@ _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".pdf"}
 
 def cmd_batch(args: argparse.Namespace) -> int:
     from app.core import AOVCoreService
-    from app.features import run_analysis, build_analysis_request
+    from app.features.analysis_actions import run_analysis, build_analysis_request
     from app.cli.formatters import to_cli_json, to_batch_report
 
     dir_path = Path(args.dir)
@@ -485,7 +492,7 @@ def cmd_shadow(args: argparse.Namespace) -> int:
         return 1
 
     from app.core import AOVCoreService
-    from app.features import run_analysis, build_analysis_request
+    from app.features.analysis_actions import run_analysis, build_analysis_request
 
     _log(f"Analyzing image: {img_path}", args.verbose, args.quiet)
     service = AOVCoreService()

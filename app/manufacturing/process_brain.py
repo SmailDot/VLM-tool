@@ -69,6 +69,33 @@ class ProcessBrain:
     # Public API
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _strip_negated_lines(text: str) -> str:
+        """移除 VLM 輸出中明確否定某特徵的行。
+
+        VLM 結構化輸出的第 2 節格式：
+            - Weld symbol detected: False
+            - Surface finish mark detected: False
+        這類行包含關鍵詞，卻代表「沒有」，直接做 substring 搜尋會假陽性。
+        將這些行去掉後，再讓剩餘文字參與 keyword matching。
+        """
+        keep = []
+        for line in text.splitlines():
+            lower_line = line.lower()
+            # 過濾 "X detected: false / no" 的行
+            if "detected: false" in lower_line or "detected: no" in lower_line:
+                continue
+            keep.append(line)
+        return "\n".join(keep)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def infer(
         self,
         vlm_description: str,
@@ -86,7 +113,9 @@ class ProcessBrain:
         Returns:
             信心度 >= 0.5 的推理結果列表，依信心度降序排列。
         """
-        vlm_lower = vlm_description.lower()
+        # 先移除否定行，再做 keyword matching，防止 "weld symbol detected: False" 假陽性
+        vlm_active = self._strip_negated_lines(vlm_description)
+        vlm_lower = vlm_active.lower()
         bom_lower = bom_facts.lower()
 
         # rag_priors 全轉小寫，方便後面比對
