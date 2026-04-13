@@ -70,6 +70,9 @@ class ManufacturingPipeline:
         self.enable_process_prediction = enable_process_prediction
         self.auto_crop = auto_crop
 
+        # Load process guide (human knowledge inheritance — injected into every VLM Pass 2)
+        self._process_guide: str = ManufacturingPipeline._load_process_guide()
+
         # Initialize visual embedder (gracefully handle unavailability)
         self.visual_embedder = None
         if use_visual:
@@ -392,6 +395,7 @@ class ManufacturingPipeline:
             _initial_prompt = get_vlm_descriptive_prompt(
                 bom_context=bom_context or parent_context_text,
                 system_anchors=system_anchors,
+                process_guide=self._process_guide,
             )
             # 保留父圖全域背景注入
             structure = parent_context_payload.get("3d_structure")
@@ -408,9 +412,9 @@ class ManufacturingPipeline:
             _initial_prompt = parent_prompt
         elif system_anchors:
             # fix: bom_context 必須一併帶入，避免有符號時 bom 被静默丟棄
-            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context, system_anchors=system_anchors)
+            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context, system_anchors=system_anchors, process_guide=self._process_guide)
         else:
-            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context) if bom_context else ""
+            _initial_prompt = get_vlm_descriptive_prompt(bom_context=bom_context, process_guide=self._process_guide) if bom_context else get_vlm_descriptive_prompt(process_guide=self._process_guide)
 
         features = self._extract_features(
             img_array,
@@ -465,7 +469,7 @@ class ManufacturingPipeline:
                 input_images: List[Union[str, Path, np.ndarray]] = list(vlm_images)
                 # Bug fix: 原本寫死 parent_context_text，使用者手動輸入的 bom_context 會被丟棄
                 _effective_bom_2nd = bom_context or parent_context_text
-                prompt = get_vlm_descriptive_prompt(bom_context=_effective_bom_2nd, rag_context=rag_context_text, system_anchors=system_anchors)
+                prompt = get_vlm_descriptive_prompt(bom_context=_effective_bom_2nd, rag_context=rag_context_text, system_anchors=system_anchors, process_guide=self._process_guide)
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (
@@ -478,7 +482,7 @@ class ManufacturingPipeline:
                     prompt=prompt,
                     response_format="text",
                     temperature=0.15,
-                    max_tokens=512,
+                    max_tokens=900,
                     stop=["[END OF REPORT]"],
                 )
                 if vlm_result and isinstance(vlm_result, str):
@@ -505,6 +509,13 @@ class ManufacturingPipeline:
                 process_inferences = [inf.to_dict() for inf in _inferences]
             except Exception as _brain_err:
                 print(f"Warning: ProcessBrain inference failed: {_brain_err}")
+
+        # ── VLM Section 4 製程選擇解析 ─────────────────────────────────────
+        vlm_process_selection: List[dict] = []
+        if features.raw_vlm_description:
+            vlm_process_selection = ManufacturingPipeline._parse_section4(features.raw_vlm_description)
+            if vlm_process_selection:
+                print(f"Info: VLM selected {len(vlm_process_selection)} processes in Section 4")
 
         # Process prediction has been removed; keep empty list for compatibility.
         prediction_enabled = (
@@ -534,6 +545,7 @@ class ManufacturingPipeline:
             rag_references=rag_references,
             warnings=warnings,
             process_inferences=process_inferences,
+            vlm_process_selection=vlm_process_selection,
         )
         
         return result
@@ -615,7 +627,7 @@ class ManufacturingPipeline:
                     input_image = image_path
                 else:
                     input_image = image
-                prompt = prompt_override or get_vlm_descriptive_prompt()
+                prompt = prompt_override or get_vlm_descriptive_prompt(process_guide=self._process_guide)
                 # 注入視角說明到 prompt：告討 VLM 每張圖的角色
                 if view_labels and len(view_labels) > 0:
                     _primary = ['Top', 'Front']
@@ -635,7 +647,7 @@ class ManufacturingPipeline:
                     prompt=prompt,
                     response_format="text",
                     temperature=0.1,
-                    max_tokens=512,
+                    max_tokens=900,
                     stop=["[END OF REPORT]"],
                 )
                 
@@ -662,6 +674,54 @@ class ManufacturingPipeline:
             raw_vlm_description=vlm_analysis,
         )
     
+    @staticmethod
+    def _load_process_guide() -> str:
+        """Load the compact process selection guide for VLM prompt injection.
+
+        Prefers the compact version (process_guide_compact.md, ~1800 chars)
+        which is optimised for small local models.  Falls back to the full
+        version if the compact one is missing, and returns "" if neither
+        exists so the pipeline continues without crashing.
+        """
+        for candidate in ("data/process_guide_compact.md", "data/process_guide.md"):
+            try:
+                p = Path(candidate)
+                if p.exists():
+                    return p.read_text(encoding="utf-8")
+            except Exception as e:
+                print(f"Warning: Failed to load {candidate}: {e}")
+        print("Info: Process guide not found — Section 4 will be skipped")
+        return ""
+
+    @staticmethod
+    def _parse_section4(vlm_text: str) -> List[dict]:
+        """Parse VLM Section 4 (PROCESS SELECTION) into structured dicts.
+
+        Expected line format:
+            - [D01] 折彎: U-shaped profile with two downward flanges visible
+
+        Returns:
+            List of {process_id, name, evidence} dicts.
+        """
+        selections: List[dict] = []
+        # Find the Section 4 block
+        match = re.search(r'###\s*4\.?\s*PROCESS SELECTION(.*?)(?=###\s*\d|\Z)', vlm_text, re.DOTALL | re.IGNORECASE)
+        if not match:
+            return selections
+        block = match.group(1)
+        # Parse each "- [ID] Name: evidence" line
+        line_pattern = re.compile(
+            r'^\s*[-•]\s*\[([A-Z0-9\-]+)\]\s+([^:：]+)[：:]\s*(.+)$',
+            re.MULTILINE
+        )
+        for m in line_pattern.finditer(block):
+            selections.append({
+                "process_id": m.group(1).strip(),
+                "name": m.group(2).strip(),
+                "evidence": m.group(3).strip(),
+            })
+        return selections
+
     @staticmethod
     def _clean_vlm_output(raw: str) -> str:
         """
@@ -699,8 +759,8 @@ class ManufacturingPipeline:
         # [END OF REPORT] 截斷
         if '[END OF REPORT]' in _cleaned:
             _cleaned = _cleaned.split('[END OF REPORT]')[0]
-        # 備援截斷：Section 4+ 之後的內容全部丟棄（3-section 架構，Section 3 是最後一節）
-        _parts = re.split(r'(?m)^(?:###\s+)?[4-9]\.', _cleaned)
+        # 備援截斷：Section 5+ 之後的內容全部丟棄（4-section 架構，Section 4 是最後一節）
+        _parts = re.split(r'(?m)^(?:###\s+)?[5-9]\.', _cleaned)
         if len(_parts) > 1:
             _cleaned = _parts[0].rstrip()
         # 備援截斷：偵測 Section 3 內的重複句型（同一句出現 2 次以上即截斷）

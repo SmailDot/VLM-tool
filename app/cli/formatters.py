@@ -44,6 +44,7 @@ def to_cli_json(
         "ocr_texts": ocr_texts,
         "rag_references": result.rag_references,
         "process_inferences": result.process_inferences,
+        "vlm_process_selection": result.vlm_process_selection,
         "warnings": result.warnings,
         "errors": result.errors,
         "total_time": round(result.total_time, 2),

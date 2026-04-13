@@ -105,7 +105,7 @@ class VLMClient:
         base_url: str = VLM_BASE_URL,
         api_key: str = "not-needed",
         model: str = VLM_MODEL,
-        timeout: int = 60,
+        timeout: int = 180,
         max_retries: int = 2
     ):
         """

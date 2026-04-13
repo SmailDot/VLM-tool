@@ -248,6 +248,10 @@ class RecognitionResult:
     # ProcessBrain 推理結果（List of ProcessInference.to_dict()）
     process_inferences: List[dict] = field(default_factory=list)
 
+    # VLM Section 4 製程選擇結果（List of {process_id, name, evidence}）
+    # 由 pipeline 解析 VLM 輸出的 "### 4. PROCESS SELECTION" 區塊填入
+    vlm_process_selection: List[dict] = field(default_factory=list)
+
     def to_dict(self) -> Dict:
         """Convert to JSON-serializable dict"""
         result = {
@@ -258,6 +262,7 @@ class RecognitionResult:
             "errors": self.errors,
             "rag_references": self.rag_references,
             "process_inferences": self.process_inferences,
+            "vlm_process_selection": self.vlm_process_selection,
         }
 
         # Add parent_context if available

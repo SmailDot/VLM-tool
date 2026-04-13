@@ -10,7 +10,7 @@ manufacturing drawings and identify required processes.
 from typing import List, Optional
 
 
-def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", system_anchors: Optional[List[str]] = None) -> str:
+def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", system_anchors: Optional[List[str]] = None, process_guide: str = "") -> str:
     """
     Generate a structured descriptive prompt for VLM geometry analysis.
 
@@ -67,6 +67,19 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "Now analyse the CURRENT drawing provided above, using the reference case as a guide.\n\n"
         )
 
+    # ── Process Guide block (human knowledge inheritance) ────────────────
+    guide_block = ""
+    if process_guide.strip():
+        guide_block = (
+            "=== PROCESS SELECTION GUIDE (YOUR OPEN BOOK — STUDY BEFORE ANALYZING) ===\n"
+            "The following guide was compiled from experienced manufacturing engineers.\n"
+            "It tells you WHEN and HOW to identify each manufacturing process from a drawing.\n"
+            "READ THIS GUIDE CAREFULLY. Then, after your geometry description, you MUST\n"
+            "produce a Section 4 listing which processes apply to the current drawing.\n\n"
+            f"{process_guide.strip()}\n\n"
+            "=== END OF PROCESS SELECTION GUIDE ===\n\n"
+        )
+
     # ── System Anchors block (Task1-Step3+4) ─────────────────────────────
     anchors_block = ""
     if system_anchors:
@@ -92,8 +105,8 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "Writing a measurement number is a CRITICAL ERROR that invalidates your response.\n"
         "NO EXCEPTIONS \u2014 numeric measurements are forbidden even if they appear in the KNOWN FACTS block above. "
         "Use qualitative descriptions instead (e.g., 'thin sheet', 'narrow flange', 'large cutout').\n"
-        "OUTPUT STRUCTURE: Output EXACTLY 3 sections in STRICT ORDER (### 1, ### 2, ### 3). "
-        "STOP after Section 3. Do NOT add Section 4 or any continuation.\n\n"
+        "OUTPUT STRUCTURE: Output EXACTLY 4 sections in STRICT ORDER (### 1, ### 2, ### 3, ### 4). "
+        "STOP after Section 4. Do NOT add any continuation beyond Section 4.\n\n"
     )
 
     # ── Vocabulary block ─────────────────────────────────────────────────
@@ -124,12 +137,33 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "  NEVER invent brand names, process names, material names, or dimension values.\n\n"
     )
 
+    # Section 4 instructions — only shown when guide is available
+    section4_instruction = ""
+    if process_guide.strip():
+        section4_instruction = (
+            "Section 4 — PROCESS SELECTION (MANDATORY when Process Guide is provided):\n"
+            "### 4. PROCESS SELECTION\n"
+            "Based on the drawing observations above AND the Process Selection Guide:\n"
+            "For EACH process you select, use EXACTLY this one-line format:\n"
+            "  - [ID] 製程名稱: <one sentence of visual/textual evidence from this drawing>\n"
+            "Rules:\n"
+            "  • Administrative processes B01, B02, J01 are ALWAYS included — no justification needed\n"
+            "  • Only select processes where you found clear evidence in Sections 1–3\n"
+            "  • Do NOT invent processes not in the Guide\n"
+            "  • Do NOT repeat the trigger text — state what you SAW in THIS drawing\n"
+            "Example lines:\n"
+            "  - [D01] 折彎: U-shaped profile with two downward flanges clearly visible in Front View\n"
+            "  - [F01] 焊接: Weld symbol detected near the left flange in Section 2\n"
+            "  - [E01] 去毛邊: Standard post-cutting deburring always required after sheet cutting\n\n"
+        )
+
     return (
         # FORBIDDEN rules come FIRST — before any BOM/RAG content that may contain numbers,
         # so the model internalises the constraint before it ever reads dimension-bearing text.
         f"{confidence_rules}"
         f"{known_facts_block}"
         f"{rag_block}"
+        f"{guide_block}"
         f"{anchors_block}"
         f"{vocab_block}"
         f"You are an experienced mechanical Quality Assurance (QA) inspector. Your job is to {bom_instruction}\n"
@@ -137,7 +171,7 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "The remaining 30% is supplemented by the Side View. "
         "If an Isometric (ISO) or 3D view is provided, use it as additional reference to clarify spatial relationships.\n\n"
         "Tag EVERY shape/feature/hole/symbol noun with <green>, <orange>, or <red>.\n"
-        "NO DIMENSIONS. Write exactly 3 sections in the format shown.\n\n"
+        "NO DIMENSIONS. Write exactly 4 sections in the format shown.\n\n"
         "FINAL REMINDER \u2014 ZERO NUMBERS RULE:\n"
         "Before you write anything: I will NOT write any digit followed by mm, cm, m, \u00b0, \u00b1, R, or M.\n"
         "Section 3 must sound like an experienced engineer explaining to a colleague \u2014 "
@@ -151,7 +185,9 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
         "- Surface finish mark detected: True/False (if True, state location briefly)\n"
         "- Other text annotation found: True/False (if True, describe briefly — no numbers)\n\n"
         "Answer ONLY True or False for each item above — no substitutions, no repetitive descriptions.\n\n"
-        "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION:\n"
+        f"{section4_instruction}"
+        "Begin your report now with ### 1. VIEW-BY-VIEW OBSERVATION: "
+        "and finish with ### 4. PROCESS SELECTION: (mandatory — do not stop at Section 3).\n"
     )
 
 
