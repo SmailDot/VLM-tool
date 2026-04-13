@@ -35,6 +35,8 @@ Thumbs.db
 
 # Local data & knowledge base (do not commit)
 data/
+# But static knowledge files should be tracked
+!data/process_knowledge.json
 knowledge_db.json
 knowledge_images/
 knowledge_vectors/

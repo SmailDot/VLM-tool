@@ -43,6 +43,7 @@ def to_cli_json(
         "symbols": symbols,
         "ocr_texts": ocr_texts,
         "rag_references": result.rag_references,
+        "process_inferences": result.process_inferences,
         "warnings": result.warnings,
         "errors": result.errors,
         "total_time": round(result.total_time, 2),

@@ -244,7 +244,10 @@ class RecognitionResult:
 
     # RAG references (optional)
     rag_references: List[Dict[str, Any]] = field(default_factory=list)
-    
+
+    # ProcessBrain 推理結果（List of ProcessInference.to_dict()）
+    process_inferences: List[dict] = field(default_factory=list)
+
     def to_dict(self) -> Dict:
         """Convert to JSON-serializable dict"""
         result = {
@@ -253,9 +256,10 @@ class RecognitionResult:
             "total_time": self.total_time,
             "warnings": self.warnings,
             "errors": self.errors,
-            "rag_references": self.rag_references
+            "rag_references": self.rag_references,
+            "process_inferences": self.process_inferences,
         }
-        
+
         # Add parent_context if available
         if self.parent_context:
             result["parent_context"] = {

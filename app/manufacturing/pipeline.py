@@ -489,6 +489,26 @@ class ManufacturingPipeline:
             except Exception as e:
                 print(f"Warning: RAG VLM analysis failed: {e}")
         
+        # ── ProcessBrain 製程推理（VLM 分析完成後執行）────────────────────
+        process_inferences: List[dict] = []
+        if features.raw_vlm_description:
+            try:
+                from .process_brain import ProcessBrain
+                _brain = ProcessBrain()
+                _rag_prior_names: List[str] = []
+                for _ref in rag_references:
+                    for _pid in _ref.get("correct_processes", []):
+                        _rag_prior_names.append(str(_pid))
+                _effective_bom_brain = bom_context or parent_context_text
+                _inferences = _brain.infer(
+                    vlm_description=features.raw_vlm_description,
+                    bom_facts=_effective_bom_brain,
+                    rag_priors=_rag_prior_names,
+                )
+                process_inferences = [inf.to_dict() for inf in _inferences]
+            except Exception as _brain_err:
+                print(f"Warning: ProcessBrain inference failed: {_brain_err}")
+
         # Process prediction has been removed; keep empty list for compatibility.
         prediction_enabled = (
             self.enable_process_prediction
@@ -516,6 +536,7 @@ class ManufacturingPipeline:
             total_time=processing_time,
             rag_references=rag_references,
             warnings=warnings,
+            process_inferences=process_inferences,
         )
         
         return result

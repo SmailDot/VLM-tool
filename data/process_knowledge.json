@@ -1,0 +1,482 @@
+{
+  "B01": {
+    "name": "繪圖者",
+    "trigger_vlm": [],
+    "trigger_bom": ["繪圖", "繪圖者"]
+  },
+  "B02": {
+    "name": "排版",
+    "trigger_vlm": [],
+    "trigger_bom": ["排版"]
+  },
+  "C01": {
+    "name": "單機切割",
+    "trigger_vlm": ["cutout", "flat plate", "rectangular outline", "laser cut", "cutting"],
+    "trigger_bom": ["單機切割", "雷射切割", "切割"]
+  },
+  "C03": {
+    "name": "複合機",
+    "trigger_vlm": ["bridge", "ventilation hole", "louver", "corrugated"],
+    "trigger_bom": ["複合機", "架橋", "通風孔", "PP瓦楞板", "瓦楞板"]
+  },
+  "C04": {
+    "name": "M2048",
+    "trigger_vlm": [],
+    "trigger_bom": ["M2048"]
+  },
+  "C05": {
+    "name": "M3048",
+    "trigger_vlm": ["extruded hole", "tapping", "burring", "thread", "center punch"],
+    "trigger_bom": ["M3048", "抽牙", "M3", "M4", "M5", "中心沖", "抽孔"]
+  },
+  "D01": {
+    "name": "折彎",
+    "trigger_vlm": ["flange", "bend", "l-shaped bracket", "c-channel", "u-shaped channel", "hat channel", "z-shaped bracket", "l-shaped profile", "c-shaped profile", "u-shaped profile", "z-shaped profile", "hat-shaped profile", "bend line", "bending"],
+    "trigger_bom": ["折彎", "折弯", "彎折", "折"]
+  },
+  "D04": {
+    "name": "折彎/植零件",
+    "trigger_vlm": ["flange", "insert", "rivet", "bend", "l-shaped", "c-channel"],
+    "trigger_bom": ["折彎", "植零件", "壓鉚", "浮動螺絲", "植入", "折彎/植零件"]
+  },
+  "D06": {
+    "name": "植零件",
+    "trigger_vlm": ["insert", "rivet", "threaded insert", "clinch nut"],
+    "trigger_bom": ["植零件", "壓鉚螺帽", "接地螺絲", "浮動螺絲", "壓鉚", "螺帽壓入", "植入螺帽", "螺帽", "压铆"]
+  },
+  "D07": {
+    "name": "植零件/折彎",
+    "trigger_vlm": ["insert", "rivet", "bend", "flange"],
+    "trigger_bom": ["植零件/折彎", "先植再折", "植零件", "折彎"]
+  },
+  "D09": {
+    "name": "植零件/貼膠",
+    "trigger_vlm": ["insert", "adhesive", "tape"],
+    "trigger_bom": ["貼膠", "植零件/貼膠", "植零件", "膠帶"]
+  },
+  "D10": {
+    "name": "折彎整平",
+    "trigger_vlm": ["flatten", "straighten", "bend"],
+    "trigger_bom": ["折彎整平", "整平"]
+  },
+  "E01": {
+    "name": "去毛邊",
+    "trigger_vlm": ["deburring", "edge finish", "burr", "chamfer", "fillet"],
+    "trigger_bom": ["去毛邊", "去毛刺", "毛邊", "攻牙", "皿頭", "打亂花"]
+  },
+  "E02": {
+    "name": "去毛邊2",
+    "trigger_vlm": ["deburring", "bend", "flange", "edge"],
+    "trigger_bom": ["去毛邊2", "2.0T", "折彎後", "擠肉", "孔變形"]
+  },
+  "E04": {
+    "name": "廠內拋光",
+    "trigger_vlm": ["surface finish mark", "polishing", "mirror finish"],
+    "trigger_bom": ["拋光", "抛光", "廠內拋光"]
+  },
+  "E05": {
+    "name": "廠內噴砂",
+    "trigger_vlm": ["surface finish mark", "sandblasting", "blasting"],
+    "trigger_bom": ["噴砂", "廠內噴砂"]
+  },
+  "E06": {
+    "name": "廠內刻字",
+    "trigger_vlm": ["engraving", "marking", "text annotation"],
+    "trigger_bom": ["刻字", "廠內刻字", "雷射刻字", "打字"]
+  },
+  "E08": {
+    "name": "廠內整平",
+    "trigger_vlm": ["dense holes", "punching", "distortion"],
+    "trigger_bom": ["廠內整平", "整平", "沖孔", "雷射加工後", "不平"]
+  },
+  "E11": {
+    "name": "燕巢傳統銑床",
+    "trigger_vlm": ["countersink", "csk", "tight tolerance", "milling"],
+    "trigger_bom": ["銑床", "傳統銑床", "沉頭孔", "公差", "無法雷射"]
+  },
+  "F01": {
+    "name": "焊接",
+    "trigger_vlm": ["weld symbol", "welding", "fillet weld", "butt weld", "weld"],
+    "trigger_bom": ["焊接", "銲接", "熔接", "焊", "銲"]
+  },
+  "F03": {
+    "name": "SPOT焊接",
+    "trigger_vlm": ["weld symbol", "spot weld", "spot"],
+    "trigger_bom": ["spot", "SPOT", "點焊", "焊接螺帽", "點焊螺帽", "點焊螺柱", "焊接螺絲", "spot零件"]
+  },
+  "F05": {
+    "name": "廠內捲圓",
+    "trigger_vlm": ["cylinder", "circular outline", "tube", "roll"],
+    "trigger_bom": ["捲圓", "圓管", "廠內捲圓", "捲管"]
+  },
+  "F06": {
+    "name": "廠內裁管",
+    "trigger_vlm": ["cylinder", "tube", "rod"],
+    "trigger_bom": ["裁管", "廠內裁管", "圓棒", "圓管裁切"]
+  },
+  "F09": {
+    "name": "銲接整形",
+    "trigger_vlm": ["weld symbol", "deformation", "distortion"],
+    "trigger_bom": ["銲接整形", "焊接整形", "焊接後變形", "整形"]
+  },
+  "F10": {
+    "name": "植焊螺絲",
+    "trigger_vlm": ["weld stud", "stud welding"],
+    "trigger_bom": ["植焊螺絲", "焊螺絲", "螺絲焊接"]
+  },
+  "F11": {
+    "name": "廠內烤漆",
+    "trigger_vlm": ["surface finish mark", "coating", "painting"],
+    "trigger_bom": ["烤漆", "廠內烤漆", "色粉", "色號", "噴漆", "塗裝"]
+  },
+  "F12": {
+    "name": "廠內架橋",
+    "trigger_vlm": ["bridge", "tab"],
+    "trigger_bom": ["架橋", "廠內架橋"]
+  },
+  "F14": {
+    "name": "焊接研磨",
+    "trigger_vlm": ["weld symbol", "grinding", "polishing", "weld bead"],
+    "trigger_bom": ["焊接研磨", "研磨", "磨焊", "焊後研磨"]
+  },
+  "F16": {
+    "name": "自動焊接",
+    "trigger_vlm": ["weld symbol", "robotic welding", "automated welding"],
+    "trigger_bom": ["自動焊接", "機械手臂", "自動化焊接", "機器人焊接"]
+  },
+  "F17": {
+    "name": "貼鉛",
+    "trigger_vlm": ["metal strip", "lead", "laminate"],
+    "trigger_bom": ["貼鉛", "鉛", "一面鉛", "鋁鉛"]
+  },
+  "F19": {
+    "name": "組立焊接",
+    "trigger_vlm": ["weld symbol", "assembly weld", "sub-assembly"],
+    "trigger_bom": ["組立焊接", "組立後焊接", "先組立再焊"]
+  },
+  "F20": {
+    "name": "自動研磨",
+    "trigger_vlm": ["grinding", "polishing", "surface finish mark"],
+    "trigger_bom": ["自動研磨", "研磨", "自動磨光"]
+  },
+  "F22": {
+    "name": "油壓整平",
+    "trigger_vlm": ["flatten", "press", "hydraulic"],
+    "trigger_bom": ["油壓整平", "油壓", "液壓整平"]
+  },
+  "F23": {
+    "name": "應力消除",
+    "trigger_vlm": ["stress relief", "heat treatment", "annealing"],
+    "trigger_bom": ["應力消除", "消除應力", "熱處理"]
+  },
+  "F25": {
+    "name": "光纖焊接",
+    "trigger_vlm": ["weld symbol", "fiber laser weld", "laser welding"],
+    "trigger_bom": ["光纖焊接", "光纖", "laser焊接"]
+  },
+  "F27": {
+    "name": "焊接假組立",
+    "trigger_vlm": ["weld symbol", "mock assembly", "tack weld"],
+    "trigger_bom": ["假組立", "焊接假組立", "先假組立", "試組"]
+  },
+  "H01": {
+    "name": "除焦洗淨",
+    "trigger_vlm": ["weld symbol", "stainless"],
+    "trigger_bom": ["除焦洗淨", "除焦", "白鐵", "不鏽鋼焊接", "SUS", "SS304", "SS316"]
+  },
+  "H02": {
+    "name": "部品包裝",
+    "trigger_vlm": [],
+    "trigger_bom": ["部品包裝", "包裝", "出貨包裝"]
+  },
+  "H03": {
+    "name": "包裝網蓋貼",
+    "trigger_vlm": ["label", "marking", "text annotation"],
+    "trigger_bom": ["網印", "蓋印", "貼紙", "標貼", "印刷"]
+  },
+  "H04": {
+    "name": "鋁洗淨",
+    "trigger_vlm": [],
+    "trigger_bom": ["鋁洗淨", "鋁材清洗", "鋁件清洗"]
+  },
+  "H06": {
+    "name": "脫脂洗淨",
+    "trigger_vlm": [],
+    "trigger_bom": ["脫脂", "脫脂洗淨", "degreasing"]
+  },
+  "H08": {
+    "name": "委外前處理",
+    "trigger_vlm": [],
+    "trigger_bom": ["委外前處理", "委外", "送外包", "外加工前"]
+  },
+  "H10": {
+    "name": "整平前委外前處理",
+    "trigger_vlm": [],
+    "trigger_bom": ["整平前委外", "撕膜", "委外整平", "整平前"]
+  },
+  "H12": {
+    "name": "表面清潔",
+    "trigger_vlm": [],
+    "trigger_bom": ["表面清潔", "植螺紋護套", "化學清洗"]
+  },
+  "H14": {
+    "name": "廠內鈍化",
+    "trigger_vlm": ["surface finish mark"],
+    "trigger_bom": ["鈍化", "廠內鈍化", "passivation"]
+  },
+  "H17": {
+    "name": "廠內皮膜",
+    "trigger_vlm": ["surface finish mark", "coating"],
+    "trigger_bom": ["皮膜", "廠內皮膜", "conversion coating", "化成皮膜"]
+  },
+  "H24": {
+    "name": "委外前清潔",
+    "trigger_vlm": [],
+    "trigger_bom": ["委外前清潔", "A03-2"]
+  },
+  "H26": {
+    "name": "燕巢無塵室清潔",
+    "trigger_vlm": ["cleanroom"],
+    "trigger_bom": ["無塵室清潔", "無塵室", "cleanroom", "clean room", "燕巢無塵室"]
+  },
+  "H27": {
+    "name": "燕巢無塵室包裝",
+    "trigger_vlm": ["cleanroom"],
+    "trigger_bom": ["無塵室包裝", "無塵室", "cleanroom", "clean room", "燕巢無塵室"]
+  },
+  "H28": {
+    "name": "委外焊接前撕膜",
+    "trigger_vlm": [],
+    "trigger_bom": ["委外焊接", "撕膜", "撕保護膜"]
+  },
+  "H29": {
+    "name": "超音波清洗",
+    "trigger_vlm": [],
+    "trigger_bom": ["超音波清洗", "超音波", "ultrasonic cleaning"]
+  },
+  "H31": {
+    "name": "燕巢無塵室清潔/包裝",
+    "trigger_vlm": ["cleanroom"],
+    "trigger_bom": ["無塵室清潔", "無塵室包裝", "無塵室", "燕巢無塵室", "cleanroom"]
+  },
+  "H32": {
+    "name": "整理清潔",
+    "trigger_vlm": [],
+    "trigger_bom": ["化學清洗", "整理清潔", "ASML"]
+  },
+  "H33": {
+    "name": "藥劑清潔",
+    "trigger_vlm": [],
+    "trigger_bom": ["三價鉻藥水", "藥劑清潔", "藥劑"]
+  },
+  "H34": {
+    "name": "擦三價鉻藥水",
+    "trigger_vlm": [],
+    "trigger_bom": ["三價鉻藥水", "三價鉻", "trivalent chromium"]
+  },
+  "I01": {
+    "name": "成品全檢",
+    "trigger_vlm": [],
+    "trigger_bom": ["成品全檢", "品檢", "全檢", "QC"]
+  },
+  "I02": {
+    "name": "成品全檢2",
+    "trigger_vlm": ["weld symbol", "surface finish mark"],
+    "trigger_bom": ["成品全檢2", "焊接後品檢", "烤漆後品檢", "二次品檢"]
+  },
+  "I03": {
+    "name": "尺寸全檢",
+    "trigger_vlm": [],
+    "trigger_bom": ["尺寸全檢", "全尺寸檢", "dimensional inspection"]
+  },
+  "I04": {
+    "name": "測漏全檢",
+    "trigger_vlm": ["sealed", "enclosure", "box"],
+    "trigger_bom": ["測漏", "不可漏水", "leak test", "水密", "氣密"]
+  },
+  "I07": {
+    "name": "二次元檢查",
+    "trigger_vlm": [],
+    "trigger_bom": ["二次元", "2D檢查", "CMM", "二次元量測"]
+  },
+  "I12": {
+    "name": "保壓測試",
+    "trigger_vlm": ["sealed", "pressure"],
+    "trigger_bom": ["保壓", "保壓測試", "pressure test"]
+  },
+  "I14": {
+    "name": "進料檢驗",
+    "trigger_vlm": [],
+    "trigger_bom": ["進料檢驗", "市購件", "IQC", "來料檢驗"]
+  },
+  "I15": {
+    "name": "開槽拍照",
+    "trigger_vlm": ["slotted hole", "slot", "notch"],
+    "trigger_bom": ["開槽拍照", "槽焊", "開槽焊接拍照"]
+  },
+  "I16": {
+    "name": "烤漆前外觀全檢",
+    "trigger_vlm": ["surface finish mark"],
+    "trigger_bom": ["烤漆前外觀", "烤漆前全檢", "塗裝前"]
+  },
+  "I19": {
+    "name": "燕巢無塵室成品全檢",
+    "trigger_vlm": ["cleanroom"],
+    "trigger_bom": ["無塵室品檢", "無塵室", "cleanroom", "燕巢無塵室"]
+  },
+  "I21": {
+    "name": "燕巢無塵室廠驗",
+    "trigger_vlm": ["cleanroom"],
+    "trigger_bom": ["無塵室廠驗", "無塵室", "燕巢無塵室", "廠驗"]
+  },
+  "I22": {
+    "name": "烤漆前預組",
+    "trigger_vlm": [],
+    "trigger_bom": ["烤漆前預組", "烤漆前", "預組"]
+  },
+  "I23": {
+    "name": "廠內三次元",
+    "trigger_vlm": [],
+    "trigger_bom": ["三次元", "CMM", "3D量測", "座標量測"]
+  },
+  "I24": {
+    "name": "出貨報告",
+    "trigger_vlm": [],
+    "trigger_bom": ["出貨報告", "出貨文件", "COC", "檢驗報告"]
+  },
+  "O01": {
+    "name": "研發部",
+    "trigger_vlm": [],
+    "trigger_bom": ["研發部", "研發"]
+  },
+  "O02": {
+    "name": "設計雷射雕刻",
+    "trigger_vlm": ["engraving", "laser marking", "text annotation"],
+    "trigger_bom": ["雕刻", "雷射雕刻", "刻字", "laser engraving"]
+  },
+  "O03": {
+    "name": "業務開單",
+    "trigger_vlm": [],
+    "trigger_bom": ["業務開單", "開單"]
+  },
+  "O04": {
+    "name": "廠驗",
+    "trigger_vlm": [],
+    "trigger_bom": ["廠驗", "客戶廠驗", "首件確認", "FAI"]
+  },
+  "O05": {
+    "name": "其它",
+    "trigger_vlm": [],
+    "trigger_bom": ["其它", "其他"]
+  },
+  "O06": {
+    "name": "高成組裝",
+    "trigger_vlm": [],
+    "trigger_bom": ["高成組裝", "高成"]
+  },
+  "O08": {
+    "name": "配管工程/德盛旺",
+    "trigger_vlm": ["tube", "pipe"],
+    "trigger_bom": ["配管工程", "德盛旺", "配管"]
+  },
+  "O09": {
+    "name": "保溫工程/欣大",
+    "trigger_vlm": [],
+    "trigger_bom": ["保溫工程", "欣大", "保溫"]
+  },
+  "O10": {
+    "name": "研發製圖",
+    "trigger_vlm": [],
+    "trigger_bom": ["研發製圖", "研發", "製圖"]
+  },
+  "O11": {
+    "name": "配管工程/科斯邁",
+    "trigger_vlm": ["tube", "pipe"],
+    "trigger_bom": ["配管工程", "科斯邁", "配管"]
+  },
+  "O12": {
+    "name": "疊板裝箱",
+    "trigger_vlm": [],
+    "trigger_bom": ["疊板裝箱", "裝箱", "裝櫃", "日本客戶"]
+  },
+  "O13": {
+    "name": "廠外維修",
+    "trigger_vlm": [],
+    "trigger_bom": ["廠外維修", "維修", "現場維修"]
+  },
+  "O13-1": {
+    "name": "廠外維修/銲接",
+    "trigger_vlm": ["weld symbol"],
+    "trigger_bom": ["廠外維修", "維修銲接", "銲接修補"]
+  },
+  "O13-2": {
+    "name": "廠外維修/補漆",
+    "trigger_vlm": ["surface finish mark"],
+    "trigger_bom": ["廠外維修", "補漆", "修補塗裝"]
+  },
+  "O14": {
+    "name": "生技課",
+    "trigger_vlm": [],
+    "trigger_bom": ["生技課", "研發件", "測試件"]
+  },
+  "O15": {
+    "name": "客戶端組裝",
+    "trigger_vlm": [],
+    "trigger_bom": ["客戶端組裝", "客戶組裝"]
+  },
+  "P01": {
+    "name": "客戶供料",
+    "trigger_vlm": [],
+    "trigger_bom": ["客戶供料", "客供料", "客戶材料"]
+  },
+  "P03": {
+    "name": "客戶加工",
+    "trigger_vlm": [],
+    "trigger_bom": ["客戶加工", "客加工", "半成品"]
+  },
+  "Q01": {
+    "name": "組裝",
+    "trigger_vlm": ["assembly", "multiple parts", "fastener", "screw", "bolt"],
+    "trigger_bom": ["組裝", "拉打", "拉帽", "組立", "assembly", "零件組裝"]
+  },
+  "Q04": {
+    "name": "清潔/脫脂/鉻酸鹽",
+    "trigger_vlm": ["surface finish mark"],
+    "trigger_bom": ["鉻酸鹽", "chromate", "鍍鉻酸鹽", "脫脂"]
+  },
+  "Q05": {
+    "name": "植螺紋護套",
+    "trigger_vlm": ["threaded hole", "insert"],
+    "trigger_bom": ["植螺紋護套", "螺紋護套", "螺紋護蓋", "helicoil"]
+  },
+  "Q07": {
+    "name": "防烤/表處遮蔽",
+    "trigger_vlm": [],
+    "trigger_bom": ["不烤漆", "防烤", "遮蔽", "masking"]
+  },
+  "Q08": {
+    "name": "廠驗前組裝",
+    "trigger_vlm": [],
+    "trigger_bom": ["廠驗前組裝", "廠驗前"]
+  },
+  "Q09": {
+    "name": "廠內配管",
+    "trigger_vlm": ["tube", "pipe", "fitting"],
+    "trigger_bom": ["廠內配管", "配管"]
+  },
+  "Q11": {
+    "name": "燕巢無塵室組裝",
+    "trigger_vlm": ["cleanroom", "assembly"],
+    "trigger_bom": ["無塵室組裝", "無塵室", "cleanroom", "燕巢無塵室"]
+  },
+  "K01": {
+    "name": "燕巢切削",
+    "trigger_vlm": ["countersink", "csk", "tight tolerance", "milling", "turning", "machining"],
+    "trigger_bom": ["燕巢切削", "切削", "CNC", "銑削", "公差", "無法雷射加工"]
+  },
+  "J01": {
+    "name": "燕巢倉庫",
+    "trigger_vlm": [],
+    "trigger_bom": ["燕巢倉庫", "倉庫", "庫存"]
+  }
+}

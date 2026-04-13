@@ -449,6 +449,77 @@ def _query_via_vlm(
     return {"answer": answer, "reason": reason, "confidence": confidence}
 
 
+# ── shadow ──────────────────────────────────────────────────────────────────
+
+def cmd_shadow(args: argparse.Namespace) -> int:
+    """影子測試子命令：記錄 ground truth / 顯示統計 / 匯出至 RAG。"""
+    from app.features.shadow_test import ShadowTester
+
+    tester = ShadowTester()
+
+    # ── --stats：只輸出統計報告 ────────────────────────────────────────────
+    if getattr(args, "stats", False):
+        _safe_print(tester.format_stats_report())
+        return 0
+
+    # ── --export-to-rag：匯出至 RAG 知識庫 ────────────────────────────────
+    if getattr(args, "export_to_rag", False):
+        from app.knowledge.manager import KnowledgeBaseManager
+        kb = KnowledgeBaseManager()
+        n = tester.export_to_rag(kb)
+        if not args.quiet:
+            print(f"已匯出 {n} 筆記錄至 RAG 知識庫", file=sys.stderr)
+        return 0
+
+    # ── 錄一筆新記錄：需要 --image 和 --ground-truth ─────────────────────
+    if not getattr(args, "image", None):
+        _err("請提供 --image 圖片路徑（或使用 --stats / --export-to-rag）")
+        return 1
+    if not getattr(args, "ground_truth", None):
+        _err("請提供 --ground-truth（空格分隔的正確製程代碼，例如 F01 C01）")
+        return 1
+
+    img_path = Path(args.image)
+    if not img_path.exists():
+        _err(f"Image not found: {args.image}")
+        return 1
+
+    from app.core import AOVCoreService
+    from app.features import run_analysis, build_analysis_request
+
+    _log(f"Analyzing image: {img_path}", args.verbose, args.quiet)
+    service = AOVCoreService()
+    request = build_analysis_request(
+        image=str(img_path),
+        parent_image=None,
+        child_images=None,
+        view_labels=None,
+        locked_bom="",
+        bom_context_input="",
+        use_rag=False,
+        use_vlm=args.vlm,
+        min_confidence=0.25,
+    )
+    result, elapsed = run_analysis(service, request)
+
+    vlm_desc = result.features.raw_vlm_description or ""
+    inferences = result.process_inferences  # List[dict]
+    ground_truth = args.ground_truth        # List[str]
+
+    rec = tester.record(str(img_path), vlm_desc, inferences, ground_truth)
+
+    if not args.quiet:
+        _safe_print(f"已記錄影子測試 → {img_path.name}")
+        _safe_print(f"  系統推理：{[i.get('process_id') for i in inferences]}")
+        _safe_print(f"  Ground Truth：{ground_truth}")
+        if rec.diff_missing:
+            _safe_print(f"  漏判：{rec.diff_missing}")
+        if rec.diff_wrong:
+            _safe_print(f"  誤判：{rec.diff_wrong}")
+
+    return 0
+
+
 # ── parser ───────────────────────────────────────────────────────────────────
 
 def _shared_parser() -> argparse.ArgumentParser:
@@ -673,6 +744,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="啟用第二層 VLM 視角確認（需搭配 --vlm）",
     )
     p_crop.set_defaults(func=cmd_crop)
+
+    # ── shadow ─────────────────────────────────────────────────────────────
+    p_shadow = sub.add_parser(
+        "shadow",
+        parents=[shared],
+        help="影子測試：記錄推理差異 / 統計報告 / 匯出至 RAG",
+        description=(
+            "影子測試：收集系統推理結果與人工 ground truth 的差異，\n"
+            "自動累積進 RAG 知識庫，無需場域專家介入。\n\n"
+            "三種使用模式：\n"
+            "  1. 記錄：--image <圖片> --ground-truth F01 C01 [--vlm]\n"
+            "  2. 統計：--stats\n"
+            "  3. 匯出：--export-to-rag"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "用法:\n"
+            "  python cli.py shadow --image drawing.jpg --ground-truth F01 C01 --vlm\n"
+            "  python cli.py shadow --stats\n"
+            "  python cli.py shadow --export-to-rag\n"
+        ),
+    )
+    p_shadow.add_argument("--image", metavar="PATH", help="輸入圖片路徑（記錄模式必填）")
+    p_shadow.add_argument(
+        "--ground-truth",
+        dest="ground_truth",
+        nargs="+",
+        metavar="CODE",
+        help="正確製程代碼列表（空格分隔，例如 F01 C01 E01）",
+    )
+    p_shadow.add_argument(
+        "--stats",
+        action="store_true",
+        help="顯示目前 shadow_log 的統計報告",
+    )
+    p_shadow.add_argument(
+        "--export-to-rag",
+        dest="export_to_rag",
+        action="store_true",
+        help="將已有 ground truth 的記錄匯入 RAG 知識庫",
+    )
+    p_shadow.set_defaults(func=cmd_shadow)
 
     return parser
 
