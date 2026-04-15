@@ -86,8 +86,11 @@ class ProcessBrain:
         keep = []
         for line in text.splitlines():
             lower_line = line.lower()
-            # 過濾 "X detected: false / no" 的行
+            # 過濾 "X detected: false / no" 的行（Weld symbol / Surface finish mark）
             if "detected: false" in lower_line or "detected: no" in lower_line:
+                continue
+            # 過濾 "Other text annotation found: False" 的行
+            if "found: false" in lower_line or "found: no" in lower_line:
                 continue
             keep.append(line)
         return "\n".join(keep)

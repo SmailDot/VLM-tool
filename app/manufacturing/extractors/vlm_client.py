@@ -166,7 +166,9 @@ class VLMClient:
                     return None
                 
                 # Load image with OpenCV to re-encode as PNG
-                image = cv2.imread(str(image_path))
+                # Use np.fromfile + cv2.imdecode to support Unicode/Chinese paths on Windows
+                _buf = np.fromfile(str(image_path), dtype=np.uint8)
+                image = cv2.imdecode(_buf, cv2.IMREAD_COLOR)
                 if image is None:
                     print(f"Error: Failed to load image: {image_path}")
                     return None
