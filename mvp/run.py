@@ -215,7 +215,16 @@ def main() -> None:
     if not pipeline.client.is_available():
         print("[ERROR] VLM service not available. Is LM Studio running?")
         sys.exit(1)
-    print(f"[MVP] VLM service OK. Running {len(selected)} families × 10 VLM calls each.")
+
+    # Query actual loaded model name from LM Studio (config default may differ)
+    try:
+        models_resp = pipeline.client.client.models.list()
+        actual_model = models_resp.data[0].id if models_resp.data else pipeline.client.model
+    except Exception:
+        actual_model = pipeline.client.model
+
+    print(f"[MVP] VLM service OK. Model: {actual_model}")
+    print(f"[MVP] Running {len(selected)} families × 10 VLM calls each.")
 
     # Output file
     output_dir = _REPO_ROOT / "test_output"
@@ -226,7 +235,7 @@ def main() -> None:
     output_blocks = []
     header = (
         f"MVP Multi-Agent VLM Pipeline — {ts}\n"
-        f"Model: {pipeline.client.model}\n"
+        f"Model: {actual_model}\n"
         f"Families: {len(selected)}  |  Calls per family: 10 (1+8+1)\n"
         f"Workers (Step 2): {args.workers}\n"
         f"{'═' * 72}\n"
