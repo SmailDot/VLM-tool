@@ -225,25 +225,13 @@ def main() -> None:
 
     print(f"[MVP] VLM service OK. Model: {actual_model}")
     print(f"[MVP] Running {len(selected)} families × 10 VLM calls each.")
+    print(f"[MVP] Each family saved as its own txt in test_output/")
 
-    # Output file
     output_dir = _REPO_ROOT / "test_output"
     output_dir.mkdir(exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = output_dir / f"mvp_result_{ts}.txt"
 
-    output_blocks = []
-    header = (
-        f"MVP Multi-Agent VLM Pipeline — {ts}\n"
-        f"Model: {actual_model}\n"
-        f"Families: {len(selected)}  |  Calls per family: 10 (1+8+1)\n"
-        f"Workers (Step 2): {args.workers}\n"
-        f"{'═' * 72}\n"
-    )
-    output_blocks.append(header)
-    print(header)
-
-    pdf_extractor_inst = PDFImageExtractor(target_dpi=200)
+    saved_files = []
 
     for family_id, fam in selected.items():
         print(f"\n{'─'*60}")
@@ -255,8 +243,6 @@ def main() -> None:
             print(f"  [WARN] Missing child images: {missing}")
         if not child_paths:
             print(f"  [SKIP] No valid child images for {family_id}")
-            block = f"{'═'*72}\n零件 ID : {family_id}\n⚠️  跳過：無有效子圖\n{'═'*72}\n"
-            output_blocks.append(block)
             continue
 
         # Load parent
@@ -270,19 +256,26 @@ def main() -> None:
             parent_image=parent_img,
         )
 
+        # Per-family header
+        fam_header = (
+            f"MVP Multi-Agent VLM Pipeline — {ts}\n"
+            f"Model: {actual_model}\n"
+            f"Family: {family_id}  |  Calls: 10 (1+8+1)\n"
+            f"Workers (Step 2): {args.workers}\n"
+        )
         block = _fmt_result(family_id, result)
-        output_blocks.append(block)
 
-        # Stream-save after each family
+        # Sanitise family_id for use as a filename
+        safe_id = family_id.replace("/", "_").replace(" ", "_").replace("\\", "_")
+        out_path = output_dir / f"mvp_{safe_id}_{ts}.txt"
         with open(out_path, "w", encoding="utf-8") as f:
-            f.write("\n\n".join(output_blocks))
+            f.write(fam_header + "\n" + block)
+        saved_files.append(out_path.name)
         print(f"  [MVP] Saved → {out_path.name}")
 
-    # Final save
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write("\n\n".join(output_blocks))
-
-    print(f"\n[MVP] All done. Output: {out_path}")
+    print(f"\n[MVP] All done. {len(saved_files)} files saved:")
+    for name in saved_files:
+        print(f"  → {name}")
 
 
 if __name__ == "__main__":

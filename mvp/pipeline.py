@@ -46,7 +46,7 @@ class MVPPipeline:
         max_workers: int = 4,
         step1_max_tokens: int = 1024,
         step2_max_tokens: int = 1024,
-        step3_max_tokens: int = 2048,
+        step3_max_tokens: int = 4096,
     ):
         """
         Args:

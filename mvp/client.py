@@ -62,14 +62,14 @@ class MVPClient:
         self,
         base_url: str = VLM_BASE_URL,
         model: str = VLM_MODEL,
-        timeout: int = 300,
+        timeout: int = 1200,
     ):
         self.model = model
         self.client = OpenAI(
             base_url=base_url,
             api_key="not-needed",
             timeout=timeout,
-            max_retries=1,
+            max_retries=0,   # no auto-retry — let the caller decide
         )
 
     # ------------------------------------------------------------------
