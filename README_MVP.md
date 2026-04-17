@@ -1,3 +1,5 @@
+## 整個系統框架粗略設定
+
 <img width="4094" height="2282" alt="膠帶" src="https://github.com/user-attachments/assets/1d14ac52-0a74-4dfb-83dc-8ecabd00399d" />
 
 ---
@@ -994,6 +996,4 @@ python -m mvp.run --list
 
 ---
 
-## 整個構思
-<img width="4094" height="2282" alt="膠帶" src="https://github.com/user-attachments/assets/2e6dcb49-bd20-48fa-99b7-15062c8cb444" />
 
