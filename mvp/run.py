@@ -152,18 +152,16 @@ def _fmt_result(family_id: str, result: dict) -> str:
 
     # ── Step 2 ──
     lines.append("")
-    lines.append("▌ Step 2｜8 Agents 分類輸出")
+    lines.append("▌ Step 2｜4 Agents 分類輸出")
     lines.append("─" * 60)
     for agent_name, agent_out in result["step2"].items():
         lines.append(f"  【{agent_name}】")
         lines.append(f"  {agent_out}")
         lines.append("")
 
-    # ── Step 3 ──
+    # ── Step 3 (disabled) ──
     lines.append("")
-    lines.append("▌ Step 3｜最終製程彙整表")
-    lines.append("─" * 60)
-    lines.append(result["step3"] or "（無輸出）")
+    lines.append("▌ Step 3｜（已停用 — 彙整由團隊外部處理）")
     lines.append(sep)
     return "\n".join(lines)
 
@@ -228,7 +226,7 @@ def main() -> None:
         actual_model = pipeline.client.model
 
     print(f"[MVP] VLM service OK. Model: {actual_model}")
-    print(f"[MVP] Running {len(selected)} families × 10 VLM calls each.")
+    print(f"[MVP] Running {len(selected)} families × 5 VLM calls each (1+4, Step 3 disabled).")
     print(f"[MVP] Each family saved as its own txt in test_output/")
 
     output_dir = _REPO_ROOT / "test_output"
@@ -281,7 +279,7 @@ def main() -> None:
         fam_header = (
             f"MVP Multi-Agent VLM Pipeline — {ts}\n"
             f"Model: {actual_model}\n"
-            f"Family: {family_id}  |  Calls: 10 (1+8+1)  |  Mode: {mode_label}\n"
+            f"Family: {family_id}  |  Calls: 5 (1+4, Step3 disabled)  |  Mode: {mode_label}\n"
             f"Workers (Step 2): {args.workers}\n"
         )
         block = _fmt_result(family_id, result)

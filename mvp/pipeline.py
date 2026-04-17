@@ -1,9 +1,9 @@
 """
-MVPPipeline — 3-step multi-agent manufacturing process classifier.
+MVPPipeline — 2-step multi-agent manufacturing process classifier.
 
 Step 1 : 1 VLM call  — visual observer, outputs Chinese description
-Step 2 : 8 VLM calls (parallel via ThreadPoolExecutor) — category classifiers
-Step 3 : 1 VLM call  — consolidator, outputs final process table
+Step 2 : 4 VLM calls (parallel via ThreadPoolExecutor) — domain expert classifiers
+Step 3 : DISABLED — consolidation handled externally by the team
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ class MVPPipeline:
             max_workers:       ThreadPoolExecutor workers for Step 2 parallel calls.
             step1_max_tokens:  Max tokens for Step 1 observer output.
             step2_max_tokens:  Max tokens per Step 2 agent output.
-            step3_max_tokens:  Max tokens for Step 3 consolidator output.
+            step3_max_tokens:  Unused (Step 3 disabled). Kept for API compatibility.
         """
         kwargs: dict = {}
         if base_url:
@@ -137,17 +137,10 @@ class MVPPipeline:
         result["step2"] = step2_outputs
         print(f"[MVP] Step 2 done ({result['elapsed_step2']}s, {len(step2_outputs)} agents replied)")
 
-        # ── Step 3 ──────────────────────────────────────────────────
-        t0 = time.time()
-        print("[MVP] Step 3 — Consolidator...")
-        step3_output = self._step3_consolidate(step1_output, step2_outputs)
-        result["elapsed_step3"] = round(time.time() - t0, 1)
-
-        if not step3_output:
-            result["error"] = "Step 3 failed: VLM returned no output"
-            return result
-        result["step3"] = step3_output
-        print(f"[MVP] Step 3 done ({result['elapsed_step3']}s)")
+        # ── Step 3 — DISABLED ───────────────────────────────────────
+        result["step3"] = "（Step 3 已停用 — 彙整作業由團隊外部處理，請參閱 Step 2 各 Agent 輸出）"
+        result["elapsed_step3"] = 0.0
+        print("[MVP] Step 3 skipped (disabled)")
 
         return result
 
