@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from app.config import VLM_BASE_URL, VLM_MODEL
+from mvp.discovery import find_lm_studio_or_default
 
 try:
     from openai import OpenAI
@@ -55,18 +56,24 @@ class MVPClient:
     Minimal VLM client for the MVP multi-agent pipeline.
 
     Key difference from VLMClient: system_prompt is passed per-call,
-    enabling each of the 8 Step-2 agents to use its own system prompt.
+    enabling each of the 4 Step-2 agents to use its own system prompt.
+
+    If base_url is not provided (and VLM_BASE_URL env var is not set),
+    the client will auto-discover the LM Studio instance on the local network.
     """
 
     def __init__(
         self,
-        base_url: str = VLM_BASE_URL,
+        base_url: Optional[str] = None,
         model: str = VLM_MODEL,
         timeout: int = 1200,
     ):
         self.model = model
+        # Auto-discover LM Studio if no explicit URL given
+        resolved_url = base_url or find_lm_studio_or_default(fallback=VLM_BASE_URL)
+        self.base_url = resolved_url
         self.client = OpenAI(
-            base_url=base_url,
+            base_url=resolved_url,
             api_key="not-needed",
             timeout=timeout,
             max_retries=0,   # no auto-retry — let the caller decide
