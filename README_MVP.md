@@ -1,3 +1,4 @@
+<img width="4094" height="2282" alt="膠帶" src="https://github.com/user-attachments/assets/1d14ac52-0a74-4dfb-83dc-8ecabd00399d" />
 
 ---
 
@@ -993,11 +994,6 @@ python -m mvp.run --list
 
 ---
 
-## 測試結果（初步）
+## 整個構思
+<img width="4094" height="2282" alt="膠帶" src="https://github.com/user-attachments/assets/2e6dcb49-bd20-48fa-99b7-15062c8cb444" />
 
-**測試零件：** 5010-586800-11A（TEL / SUS304 / 1.5mm / 光纖雷射切割）  
-**模型：** gemma-4-26b-a4b-it（LM Studio 本地推論）  
-**輸入：** 父圖（未加註）+ 4 張子視圖，共 5 張  
-**總耗時：** Step1=62.7s / Step2=610.3s(8並行) / Step3=36.3s  
-
-> 詳細輸出見 `test_output/mvp_result_20260415_223811.txt`
