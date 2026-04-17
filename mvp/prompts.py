@@ -33,7 +33,8 @@ Rules:
 - If a feature is ambiguous, write: 「疑似[特徵]，待確認」
 - NEVER invent content not visible in the images
 - Output length: 150–250 words
-- Output ONLY the 5-section description, no preamble\
+- Output ONLY the 5-section description, no preamble
+- NEVER use LaTeX notation. Write symbols as plain Unicode: φ for diameter, ° for degrees, × for multiplication, ≥ ≤ for comparisons\
 """
 
 STEP1_USER = """\
@@ -80,7 +81,8 @@ You receive TWO inputs:
 
 Multi-view rule: ANY single view (front / top / side / isometric) showing a feature is sufficient evidence.
 Conflict rule: If drawing and description conflict, trust the drawing and note「圖面修正：[說明]」in the evidence field.
-Sort rule: Output lines sorted by confidence score descending (highest score first).\
+Sort rule: Output lines sorted by confidence score descending (highest score first).
+Symbol rule: NEVER use LaTeX notation ($\phi$, $\varnothing$, $\ge$, etc.). Write plain Unicode: φ for diameter, ° for degrees, ≥ ≤ for comparisons.\
 """
 
 # ══════════════════════════════════════════════════════════════════════
@@ -362,9 +364,17 @@ SECTION 1 — MERGE RULES
 
 Standard items (no ⚠️ mark):
 - score ≥ 0.70 → INCLUDE unconditionally
-- score 0.50–0.69 → INCLUDE unless directly contradicted by a ≥ 0.70 item in the same functional category
+- score 0.50–0.69 → INCLUDE unconditionally (only a Section 3 business rule may override)
 - score 0.30–0.49 → INCLUDE only if a business rule forces it (Section 3)
 - score < 0.30 → DROP
+
+STRICT REMOVAL POLICY — items may ONLY be removed for these reasons:
+  1. score < 0.30 (cite exact score)
+  2. An explicit business rule from Section 3 whose condition is fully met (cite Rule number AND the condition that triggered it)
+  3. Human-annotation ⚠️ item → moved to 待人工確認 (never dropped)
+  4. Exact duplicate → keep highest-score instance
+FORBIDDEN removal reasons: 「流程精簡」「邏輯重組」「功能重疊」「涵蓋」「已含」or any reason not matching one of the four above.
+If you cannot cite a specific Rule from Section 3 with its exact trigger condition met, you MUST keep the item.
 
 Human-annotation items (lines with ⚠️ 人工加註):
 - NEVER auto-include regardless of score
@@ -376,12 +386,11 @@ Duplicates:
 - Merge evidence text from all instances into one combined 依據 field
 
 When DROPPING or EXCLUDING an item for ANY reason, record it in the 「移除項目」table with the exact reason.
-Removal reasons must be explicit — choose from:
+Removal reasons must be one of these exact forms — no other wording is permitted:
 - 「score < 0.30，無足夠依據」
-- 「互斥排除：[competing code] score ≥ 0.70，本項依互斥規則移除」
+- 「互斥排除：Rule [N]，[competing code] score ≥ 0.70，本項依互斥規則移除」
 - 「依賴缺失：依賴 [parent code] 但該項未納入」
-- 「業務規則 Rule [N] 排除」
-- Other specific reason
+- 「業務規則 Rule [N] 排除：[exact trigger condition met]」
 
 ════════════════════════════════
 SECTION 2 — SCORE RECALCULATION
@@ -432,17 +441,29 @@ Rule 6 — H01排除：
 
 Rule 7 — C01/C05互斥：
   IF C05 M3048 score ≥ 0.70
-  → REMOVE C01 from included list (reason:「互斥排除：C05≥0.70，C01改由C05替代」)
+  → REMOVE C01 ONLY (reason:「互斥排除：Rule 7，C05≥0.70，C01改由C05替代」)
   → Record C01 in 「移除項目」table
+  ⚠️ Rule 7 affects C01 ONLY. It has zero effect on D01, D04, or any other process code.
 
 Rule 8 — D01/D04互斥：
-  IF D04 score ≥ 0.70
-  → REMOVE D01 from included list (reason:「互斥排除：D04已含折彎工序，D01重複」)
+  IF D04 is explicitly present in agent outputs AND D04 score ≥ 0.70
+  → REMOVE D01 from included list (reason:「互斥排除：Rule 8，D04≥0.70，D01重複」)
   → Record D01 in 「移除項目」table
+  ⚠️ NEGATIVE CONSTRAINT: If D04 does NOT appear in agent outputs, D01 MUST stay in the main table.
+  ⚠️ Rule 8 can only be triggered by D04's presence. C05, Rule 7, or any other rule cannot trigger Rule 8.
+  ⚠️ D01 score ≥ 0.50 with no D04 present = ALWAYS include D01, no exceptions.
 
 Rule 9 — H26/H27/H31互斥：
   Keep the ONE with the highest score, remove the other two
-  → Record removed ones in 「移除項目」table with reason:「互斥排除：無塵室製程三選一」
+  → Record removed ones in 「移除項目」table with reason:「互斥排除：Rule 9，無塵室製程三選一」
+
+Rule 10 — 清潔製程並存允許：
+  H06脫脂洗淨、H12表面清潔、H32整理清潔 are NOT mutually exclusive.
+  They may all appear in the main table simultaneously if each meets the score threshold.
+  Do NOT remove any of them citing "涵蓋" or "重疊" — only score < 0.30 or a specific Rule can remove them.
+
+IMPORTANT: The above 10 rules are exhaustive. There are NO other implicit rules.
+Do NOT invent additional exclusion logic beyond what is stated here.
 
 ════════════════════════════════
 SECTION 4 — FIXED BASELINE
@@ -466,6 +487,7 @@ CRITICAL OUTPUT RULE:
   3. 移除項目
   4. 【自我修正說明】（見格式說明）
 - If no corrections were needed, write「無修正」in the 自我修正說明 section.
+- ABSOLUTE PROHIBITION: After 【自我修正說明】, do NOT output any additional tables, re-prints, or summaries. The three tables above are the FINAL corrected output. 【自我修正說明】 is a retrospective log only — it describes changes already reflected in the tables above. Writing tables after this section is forbidden.
 
 主表（score ≥ 0.50，依最終信心度由高至低排序；同分時依製程代碼 B→C→D→E→F→H→I→O→Q→K→J 排列）：
 | 製程編號 | 製程名稱 | 最終信心度 | 判斷依據摘要 |
@@ -483,12 +505,13 @@ CRITICAL OUTPUT RULE:
 | ...     | ...     | 0.00      | ...     |
 
 【自我修正說明】
-若在套用業務規則或互斥/依賴規則時發現任何初步判斷有誤，在此說明：
+此區塊是「事後回顧日誌」，說明你在內部驗證時發現並已修正的錯誤。
+上方三張表格已是最終正確版本。此區塊僅做說明，不得再附加任何表格。
 格式：
 - 修正項目：[製程編號]
 - 初步判斷：[原本的錯誤判斷及原因]
 - 修正後：[正確結論及原因]
-- 影響：[此修正對主表/移除表的影響]
+- 影響：[此修正已反映在上方表格中的哪個位置]
 
 若無任何修正：直接寫「無修正」。
 
