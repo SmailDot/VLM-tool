@@ -188,7 +188,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--no-parent", action="store_true",
-        help="Skip parent PDF image (faster, tests child-only performance).",
+        help="Skip parent PDF image — send child images only.",
+    )
+    parser.add_argument(
+        "--parent-only", action="store_true",
+        help="Send parent PDF image only — skip all child images.",
     )
     args = parser.parse_args()
 
@@ -241,14 +245,23 @@ def main() -> None:
         child_paths, missing = _validate_children(fam["children"])
         if missing:
             print(f"  [WARN] Missing child images: {missing}")
-        if not child_paths:
-            print(f"  [SKIP] No valid child images for {family_id}")
-            continue
 
         # Load parent
         parent_img = None
         if not args.no_parent and fam.get("parent"):
             parent_img = _load_parent_pdf(fam["parent"])
+
+        # --parent-only: skip children, require parent
+        if args.parent_only:
+            if parent_img is None:
+                print(f"  [SKIP] --parent-only set but no parent available for {family_id}")
+                continue
+            child_paths = []
+            print(f"  [RUN] parent-only mode — sending parent image only")
+        else:
+            if not child_paths:
+                print(f"  [SKIP] No valid child images for {family_id}")
+                continue
 
         # Run pipeline
         result = pipeline.run(
@@ -256,18 +269,26 @@ def main() -> None:
             parent_image=parent_img,
         )
 
+        # Determine image mode label
+        if args.parent_only:
+            mode_label = "parent-only"
+        elif args.no_parent:
+            mode_label = "child-only"
+        else:
+            mode_label = "full"
+
         # Per-family header
         fam_header = (
             f"MVP Multi-Agent VLM Pipeline — {ts}\n"
             f"Model: {actual_model}\n"
-            f"Family: {family_id}  |  Calls: 10 (1+8+1)\n"
+            f"Family: {family_id}  |  Calls: 10 (1+8+1)  |  Mode: {mode_label}\n"
             f"Workers (Step 2): {args.workers}\n"
         )
         block = _fmt_result(family_id, result)
 
         # Sanitise family_id for use as a filename
         safe_id = family_id.replace("/", "_").replace(" ", "_").replace("\\", "_")
-        out_path = output_dir / f"mvp_{safe_id}_{ts}.txt"
+        out_path = output_dir / f"mvp_{safe_id}_{mode_label}_{ts}.txt"
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(fam_header + "\n" + block)
         saved_files.append(out_path.name)
