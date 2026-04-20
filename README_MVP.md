@@ -128,7 +128,7 @@ RAG相關度：0.80
 
 ### 信心度計算公式
 
-$$\text{Final Score} = \alpha \times \text{VLM\_Score} + (1-\alpha) \times \text{RAG\_Score}$$
+$$ \text{Final Score} = \alpha \cdot \text{VLM Score} + (1-\alpha) \cdot \text{RAG Score} $$
 
 其中 **α = 0.6**（偏重 VLM 視覺判斷），RAG 向量相似度為輔。
 
