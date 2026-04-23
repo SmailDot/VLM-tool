@@ -1,5 +1,4 @@
 # Manufacturing Process Selection Guide
-# 製程選擇參考手冊
 # Source: NKUST AIIAStudents Lab — 2026-01 (High + Medium frequency only)
 
 ## HOW TO USE THIS GUIDE
@@ -13,218 +12,218 @@ For each process entry below:
 
 ---
 
-## B — Administrative / Management  (管理製程)
+## B — Administrative / Management
 
 [B01] 繪圖者  (★★ HIGH)
-  Trigger  : 基本
+  Trigger  : always required (administrative step)
   Evidence : See trigger description
 
 [B02] 排版  (★★ HIGH)
-  Trigger  : 基本
+  Trigger  : always required (administrative step)
   Evidence : See trigger description
 
 ---
 
-## C — Cutting  (切割)
+## C — Cutting
 
 [C01] 單機切割  (★★ HIGH)
-  Trigger  : 基本，有M3048不做
+  Trigger  : always required for primary laser profile cutting; not required if M3048 (NCT forming) is assigned
   Evidence : See trigger description
 
 [C04] M2048  (★  MED)
-  Trigger  : 由排版去決定分攤M3048的工作
+  Trigger  : layout/nesting engineer decides whether to split the workload with M3048
   Evidence : See trigger description
 
 [C05] M3048  (★★ HIGH)
-  Trigger  : 圖面，備註規格: 抽牙M3/M4/M5 或製圖拆圖完有註明"中心沖)
+  Trigger  : drawing notes specify extruded hole tapping M3/M4/M5, or "center punch" annotation present
   Evidence : TEXT — look for text annotations on drawing
 
 ---
 
-## D — Bending & Insert  (折彎 / 植零件)
+## D — Bending & Insert
 
 [D01] 折彎  (★★ HIGH)
-  Trigger  : 基本,圖面有折彎的
+  Trigger  : always required when bending features (flanges, profiles) are present in the drawing
   Evidence : VISUAL — look for geometric shapes/profiles
 
 [D04] 折彎/植零件  (★★ HIGH)
-  Trigger  : 基本;圖面有植零件和折彎同時存在時
+  Trigger  : always required when both hardware insertion and bending features coexist in the drawing
   Evidence : VISUAL + TEXT — geometric features AND text annotation
 
 [D06] 植零件  (★★ HIGH)
-  Trigger  : 圖面有植零件:壓鉚螺帽;接地螺絲;浮動螺絲…等中文
+  Trigger  : drawing specifies hardware: press-nut, grounding screw, floating nut, standoff, etc.
   Evidence : TEXT — look for text annotations on drawing
 
 [D07] 植零件/折彎  (★  MED)
-  Trigger  : 現場或生技回饋要先植再折
+  Trigger  : shop floor or ME feedback: hardware must be inserted before bending sequence
   Evidence : See trigger description
 
 ---
 
-## E — Surface Finishing  (後處理)
+## E — Surface Finishing
 
 [E01] 去毛邊  (★★ HIGH)
-  Trigger  : 基本,去除毛邊+打亂花+攻牙+皿頭
+  Trigger  : always required: deburring + orbital sanding + tapping + countersink finishing
   Evidence : See trigger description
 
 [E02] 去毛邊2  (★  MED)
-  Trigger  : 1.有幾家客戶有指定2.0T的厚度若有折,需在折彎後加上「去毛邊2」磨除擠肉  2.折彎後孔變形
+  Trigger  : 1. certain customers require secondary deburring for ≥2.0mm thickness to remove material squeeze after bending; 2. apply if holes deform post-bending
   Evidence : See trigger description
 
 ---
 
-## F — Welding  (焊接)
+## F — Welding
 
 [F01] F01 焊接  (★★ HIGH)
-  Trigger  : 高;基本,焊接符號或圖面有"焊接"字眼
+  Trigger  : high-priority; always required when weld symbols or "WELD" annotations appear on the drawing
   Evidence : SYMBOL + TEXT — symbols AND text annotation
 
 [F03] F03 SPOT  (★  MED)
-  Trigger  : 圖面有spot 符號 及spot零件(焊接螺帽.點焊螺帽.點焊螺柱 ..)
+  Trigger  : drawing shows spot weld symbols or spot-weld hardware (weld nuts, weld studs, etc.)
   Evidence : SYMBOL + TEXT — symbols AND text annotation
 
 [F05] F05 廠內捲圓  (★  MED)
-  Trigger  : 圖面上的圓管樣但不在巿購件規格內,直徑大於70mm
+  Trigger  : drawing shows a cylindrical profile NOT available as a standard commercial part, diameter > 70mm
   Evidence : VISUAL + TEXT — geometric features AND text annotation
 
 [F06] F06 廠內裁管  (★  MED)
-  Trigger  : 一般是指圓棒或零件要裁長度
+  Trigger  : applies when round bars or structural tube stock require custom length cutting
   Evidence : See trigger description
 
 [F10] F10 植焊螺絲  (★  MED)
-  Trigger  : 零件:植焊螺絲(業務依圖決定零件)
+  Trigger  : part list: weld studs required (sales determines specific hardware based on drawing)
   Evidence : See trigger description
 
 [F11] F11 廠內烤漆  (★★ HIGH)
-  Trigger  : 1.圖面上有烤漆 2.業務有買色粉或廠內有色粉 3.圖面上有烤漆色號
+  Trigger  : 1. drawing specifies powder coating; 2. powder is available from sales; 3. paint color code annotated on drawing
   Evidence : TEXT (primary) + external info (customer/BOM note)
 
 [F14] F14 焊接研磨  (★★ HIGH)
-  Trigger  : 基本，通常接在「焊接」之後
+  Trigger  : always required; follows welding as a mandatory post-weld grinding step
   Evidence : See trigger description
 
 [F16] F16 自動焊接  (★  MED)
-  Trigger  : 中;現場回饋,要在自動焊接使用機械手臂焊接
+  Trigger  : medium-priority; shop floor requests robotic arm for automated welding
   Evidence : See trigger description
 
 [F20] F20 自動研磨  (★  MED)
-  Trigger  : 中;搭配「自動焊接」後的製程
+  Trigger  : medium-priority; paired as mandatory post-process after automated welding
   Evidence : See trigger description
 
 [F25] F25 光纖焊接  (★  MED)
-  Trigger  : 現場回饋,可以用「光纖焊接」
+  Trigger  : shop floor feedback: fiber laser welding applicable for this part
   Evidence : See trigger description
 
 ---
 
-## H — Cleaning & Packaging  (清洗 / 包裝)
+## H — Cleaning & Packaging
 
 [H01] H01 除焦洗淨  (★★ HIGH)
-  Trigger  : 白鐵焊接會需除焦,表處:烤漆則不用除焦
+  Trigger  : required after stainless steel welding; NOT required if surface treatment is powder coating
   Evidence : See trigger description
 
 [H02] H02 部品包裝  (★★ HIGH)
-  Trigger  : 基本 ;一般都要經過包裝才可出貨
+  Trigger  : always required; all parts must undergo final packaging before shipment
   Evidence : See trigger description
 
 [H03] H03 包裝網蓋貼  (★★ HIGH)
-  Trigger  : 圖面上有"網印,蓋印,貼紙"
+  Trigger  : drawing specifies screen printing, stamping, or label application
   Evidence : TEXT — look for text annotations on drawing
 
 [H08] H08 委外前處理  (★★ HIGH)
-  Trigger  : 一般要送委外前要包裝好避免碰撞
+  Trigger  : always required before outsourcing; parts must be packaged to prevent transit damage
   Evidence : See trigger description
 
 [H14] H14 廠內鈍化  (★  MED)
-  Trigger  : 客戶圖面上有鈍化
+  Trigger  : customer drawing specifies passivation treatment
   Evidence : TEXT — look for text annotations on drawing
 
 [H26] H26 燕巢無塵室清潔  (★  MED)
-  Trigger  : 圖面上有要求在無塵室等級
+  Trigger  : drawing specifies cleanroom-grade cleaning requirement
   Evidence : TEXT — look for text annotations on drawing
 
 [H27] H27 燕巢無塵室包裝  (★  MED)
-  Trigger  : 圖面上有要求在無塵室等級
+  Trigger  : drawing specifies cleanroom-grade packaging requirement
   Evidence : TEXT — look for text annotations on drawing
 
 [H31] H31 燕巢無塵室清潔/包裝  (★  MED)
-  Trigger  : 圖面上有要求在無塵室清潔+包裝
+  Trigger  : drawing specifies both cleanroom cleaning AND cleanroom packaging
   Evidence : TEXT — look for text annotations on drawing
 
 [H32] H32 整理清潔  (★  MED)
-  Trigger  : 「化學清洗」之前製程 (ASML專用)
+  Trigger  : preparatory step before chemical cleaning (specifically for ASML projects)
   Evidence : See trigger description
 
 ---
 
-## I — Inspection  (品檢)
+## I — Inspection
 
 [I01] 成品全檢  (★★ HIGH)
-  Trigger  : 基本,一般指包裝前的品檢
+  Trigger  : always required; standard quality inspection performed before packaging
   Evidence : See trigger description
 
 [I02] 成品全檢2  (★★ HIGH)
-  Trigger  : 第二次的品檢,工件有焊接或烤漆後的品檢
+  Trigger  : secondary inspection pass; required after welding or powder coating operations
   Evidence : See trigger description
 
 [I04] 測漏全檢  (★  MED)
-  Trigger  : 圖面有測漏或不可漏水
+  Trigger  : drawing specifies leak testing or waterproofing requirements
   Evidence : TEXT — look for text annotations on drawing
 
 [I14] 進料檢驗  (★  MED)
-  Trigger  : 指巿購件的加工,第一關
+  Trigger  : first-gate incoming inspection for purchased commercial parts
   Evidence : See trigger description
 
 [I19] 燕巢無塵室成品全檢  (★  MED)
-  Trigger  : 圖面上有要求在無塵室品檢
+  Trigger  : drawing requires final inspection to be performed within a cleanroom
   Evidence : TEXT — look for text annotations on drawing
 
 ---
 
-## K — CNC Machining  (切削)
+## K — CNC Machining
 
 [K01] 燕巢切削  (★  MED)
-  Trigger  : 無法用雷射加工+折彎成型,或公差太小
+  Trigger  : features cannot be achieved by laser and bending alone, or tolerances are too tight for standard sheet metal
   Evidence : VISUAL + TEXT — geometric features AND text annotation
 
 ---
 
-## O — Special / Design  (特殊 / 設計)
+## O — Special / Design
 
 [O02] 設計雷射雕刻  (★★ HIGH)
-  Trigger  : 圖上有雕刻
+  Trigger  : drawing specifies laser engraving or marking
   Evidence : TEXT — look for text annotations on drawing
 
 [O14] 生技課  (★  MED)
-  Trigger  : 研發件或測試件完成後的最後一關
+  Trigger  : final quality gate for R&D prototypes or test samples before delivery
   Evidence : See trigger description
 
 ---
 
-## Q — Assembly & Treatment  (組裝 / 表處)
+## Q — Assembly & Treatment
 
 [Q01] Q01 組裝  (★★ HIGH)
-  Trigger  : 拉打,拉帽,組裝零件或工件組裝
+  Trigger  : assembly operations: pull-riveting, pull-nuts, hardware integration, or sub-assembly joining
   Evidence : See trigger description
 
 [Q04] Q04 清潔/脫脂/鉻酸鹽  (★  MED)
-  Trigger  : 圖面有鉻酸鹽
+  Trigger  : drawing specifies chromate conversion coating (Alodine)
   Evidence : TEXT — look for text annotations on drawing
 
 [Q07] Q07 防烤/表處遮蔽  (★  MED)
-  Trigger  : 圖面上有不烤漆或防烤或請遮蔽字樣
+  Trigger  : drawing notes: "No Paint", "Anti-paint", or "Masking Required"
   Evidence : TEXT — look for text annotations on drawing
 
 [Q11] Q11 燕巢無塵室組裝  (★  MED)
-  Trigger  : 圖面上有要求在無塵室組裝
+  Trigger  : drawing requires assembly to be performed within a cleanroom environment
   Evidence : TEXT — look for text annotations on drawing
 
 ---
 
-## J — Warehouse  (倉庫)
+## J — Warehouse
 
 [J01] 燕巢倉庫  (★★ HIGH)
-  Trigger  : 基本
+  Trigger  : always required (warehouse/inventory step)
   Evidence : See trigger description
 
 ---

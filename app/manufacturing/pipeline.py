@@ -265,12 +265,12 @@ class ManufacturingPipeline:
             structure = parent_context_payload.get("3d_structure")
             if structure:
                 parent_prompt = (
-                    f"【全域幾何背景】 此零件為一個 {structure}。"
-                    "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                    f"=== GLOBAL GEOMETRY CONTEXT: This part is a {structure}. "
+                    "Use this context when analyzing the current drawing's features and processes. ===\n\n"
                     f"{parent_prompt}"
                 )
             if parent_report:
-                parent_prompt = f"【父圖全域分析報告】{parent_report}\n\n{parent_prompt}"
+                parent_prompt = f"=== PARENT DRAWING GLOBAL ANALYSIS REPORT ===\n{parent_report}\n=== END OF PARENT REPORT ===\n\n{parent_prompt}"
 
         # ── auto_crop：當未傳入 child_images 且圖寬比符合多視角特徵時，自動切圖 ──
         if not child_images and self.auto_crop:
@@ -397,17 +397,16 @@ class ManufacturingPipeline:
                 system_anchors=system_anchors,
                 process_guide=self._process_guide,
             )
-            # 保留父圖全域背景注入
             structure = parent_context_payload.get("3d_structure")
             if structure:
                 _initial_prompt = (
-                    f"【全域幾何背景】 此零件為一個 {structure}。"
-                    "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                    f"=== GLOBAL GEOMETRY CONTEXT: This part is a {structure}. "
+                    "Use this context when analyzing the current drawing's features and processes. ===\n\n"
                     f"{_initial_prompt}"
                 )
             parent_report = self._build_parent_report(parent_context, parent_context_payload)
             if parent_report:
-                _initial_prompt = f"【父圖全域分析報告】{parent_report}\n\n{_initial_prompt}"
+                _initial_prompt = f"=== PARENT DRAWING GLOBAL ANALYSIS REPORT ===\n{parent_report}\n=== END OF PARENT REPORT ===\n\n{_initial_prompt}"
         elif parent_prompt:
             _initial_prompt = parent_prompt
         elif system_anchors:
@@ -473,8 +472,8 @@ class ManufacturingPipeline:
                 structure = parent_context_payload.get("3d_structure")
                 if structure:
                     prompt = (
-                        f"【全域幾何背景】 此零件為一個 {structure}。"
-                        "請基於此背景分析當前圖片的製程與特徵。\n\n"
+                        f"=== GLOBAL GEOMETRY CONTEXT: This part is a {structure}. "
+                        "Use this context when analyzing the current drawing's features and processes. ===\n\n"
                         f"{prompt}"
                     )
                 vlm_result = self.vlm_client.analyze_image(

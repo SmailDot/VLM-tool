@@ -145,7 +145,7 @@ def get_vlm_descriptive_prompt(bom_context: str = "", rag_context: str = "", sys
             "### 4. PROCESS SELECTION\n"
             "Based on the drawing observations above AND the Process Selection Guide:\n"
             "For EACH process you select, use EXACTLY this one-line format:\n"
-            "  - [ID] 製程名稱: <one sentence of visual/textual evidence from this drawing>\n"
+            "  - [ID] <process name>: <one sentence of visual/textual evidence from this drawing>\n"
             "Rules:\n"
             "  • Administrative processes B01, B02, J01 are ALWAYS included — no justification needed\n"
             "  • Only select processes where you found clear evidence in Sections 1–3\n"
