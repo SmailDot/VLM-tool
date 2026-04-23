@@ -22,11 +22,11 @@ Do NOT make recommendations.
 Analyze all provided images together as one part. Output a single unified description \
 in Traditional Chinese covering these 5 sections in order:
 
-1. 材料/表面標註：圖面上出現的材質文字、表面符號、塗裝色號、防烤/遮蔽標記
-2. 幾何特徵：折彎線、孔位、螺紋孔、沉頭孔、切口、圓管、凸台、溝槽
-3. 焊接/接合特徵：焊接符號、點焊標記、鉚合符號、組立關係
-4. 文字標註與備註：所有中英文備註、公差要求、特殊加工指示、客戶規格文字
-5. 整體判斷：零件類型（單件鈑金/組合件/管件/其他）、複雜度（簡單/中等/複雜）
+1. Material / Surface Annotations: material text, surface finish symbols, paint color codes, anti-paint / masking marks visible on the drawing
+2. Geometric Features: bend lines, hole patterns, threaded holes, countersink holes, cutouts, cylindrical tubes, bosses, grooves
+3. Welding / Joining Features: weld symbols, spot-weld marks, rivet symbols, assembly relationship indicators
+4. Text Annotations & Notes: all Chinese/English notes, tolerance callouts, special processing instructions, customer specification text
+5. Overall Assessment: part type (single sheet-metal part / assembly / tube part / other), complexity (simple / medium / complex)
 
 Rules:
 - If a feature is ambiguous, write: 「疑似[特徵]，待確認」
@@ -37,7 +37,7 @@ Rules:
 """
 
 STEP1_USER = """\
-請分析這套工程圖（父圖 + 子視圖），依照系統指示輸出五段描述。\
+Please analyze this engineering drawing set (parent drawing + child views) and output a five-section description following the system instructions.\
 """
 
 # ══════════════════════════════════════════════════════════════════════
@@ -45,158 +45,159 @@ STEP1_USER = """\
 # ══════════════════════════════════════════════════════════════════════
 
 STEP2_USER_TMPL = """\
-你同時收到以下兩個輸入：
+You are receiving the following two inputs simultaneously:
 
-【Step1 觀察描述】
+[Step 1 Observation Description]
 {step1_output}
 
-【工程圖】
-（父圖 + 子圖已附於此訊息中）
+[Engineering Drawing]
+(Parent drawing + child views are attached to this message)
 
-請對照圖面與描述進行分析。若圖面與描述有衝突，以圖面為準，並在依據欄標注「圖面修正：[說明]」。\
+Cross-reference the drawing against the description when analyzing. \
+If the drawing and description conflict, trust the drawing and note 「圖面修正：[說明]」in the evidence field.\
 """
 
 # ── Static RAG injection for each domain (placeholder until real RAG is wired) ──
-# Each entry uses RAG相關度 = 0.80 (domain pre-filtered, no actual similarity ranking yet)
+# Each entry uses RAG relevance score = 0.80 (domain pre-filtered, no actual similarity ranking yet)
 
 _RAG_GEOMETRY = """\
 C01 單機切割
-RAG相關度：0.80
-自然語言描述：單機切割屬於基本加工製程，其判斷邏輯優先考慮圖面整體的輪廓成型需求，但具備排他性的決定因素，即當製程中已存在 M3048（中心沖/抽牙）編號時，基於過往工序整合與加工效率的經驗分析，將自動取消單機切割工序，轉由具備複合加工能力的機台或後續整合製程來承接。
+RAG relevance: 0.80
+Description: Laser Cutting is the baseline profile-cutting process. Selection logic: always triggered by the need to cut the overall outline from flat sheet. Exclusive condition: if M3048 (center punch / extruded hole tapping) is already assigned in the process plan, laser cutting is automatically cancelled and the work is transferred to a machine with integrated forming capability.
 
 C03 複合機
-RAG相關度：0.80
-自然語言描述：複合機製程的判定主要源於圖面中揭示的特殊結構特徵與材質屬性，當圖紙任一視圖中出現架橋（Bridge）結構或通風孔位，且指定材質為 PP 瓦楞板時，便會依據過往針對多孔隙輕量化材料的加工經驗，自動觸發複合式加工工序，以確保在維持材料物理強度的前提下，精準達成結構成型與排氣功能。
+RAG relevance: 0.80
+Description: NCT/Laser Combo Machining is triggered by specific structural features and material properties visible in the drawing. When any view shows a bridge (tab/bridge) structure or ventilation hole pattern and the specified material is PP corrugated board, this combined processing sequence is automatically triggered to achieve structural forming and ventilation function while maintaining the material's physical strength.
 
 C05 M3048
-RAG相關度：0.80
-自然語言描述：圖面幾何特徵與規格備註的雙重識別，當圖紙任一視圖中出現抽牙（如 M3、M4、M5 等規格）的標記，或是在製圖與拆圖階段明確註明「中心沖」特徵時，系統將結合過往對孔位預處理的工藝經驗，自動觸發此項用於定位或螺紋強化成型的決定性製程。
+RAG relevance: 0.80
+Description: NCT Forming & Tapping is triggered by dual recognition — when any drawing view shows extruded-hole tapping callouts (e.g. M3, M4, M5), or when "center punch" is explicitly annotated during drafting or part breakout. This process is triggered to perform extrusion forming and thread strengthening at the designated hole locations.
 
 D01 折彎
-RAG相關度：0.80
-自然語言描述：折彎製程通常由圖面中任一視角所辨識出的幾何特徵（如折彎線或視角轉折）作為基本觸發點，並在客戶備註要求高精度公差、或根據過往經驗判斷材料具備高回彈物理特性時，進一步由基本工序轉化為需考量模具補償與空間避位的專業成型決策。
+RAG relevance: 0.80
+Description: Press Brake Bending is triggered by geometric features visible in any view (bend lines or profile transitions indicating a 3D shape formed from flat sheet). When customer notes require high-precision tolerances or material properties indicate high springback, this escalates from a basic operation to a precision forming decision requiring tooling compensation and clearance planning.
 
 D10 折彎整平
-RAG相關度：0.80
-自然語言描述：折彎整平製程的觸發並非基於常規邏輯，而是當一般整平工序經由技術評估或模擬測試確認無法達到圖面要求的平整度或幾何精度時，依據過往針對應力釋放的工藝經驗與實測數據，判定必須透過折彎動作產生的塑性變形來強行導正板材，進而達成最終品質標準的決定性工序。
+RAG relevance: 0.80
+Description: Post-Bend Straightening is triggered not by standard logic, but when conventional leveling has been confirmed — through technical evaluation or simulation — to be insufficient to achieve the flatness or geometric accuracy specified in the drawing. The plastic deformation induced by the bending action is used to forcibly correct the sheet to final quality standards.
 
 E11 燕巢傳統銑床
-RAG相關度：0.80
-自然語言描述：當圖面中的幾何公差標註過於嚴苛（如孔位尺寸公差超出了雷射熱加工所能負擔的誤差範圍，通常指公差小於 ±0.05mm），或是存在無法僅靠貫穿切割達成的沉頭孔（Countersink）位時，系統將結合過往對材料熱影響區（HAZ）變形量的大數據分析，判定轉由具備物理切削優勢的技術來執行，以確保孔徑的真圓度、位置度以及精確的階梯深度表現。
+RAG relevance: 0.80
+Description: Conventional Milling (Yanchao) is triggered when geometric tolerances in the drawing are too tight for laser thermal processing (typically tolerances tighter than ±0.05mm), or when countersink (CSK) features exist that cannot be achieved by through-cutting alone. The heat-affected zone (HAZ) deformation limitations of laser processing make physical cutting the only viable approach for achieving true circularity, positional accuracy, and precise step depth.
 
 F05 廠內捲圓
-RAG相關度：0.80
-自然語言描述：當圖面工程圖或零件視角中呈現出圓柱狀幾何特徵，且其尺寸規格經比對後確認不屬於市購標準管材（特別是直徑大於 70mm 的非標尺寸時），系統將結合過往對大直徑工件成型能力的數據評估，判定需捨棄成品採購而改採平板材料進行板金捲圓加工，以在確保圓度與結構強度的前提下，彈性達成特殊管徑與板厚要求的定製化成型需求。
+RAG relevance: 0.80
+Description: Plate Rolling is triggered when any engineering view shows a cylindrical geometry whose dimensions are confirmed NOT to match any standard commercial tube specification — especially non-standard diameters exceeding 70mm. Rather than purchasing a finished tube, flat sheet stock is roll-formed to achieve the custom diameter and wall thickness while maintaining roundness and structural integrity.
 
 F06 廠內裁管
-RAG相關度：0.80
-自然語言描述：針對圖面視角中呈現的圓柱體、實心圓棒或管狀幾何特徵，並結合規格備註中對於「長度切割」或特定的長度數值標記（如 L 值標註），自動觸發將長型原材料進行定長化處理的決策。
+RAG relevance: 0.80
+Description: Tube Sawing/Cutting is triggered when any drawing view shows cylindrical bodies, solid round bars, or tube geometry, combined with length annotations (e.g. L-value callouts) or "cut to length" notes in the specifications.
 
 K01 燕巢切削
-RAG相關度：0.80
-自然語言描述：當圖面視角中呈現出雷射切割無法實現的厚重實體、具備深孔、盲孔或複雜的三維曲面特徵，或是標註的幾何公差與尺寸精度已超出一般板金折彎的物理極限（例如要求 ±0.01mm 以內的極精密公差）時的製程決策。\
+RAG relevance: 0.80
+Description: Precision Machining (Yanchao) is triggered when drawing views show solid or thick features that cannot be achieved by laser cutting alone, or contain deep holes, blind holes, or complex 3D curved surfaces, or when specified geometric tolerances exceed the physical limits of standard sheet metal processes (e.g. tolerances tighter than ±0.01mm).\
 """
 
 _RAG_STRUCTURAL = """\
 D06 植零件
-RAG相關度：0.80
-自然語言描述：植零件製程主要是透過圖面任一視角中辨識出的特定硬體特徵（如壓鉚螺帽、接地螺絲或浮動螺絲等中英日文標註）來決定，不論是經由視覺化的孔位特徵判斷，或是依據客戶備註與過往經驗識別出需進行壓力嵌合或緊固件植入的工序，皆會觸發此項基本製程判斷。
+RAG relevance: 0.80
+Description: Hardware Insertion (PEM/Press-fit) is determined by identifying specific hardware features in any drawing view — press nuts, grounding screws, floating nuts, standoffs, etc. (annotated in Chinese, Japanese, or English). Whether identified visually from hole features or from customer notes indicating press-fit or fastener insertion requirements, this baseline process is triggered.
 
 F01 焊接
-RAG相關度：0.80
-自然語言描述：透過辨識圖面任一視角中出現的熔接符號、文字標註或特定組件的重疊特徵，自動觸發將分散零件轉化為一體化固定結構的加工邏輯。此判斷會進一步依據材料厚度與結構強度需求進行細分：若涉及高品質外觀、氣密性或高強度結構連接，系統會依據過往經驗關聯至亞焊（氬焊）等連續性熔接工法；而針對大批量、薄板件的快速固定，則會自動識別為點焊工序。
+RAG relevance: 0.80
+Description: TIG/MIG Welding is triggered by identifying weld symbols, text annotations, or overlapping component interfaces in any drawing view. The judgment is further refined by material thickness and structural strength: for high-quality appearance, airtightness, or high-strength connections, continuous fusion welding (TIG/argon) is implied; for high-volume thin-sheet rapid fixation, spot welding is identified instead.
 
 F03 SPOT
-RAG相關度：0.80
-自然語言描述：經由辨識圖面任一視角中出現的專屬符號或點焊型硬體（如焊接螺帽、點焊螺柱等），自動觸發以局部高電流熔核為核心的電阻焊接決策，這類工序不僅是基於圖面的幾何定位需求，更深層整合了對於薄板加工中熱影響區（HAZ）最小化、以及在自動化量產時對緊固件精準度與生產週期的嚴格管控經驗。
+RAG relevance: 0.80
+Description: Resistance Spot Welding is triggered by identifying dedicated spot-weld symbols or spot-weld hardware (weld nuts, weld studs, etc.) in any drawing view. This process integrates requirements for minimizing the heat-affected zone (HAZ) in thin-sheet processing and strict control of fastener precision and production cycle time in automated manufacturing.
 
 F14 焊接研磨
-RAG相關度：0.80
-自然語言描述：只要圖面任一視圖中出現「焊接」標記，系統便會基於工序鏈的邏輯完整性，將此判定為熔接後必須執行的銜接程序。這項決策主要針對焊接後產生的凸起焊道（Weld Bead）與金屬飛濺進行物理平整化，以確保零件表面的幾何連續性並消除因熱應力產生的微小變形。
+RAG relevance: 0.80
+Description: Weld Grinding/Dressing is automatically triggered whenever a welding annotation appears in any drawing view. Based on process chain logic, this is a mandatory post-weld step to physically flatten raised weld beads and metal spatter, ensuring geometric continuity of the part surface and eliminating micro-deformations caused by thermal stress.
 
 F23 應力消除
-RAG相關度：0.80
-自然語言描述：當客戶圖面或技術備註中明確標註此項需求時，通常反映了零件具備極高的尺寸穩定性要求，或是在經歷大面積切削、高強度焊接等製程後產生了嚴重的內部殘餘應力（Residual Stress）。這項決策結合了過往對於材料微觀結構變化的數據分析，判定必須透過受控的熱處理循環來釋放內部的物理張力。
+RAG relevance: 0.80
+Description: Thermal Stress Relieving is triggered when explicitly required by the customer drawing or technical notes. This typically indicates the part has extremely high dimensional stability requirements, or has accumulated significant internal residual stress from large-area machining or high-intensity welding. A controlled heat treatment cycle is required to release the internal physical tension.
 
 Q01 組裝
-RAG相關度：0.80
-自然語言描述：透過辨識圖面任一視角中呈現的多組件干涉界面、特定緊固件符號（如拉帽、拉打或彈簧銷標註）或明確的組件清單（BOM），自動觸發將各別工件轉化為一體化模組的連接決策。\
+RAG relevance: 0.80
+Description: Mechanical Assembly is triggered by identifying multi-component interference interfaces, specific fastener callouts (pull-nut, pull-rivet, spring-pin annotations), or an explicit Bill of Materials (BOM) in any drawing view — converting individual workpieces into an integrated module.\
 """
 
 _RAG_SURFACE = """\
 E01 去毛邊
-RAG相關度：0.80
-自然語言描述：確保零件表面的平整與安全性，通常由圖面中定義的切割邊緣自動觸發，並根據客戶對外觀或裝配的特定要求，進一步整合打亂花（表面處理）、攻牙或皿頭（沉孔）等後續加值工序，形成一套基於過往品質控制經驗所建構的綜合性表面修飾製程。
+RAG relevance: 0.80
+Description: Deburring ensures surface flatness and safety. It is automatically triggered by cut edges defined in the drawing, and further incorporates orbital sanding (surface blending), tapping, or countersink finishing based on customer appearance or assembly requirements — forming a comprehensive surface finishing process chain built from past quality control experience.
 
 E02 去毛邊2
-RAG相關度：0.80
-自然語言描述：主要針對特定客戶在板材厚度達 2.0T 且圖面顯示具備折彎特徵時，為了解決折彎 R 角處因金屬塑性流動產生的「擠肉」（凸起）現象，以及修正孔位因鄰近折彎線受拉伸而產生的幾何變形，依據過往精密加工的數據回饋，判定需在成型後進行局部磨除與修正，以確保零件在後續組裝時的平整度與孔位機能性。
+RAG relevance: 0.80
+Description: Secondary Deburring is specifically applied to parts with ≥2.0mm material thickness that show bending features. It addresses material squeeze flash at the bend radius caused by plastic flow during bending, and corrects hole distortion caused by tensile stress near bend lines. Post-forming local grinding and correction ensures flatness and hole functionality for subsequent assembly.
 
 F11 廠內烤漆
-RAG相關度：0.80
-自然語言描述：當圖面任一視角中出現明確的塗裝特徵標註、特定顏色代號（如 RAL 或 Pantone 色號），或經由廠內物料管理系統（ERP）偵測到已採購或庫存特定色粉之紀錄時，系統將結合視覺識別、規格參數與供應鏈數據，自動觸發針對零件表面的防護與美化決策。
+RAG relevance: 0.80
+Description: In-house Powder Coating is triggered when any drawing view shows an explicit coating annotation, a specific color code (e.g. RAL or Pantone), or when the factory ERP system detects that a specific powder color has been purchased or is in stock. Visual recognition, specification parameters, and supply chain data are combined to trigger this surface protection and finishing decision.
 
 H01 除焦洗淨
-RAG相關度：0.80
-自然語言描述：當系統識別零件材質為不鏽鋼（白鐵）且具備焊接工徵時，基於恢復材料物理抗蝕性與移除焊後氧化皮膜（Oxide Scale）的必要性，會自動判定執行除焦洗淨工序。然而，若後續工藝標註為表面烤漆處理，則會自動判定無需進行額外的除焦清洗。
+RAG relevance: 0.80
+Description: Post-Weld Descaling is triggered when the part material is identified as stainless steel and welding features are present. The goal is to restore the material's corrosion resistance by removing post-weld oxide scale. Exception: if subsequent processing specifies powder coating, descaling is automatically determined to be unnecessary.
 
 H03 包裝網蓋貼
-RAG相關度：0.80
-自然語言描述：當圖面中標註有「網印」、「蓋印」或「貼紙」等視覺化識別指示時，系統將自動觸發產品末端的資訊賦予與包裝識別工序。
+RAG relevance: 0.80
+Description: Packaging & Labeling/Stenciling is triggered when the drawing specifies "screen print", "stamp", or "label" visual identification instructions — activating the end-of-line information marking and packaging identification process.
 
 H04 鋁洗淨
-RAG相關度：0.80
-自然語言描述：主要依據客戶訂單需知或圖紙中任何形式的文字備註（如材質洗淨或特定表面處理指示）來觸發決策，其核心目標在於徹底清除鋁合金表面的自然氧化層與加工過程殘留的切削油漬。
+RAG relevance: 0.80
+Description: Aluminum Etching/Cleaning is triggered by customer order notes or any text annotation in the drawing (e.g. material cleaning or specific surface treatment instructions). The primary goal is to thoroughly remove the natural oxide layer and machining oil residue from aluminum alloy surfaces.
 
 H06 脫脂洗淨
-RAG相關度：0.80
-自然語言描述：主要依據圖面規範或客戶端的特定技術需求，觸發針對零件表面殘留油脂（如加工冷卻液或切削油）的清除決策。這項工序不僅是為了滿足客戶對於微觀清潔度的顯性標準，更深度整合了過往針對介面附著力（Interfacial Adhesion）的數據分析，判定必須透過脫脂程序提升表面能，以確保零件在後續電鍍、烤漆或精密組裝過程中能有效防止塗層剝落。
+RAG relevance: 0.80
+Description: Chemical Degreasing is triggered by drawing specifications or specific customer technical requirements to remove surface residual oils (machining coolant, cutting oil). Beyond meeting explicit cleanliness standards, this process improves surface energy to ensure effective adhesion during subsequent plating, powder coating, or precision assembly — preventing coating delamination.
 
 H14 廠內鈍化
-RAG相關度：0.80
-自然語言描述：當圖面規格或客戶技術備註中明確提出此項需求時，系統將自動觸發針對不鏽鋼或耐蝕合金的化學轉化處理決策。這項工序的核心在於利用受控的化學反應移除金屬表面的游離鐵與加工雜質，並誘導形成一層極薄且緻密的富鉻氧化膜（Passive Layer）。
+RAG relevance: 0.80
+Description: In-house Passivation is triggered when drawing specifications or customer technical notes explicitly require it. The process uses controlled chemical reactions to remove free iron and machining contaminants from the stainless steel surface, inducing formation of a thin, dense chromium-rich passive oxide layer for enhanced corrosion resistance.
 
 O02 設計雷射雕刻
-RAG相關度：0.80
-自然語言描述：透過辨識圖面中任一視角所呈現的文字、字母或特定識別代碼，並對應到「雕刻」等加工指示時，系統將自動觸發高精度雷射表面標記的設計決策。
+RAG relevance: 0.80
+Description: Laser Marking Layout Design is triggered when any drawing view shows text, letters, or specific identification codes corresponding to "engraving" or marking instructions — activating the high-precision laser surface marking design decision.
 
 Q04 清潔/脫脂/鉻酸鹽
-RAG相關度：0.80
-自然語言描述：當辨識到圖面或技術文件中出現「鉻酸鹽」字眼時，將觸發包含清潔、脫脂及化學皮膜處理的複合製程決策。
+RAG relevance: 0.80
+Description: Surface Pre-treatment (Alodine/Chromate) is triggered when "chromate" or equivalent terms are identified in the drawing or technical documents — activating a combined process sequence of cleaning, degreasing, and chemical conversion coating.
 
 Q07 防烤/表處遮蔽
-RAG相關度：0.80
-自然語言描述：當圖面中標註「不烤漆」、「防烤」或「請遮蔽」等明確指示時，系統將自動觸發針對特定功能區域的物理隔離決策。這項製程的核心在於保護零件上的關鍵導電點、高精度配合面或細緻螺紋，防止因漆層厚度（Film Build-up）或化學皮膜改變原設計的幾何公差。\
+RAG relevance: 0.80
+Description: Masking for Surface Treatment is triggered when the drawing specifies "No Paint", "Anti-paint", or "Masking Required". The core purpose is to protect key conductive points, high-precision mating surfaces, or fine threads from coating buildup (film build-up) that would alter the designed geometric tolerances.\
 """
 
 _RAG_QA = """\
 H26 燕巢無塵室清潔
-RAG相關度：0.80
-自然語言描述：當圖面規範中明確指定需符合特定清潔等級（如 ISO Class 級別或 Class 100/1000 等無塵標準）時，系統將自動觸發針對微塵粒子與化學殘留的嚴格移除程序。
+RAG relevance: 0.80
+Description: Cleanroom Cleaning (Yanchao) is triggered when drawing specifications explicitly require a specific cleanliness level (e.g. ISO Class or Class 100/1000 cleanroom standard), activating strict removal procedures for micro-particles and chemical residues.
 
 H27 燕巢無塵室包裝
-RAG相關度：0.80
-自然語言描述：當圖面規範明確指定需符合特定無塵室等級要求時，系統將自動觸發在受控環境下進行最終密封的防護決策。這項工序的核心在於利用專用的包材（如雙層抗靜電袋或真空封裝）來維持零件在清洗後的極致潔淨狀態。
+RAG relevance: 0.80
+Description: Cleanroom Packaging (Yanchao) is triggered when drawing specifications explicitly require a cleanroom-grade environment, activating final sealing in a controlled environment. Specialized packaging materials (e.g. double anti-static bags or vacuum sealing) maintain the part's extreme cleanliness after washing.
 
 I02 成品全檢2
-RAG相關度：0.80
-自然語言描述：當零件經歷過焊接或烤漆等涉及高溫熱變形與表面物理改質的關鍵工序後，系統會依據工藝邏輯的完整性自動觸發二次成品全檢。
+RAG relevance: 0.80
+Description: Secondary Final Inspection is automatically triggered after parts have undergone welding or powder coating — processes involving high-temperature thermal deformation and surface physical modification. Process chain logic requires a second full inspection to verify dimensional recovery and surface quality.
 
 I04 測漏全檢
-RAG相關度：0.80
-自然語言描述：透過辨識圖面任一視角中出現的「測漏」或「不可漏水」等明確功能性要求，自動觸發針對組件密封完整性的全數檢驗程序。
+RAG relevance: 0.80
+Description: 100% Leak Testing is triggered by identifying explicit functional requirements such as "leak test" or "no water ingress" in any drawing view — activating a 100% inspection of component sealing integrity.
 
 I12 保壓測試
-RAG相關度：0.80
-自然語言描述：當圖面中出現明確的保壓標註或壓力維持參數時，系統將自動觸發針對組件結構穩定性與長效密封能力的嚴格驗證程序。
+RAG relevance: 0.80
+Description: Pressure Retention Test is triggered when explicit pressure-hold annotations or pressure maintenance parameters appear in the drawing, activating strict verification of component structural stability and long-term sealing capability.
 
 I19 燕巢無塵室成品全檢
-RAG相關度：0.80
-自然語言描述：當工程圖面上出現「無塵室品檢」標註時，系統將自動觸發在受控環境下執行最終品質校驗的決策。
+RAG relevance: 0.80
+Description: Cleanroom Final QC is triggered when a "cleanroom inspection" annotation appears on the engineering drawing, activating final quality verification performed in a controlled cleanroom environment.
 
 Q11 燕巢無塵室組裝
-RAG相關度：0.80
-自然語言描述：當辨識到工程圖面上標註「在無塵室組裝」之要求時，系統將自動觸發在高度受控環境下的模組整合決策。\
+RAG relevance: 0.80
+Description: Cleanroom Integration is triggered when "assemble in cleanroom" requirements are identified on the engineering drawing, activating module integration in a highly controlled environment.\
 """
 
 # ══════════════════════════════════════════════════════════════════════
@@ -236,8 +237,7 @@ If a RAG candidate has absolutely zero basis from any view or description, you m
 
 Output in Traditional Chinese. No preamble. No extra text.
 
-【RAG 檢索結果】
-以下是與本視角最相關的製程候選清單（依相關度排序）：
+[RAG Retrieved Candidate List — sorted by relevance to this domain]
 
 {_RAG_GEOMETRY}\
 """
@@ -281,8 +281,7 @@ Output format (one line per process with any possibility):
 
 Output in Traditional Chinese. No preamble. No extra text.
 
-【RAG 檢索結果】
-以下是與本視角最相關的製程候選清單（依相關度排序）：
+[RAG Retrieved Candidate List — sorted by relevance to this domain]
 
 {_RAG_STRUCTURAL}\
 """
@@ -322,8 +321,7 @@ Output format (one line per process with any possibility):
 
 Output in Traditional Chinese. No preamble. No extra text.
 
-【RAG 檢索結果】
-以下是與本視角最相關的製程候選清單（依相關度排序）：
+[RAG Retrieved Candidate List — sorted by relevance to this domain]
 
 {_RAG_SURFACE}\
 """
@@ -367,8 +365,7 @@ Output format (one line per process with any possibility):
 
 Output in Traditional Chinese. No preamble. No extra text.
 
-【RAG 檢索結果】
-以下是與本視角最相關的製程候選清單（依相關度排序）：
+[RAG Retrieved Candidate List — sorted by relevance to this domain]
 
 {_RAG_QA}\
 """
@@ -380,11 +377,11 @@ Output in Traditional Chinese. No preamble. No extra text.
 # ══════════════════════════════════════════════════════════════════════
 
 STEP3_SYSTEM = """\
-（Step 3 已停用 — 彙整作業由團隊外部處理）\
+(Step 3 is disabled — consolidation is handled by the senior engineer externally)\
 """
 
 STEP3_USER_TMPL = """\
-（Step 3 已停用）\
+(Step 3 is disabled)\
 """
 
 # ══════════════════════════════════════════════════════════════════════
