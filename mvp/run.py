@@ -13,6 +13,7 @@ Output saved to: test_output/mvp_result_<timestamp>.txt
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -26,75 +27,116 @@ from app.manufacturing.extractors.pdf_extractor import PDFImageExtractor
 from mvp.pipeline import MVPPipeline
 
 # ══════════════════════════════════════════════════════════════════════
-# Family definitions
-# Each family: list of child .jpg paths + optional parent .pdf path
-# All paths relative to test_jpg/
+# Auto-discovery: scan test_jpg/ and group files into families
 # ══════════════════════════════════════════════════════════════════════
 
 _TJPG = _REPO_ROOT / "test_jpg"
 
-FAMILIES: dict[str, dict] = {
-    "108-001416-13A": {
-        "children": [
-            _TJPG / "108-001416-13A-人類加註_FRONT.jpg",
-            _TJPG / "108-001416-13A-人類加註_TOP.jpg",
-            _TJPG / "108-001416-13A-人類加註_側視圖.jpg",
-        ],
-        "parent": _TJPG / "108-001416-13A-人類未加註.pdf",
-    },
-    "161-01489-00_A": {
-        "children": [
-            _TJPG / "161-01489-00_A-人類未加註_仰視圖.pdf.jpg",
-            _TJPG / "161-01489-00_A-人類未加註_俯視圖.pdf.jpg",
-            _TJPG / "161-01489-00_A-人類未加註_左側視圖.pdf.jpg",
-            _TJPG / "161-01489-00_A-人類未加註_立體圖.pdf.jpg",
-        ],
-        "parent": _TJPG / "161-01489-00_A-人類未加註.pdf",
-    },
-    "161-01757-00_A": {
-        "children": [
-            _TJPG / "161-01757-00_A_前試圖.pdf.jpg",
-            _TJPG / "161-01757-00_A_府試圖.pdf.jpg",
-            _TJPG / "161-01757-00_A_側視圖.pdf.jpg",
-            _TJPG / "161-01757-00_A_立體圖.pdf.jpg",
-        ],
-        "parent": _TJPG / "161-01757-00_A-人類未加註.pdf",
-    },
-    "5010-555691-13A": {
-        "children": [
-            _TJPG / "5010-555691-13A-前視圖.pdf.jpg",
-            _TJPG / "5010-555691-13A-俯視圖.pdf.jpg",
-            _TJPG / "5010-555691-13A-側視圖.pdf.jpg",
-            _TJPG / "5010-555691-13A-立體圖.pdf.jpg",
-        ],
-        "parent": _TJPG / "5010-555691-13A-人類未加註.pdf",
-    },
-    "5010-586800-11A": {
-        "children": [
-            _TJPG / "5010-586800-11A-前試圖.pdf.jpg",
-            _TJPG / "5010-586800-11A-俯視圖.pdf.jpg",
-            _TJPG / "5010-586800-11A-測試圖.pdf.jpg",
-            _TJPG / "5010-586800-11A-立體圖.pdf.jpg",
-        ],
-        "parent": _TJPG / "5010-586800-11A-人類未加註.pdf",
-    },
-    "F0050-00_耐震ブラケット": {
-        "children": [
-            _TJPG / "f0050-00_耐震ﾌﾞﾗｹｯﾄ 前視圖.pdf.jpg",
-            _TJPG / "f0050-00_耐震ﾌﾞﾗｹｯﾄ 府試圖.pdf.jpg",
-            _TJPG / "f0050-00_耐震ﾌﾞﾗｹｯﾄ 側視圖.pdf.jpg",
-        ],
-        "parent": _TJPG / "F0050-00_耐震ﾌﾞﾗｹｯﾄ-人類未加註.pdf",
-    },
-    "TSDH-230-3": {
-        "children": [
-            _TJPG / "tsDH-230-3-府試圖.jpg",
-            _TJPG / "tsDH-230-3-測試圖.jpg",
-            _TJPG / "tsDH-230-3-立體圖.jpg",
-        ],
-        "parent": _TJPG / "TSDH-230-3-人類未加註.pdf",
-    },
-}
+_IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'}
+
+# View-name tokens used to strip suffixes when grouping orphan images
+_VIEW_TOKENS = [
+    '人類未加註', '人類加註',
+    '前視圖', '後視圖', '俯視圖', '府試圖', '仰視圖',
+    '側視圖', '左側視圖', '右側視圖', '立體圖', '等角圖', '測試圖',
+    'FRONT', 'BACK', 'LEFT', 'RIGHT', 'TOP', 'BOTTOM', 'SIDE', 'ISO',
+]
+
+
+def _pdf_to_family_id(stem: str) -> str:
+    """Extract family ID from a PDF stem by stripping annotation suffixes."""
+    # Handles: -人類未加註  _人類加註  -人類加註  etc.
+    cleaned = re.sub(r'[-_ ]+人類[未]?加註$', '', stem).strip()
+    return cleaned if cleaned else stem
+
+
+def _strip_view_suffix(stem: str) -> str:
+    """Strip trailing view-name tokens to get a candidate family ID for orphan images."""
+    # .pdf.jpg files — remove the embedded .pdf
+    if stem.lower().endswith('.pdf'):
+        stem = stem[:-4]
+    for token in sorted(_VIEW_TOKENS, key=len, reverse=True):
+        cleaned = re.sub(rf'[-_ ]+{re.escape(token)}.*$', '', stem,
+                         flags=re.IGNORECASE).strip()
+        if cleaned and cleaned != stem:
+            return cleaned
+    return stem
+
+
+def _discover_families(folder: Path) -> dict[str, dict]:
+    """
+    Scan *folder* and build a family dict automatically.
+
+    Rules:
+    - Every PDF whose stem contains 人類未加註 / 人類加註 → defines a family ID
+    - PDFs without that annotation → family ID = full stem (bare PDFs are parents too)
+    - Image files are assigned to the family whose ID is the longest prefix of the filename
+    - Orphan images (no matching PDF) are grouped by stripping view-name tokens
+    - Within a family, 未加註 PDF is preferred as the parent over 加註
+    """
+    if not folder.exists():
+        return {}
+
+    families: dict[str, dict] = {}
+
+    # ── Pass 1: PDFs define family IDs ──────────────────────────────
+    for pdf in sorted(folder.glob("*.pdf")):
+        fid = _pdf_to_family_id(pdf.stem)
+        if not fid:
+            continue
+        if fid not in families:
+            families[fid] = {"children": [], "parent": None}
+        current = families[fid]["parent"]
+        # Prefer 未加註 (unannotated) as parent
+        if current is None or ("未加註" in pdf.stem and "未加註" not in current.stem):
+            families[fid]["parent"] = pdf
+
+    # ── Pass 2: assign images to families by longest-prefix match ───
+    # Sort family IDs longest-first to avoid a short ID stealing files
+    # that belong to a longer ID (e.g. "ABC" vs "ABC-extra")
+    fids_by_len = sorted(families, key=len, reverse=True)
+
+    unmatched: list[Path] = []
+    for img in sorted(p for p in folder.iterdir()
+                      if p.is_file() and p.suffix.lower() in _IMG_EXTS):
+        img_lower = img.name.lower()
+        matched = False
+        for fid in fids_by_len:
+            if img_lower.startswith(fid.lower()):
+                families[fid]["children"].append(img)
+                matched = True
+                break
+        if not matched:
+            unmatched.append(img)
+
+    # ── Pass 3: group orphan images (no parent PDF found) ───────────
+    orphan_groups: dict[str, list[Path]] = {}
+    for img in unmatched:
+        candidate = _strip_view_suffix(img.stem)
+        orphan_groups.setdefault(candidate, []).append(img)
+
+    for fid, imgs in orphan_groups.items():
+        if fid not in families:
+            families[fid] = {"children": imgs, "parent": None}
+        else:
+            families[fid]["children"].extend(imgs)
+
+    return families
+
+
+# ── Manual overrides (only needed for edge cases auto-discovery can't handle) ──
+# Add entries here to override or supplement auto-discovery for specific families.
+# Example:
+#   _OVERRIDES: dict[str, dict] = {
+#       "MY-PART-001": {
+#           "children": [_TJPG / "MY-PART-001-front.jpg"],
+#           "parent":   _TJPG / "MY-PART-001.pdf",
+#       },
+#   }
+_OVERRIDES: dict[str, dict] = {}
+
+# FAMILIES = auto-discovery (covers every file in test_jpg/) + manual overrides
+FAMILIES: dict[str, dict] = {**_discover_families(_TJPG), **_OVERRIDES}
 
 
 # ══════════════════════════════════════════════════════════════════════
