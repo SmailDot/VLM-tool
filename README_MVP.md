@@ -18,7 +18,7 @@
 
 ```
 [輸入：工程圖]
-(父圖 PDF + 子視圖 3~4 張 JPG)
+(父圖 PDF + 子視圖 3~4 張 JPG，或僅父圖 PDF — 缺子圖時自動以 PDF 首頁充當)
         |
         v
 +------------------------------------------+
@@ -74,8 +74,10 @@
 
 **每個 Agent 輸出格式（每製程一行）：**
 ```
-[製程編號] [製程名稱] | RAG:[RAG相關度] | VLM:[0.00] | 依據：[具體觀察與推論過程]
+[製程編號] [製程名稱] | VLM:[0.00] | 依據：[具體觀察與推論過程]
 ```
+
+> VLM 評分採 0.00–1.00、**0.01 級距**（例：0.37、0.62、0.83），prompt 已明文禁止收斂至 0.05 級距以提升辨識度。
 
 #### Agent 職責分配
 
@@ -109,9 +111,11 @@ Step 3 彙整功能目前已停用，製程最終決策由團隊外部系統處�
 **RAG 注入格式：**
 ```
 [製程編號] [製程名稱]
-RAG相關度：0.80
 自然語言描述：{製程的自然語言觸發條件說明，供 VLM 作為辨識小抄}
 ```
+
+> 早期版本曾在每筆候選之後固定填入 `RAG relevance: 0.80`，並在 Agent 輸出中保留 `RAG:[相關度]` 欄位；
+> 為避免 VLM 被假相關度誤導，現已將該欄位整批移除，等真實向量檢索接上後再恢復。
 
 ### 未來（動態檢索）
 
@@ -137,15 +141,21 @@ $$ \text{Final Score} = \alpha \cdot \text{VLM Score} + (1-\alpha) \cdot \text{R
 ## 5. CLI 使用說明
 
 ```bash
-# 執行所有可用 Family
+# 執行 test_jpg/ 內所有可用 Group
 python -m mvp.run
 
-# 指定單一或多個 Family
-python -m mvp.run --family 108-001416-13A
-python -m mvp.run --family 108-001416-13A TSDH-230-3
+# 指定單一或多個 Group
+python -m mvp.run --group 108-001416-13A
+python -m mvp.run --group 108-001416-13A TSDH-230-3
 
-# 列出目前支援的所有 Family ID
+# 列出目前支援的所有 Group ID
 python -m mvp.run --list
+
+# ★ 任意路徑輸入（不必把檔案丟進 test_jpg/）
+python -m mvp.run --path "D:/somewhere/folder"          # 任意資料夾，套用同一套 discovery
+python -m mvp.run --path "D:/somewhere/部品圖.pdf"      # 單一 PDF — 視為單群組的父圖
+python -m mvp.run --path "D:/somewhere/view.jpg"        # 單張影像 — 視為單群組的子圖
+python -m mvp.run --path "D:/somewhere/folder" --list   # 預覽該資料夾掃出的 Group
 
 # 圖像傳送模式
 python -m mvp.run --no-parent      # 跳過父圖，只送子視圖
@@ -155,14 +165,19 @@ python -m mvp.run --parent-only    # 只送父圖，不送子視圖
 python -m mvp.run --workers 2
 ```
 
-**輸出路徑：** `test_output/mvp_<family>_<mode>_<timestamp>.txt`
+**僅含父圖 PDF 的 fallback：**
+若某 Group 只有父圖 PDF、沒有任何子視圖，Pipeline 會自動把 PDF 首頁渲染後當作唯一子圖，
+讓 default / `--no-parent` / `--parent-only` 三種模式皆可正常執行。
+
+**輸出路徑：** `test_output/mvp_<group>_<mode>_<timestamp>.txt`
+其中 `<mode>` 為 `full` / `child-only` / `parent-only`。
 
 ---
 
-## 6. 可用測試 Family
+## 6. 可用測試 Group
 
-| Family ID | 說明 |
-|-----------|------|
+| Group ID | 說明 |
+|----------|------|
 | `108-001416-13A` | 人類加註版（含正/俯/側視圖） |
 | `161-01489-00_A` | 人類未加註版（含仰視/俯視/側視/立體圖） |
 | `161-01757-00_A` | 人類未加註版（含前/俯/側/立體圖） |
@@ -188,8 +203,10 @@ mvp/
 │                     #   • Step 2：ThreadPool 並行呼叫 4 Agents
 │                     #   • Step 3：已停用
 └── run.py            # CLI 執行器
-                      #   • 參數解析（family、workers、--no-parent 等）
+                      #   • 參數解析（--group / --path / --workers / --no-parent / --parent-only）
+                      #   • test_jpg/ 與任意 --path 的 group 自動探勘
                       #   • PDF → 影像轉換（PDFImageExtractor）
+                      #   • 缺子圖時的 PDF-as-child fallback
                       #   • 結果寫入 test_output/
 ```
 
@@ -200,7 +217,7 @@ mvp/
 | 項目 | 說明 |
 |------|------|
 | 父圖規格 | 一律使用人類未加註 PDF（200 DPI），確保 VLM 不受人工提示影響 |
-| RAG 靜態注入 | 目前所有製程 RAG 相關度固定為 0.80（無實際向量檢索） |
+| RAG 靜態注入 | 目前僅有「自然語言描述」的靜態候選清單，尚未接真實向量檢索；先前的 `RAG relevance: 0.80` 佔位欄位已整批移除 |
 | Step 3 停用 | 4 個 Agent 輸出獨立呈現，最終彙整由外部處理 |
 | VRAM 需求 | Gemma-4-26B 搭配多張圖面時需獨佔 GPU，避免其他應用同時占用 VRAM |
 | LaTeX 符號 | Prompt 已禁止 LaTeX 輸出，輸出中若仍出現請回報 |
