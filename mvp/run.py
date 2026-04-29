@@ -1,13 +1,24 @@
 """
-MVP Runner — runs the 3-step multi-agent pipeline on test_jpg families.
+MVP Runner — runs the 3-step multi-agent pipeline on drawing groups.
 
 Usage:
-    python -m mvp.run                         # all families
-    python -m mvp.run --family 108-001416-13A  # single family
-    python -m mvp.run --family 108-001416-13A 161-01757-00_A  # multiple
-    python -m mvp.run --list                  # print available families
+    python -m mvp.run                                   # all groups in test_jpg/
+    python -m mvp.run --group 108-001416-13A            # single group by ID
+    python -m mvp.run --group A B                       # multiple groups
+    python -m mvp.run --path /any/folder                # ad-hoc: scan a custom directory
+    python -m mvp.run --path /any/file.pdf              # ad-hoc: single PDF (parent only)
+    python -m mvp.run --path /any/image.jpg             # ad-hoc: single image (child only)
+    python -m mvp.run --list                            # print available groups
 
-Output saved to: test_output/mvp_result_<timestamp>.txt
+Output saved to: test_output/mvp_<group>_<mode>_<timestamp>.txt
+
+Modes:
+    default       — parent + child views
+    --parent-only — parent PDF page only
+    --no-parent   — child views only
+                    Fallback: if a group has only a parent PDF and no real child images,
+                    the rendered PDF page is used as the lone child so the run still
+                    proceeds.
 """
 
 from __future__ import annotations
@@ -27,7 +38,7 @@ from app.manufacturing.extractors.pdf_extractor import PDFImageExtractor
 from mvp.pipeline import MVPPipeline
 
 # ══════════════════════════════════════════════════════════════════════
-# Auto-discovery: scan test_jpg/ and group files into families
+# Auto-discovery: scan a folder and group files into groups
 # ══════════════════════════════════════════════════════════════════════
 
 _TJPG = _REPO_ROOT / "test_jpg"
@@ -43,16 +54,14 @@ _VIEW_TOKENS = [
 ]
 
 
-def _pdf_to_family_id(stem: str) -> str:
-    """Extract family ID from a PDF stem by stripping annotation suffixes."""
-    # Handles: -人類未加註  _人類加註  -人類加註  etc.
+def _pdf_to_group_id(stem: str) -> str:
+    """Extract group ID from a PDF stem by stripping annotation suffixes."""
     cleaned = re.sub(r'[-_ ]+人類[未]?加註$', '', stem).strip()
     return cleaned if cleaned else stem
 
 
 def _strip_view_suffix(stem: str) -> str:
-    """Strip trailing view-name tokens to get a candidate family ID for orphan images."""
-    # .pdf.jpg files — remove the embedded .pdf
+    """Strip trailing view-name tokens to get a candidate group ID for orphan images."""
     if stem.lower().endswith('.pdf'):
         stem = stem[:-4]
     for token in sorted(_VIEW_TOKENS, key=len, reverse=True):
@@ -63,47 +72,44 @@ def _strip_view_suffix(stem: str) -> str:
     return stem
 
 
-def _discover_families(folder: Path) -> dict[str, dict]:
+def _discover_groups(folder: Path) -> dict[str, dict]:
     """
-    Scan *folder* and build a family dict automatically.
+    Scan *folder* and build a group dict automatically.
 
     Rules:
-    - Every PDF whose stem contains 人類未加註 / 人類加註 → defines a family ID
-    - PDFs without that annotation → family ID = full stem (bare PDFs are parents too)
-    - Image files are assigned to the family whose ID is the longest prefix of the filename
+    - Every PDF whose stem contains 人類未加註 / 人類加註 → defines a group ID
+    - PDFs without that annotation → group ID = full stem (bare PDFs are parents too)
+    - Image files are assigned to the group whose ID is the longest prefix of the filename
     - Orphan images (no matching PDF) are grouped by stripping view-name tokens
-    - Within a family, 未加註 PDF is preferred as the parent over 加註
+    - Within a group, 未加註 PDF is preferred as the parent over 加註
     """
     if not folder.exists():
         return {}
 
-    families: dict[str, dict] = {}
+    groups: dict[str, dict] = {}
 
-    # ── Pass 1: PDFs define family IDs ──────────────────────────────
+    # ── Pass 1: PDFs define group IDs ───────────────────────────────
     for pdf in sorted(folder.glob("*.pdf")):
-        fid = _pdf_to_family_id(pdf.stem)
-        if not fid:
+        gid = _pdf_to_group_id(pdf.stem)
+        if not gid:
             continue
-        if fid not in families:
-            families[fid] = {"children": [], "parent": None}
-        current = families[fid]["parent"]
-        # Prefer 未加註 (unannotated) as parent
+        if gid not in groups:
+            groups[gid] = {"children": [], "parent": None}
+        current = groups[gid]["parent"]
         if current is None or ("未加註" in pdf.stem and "未加註" not in current.stem):
-            families[fid]["parent"] = pdf
+            groups[gid]["parent"] = pdf
 
-    # ── Pass 2: assign images to families by longest-prefix match ───
-    # Sort family IDs longest-first to avoid a short ID stealing files
-    # that belong to a longer ID (e.g. "ABC" vs "ABC-extra")
-    fids_by_len = sorted(families, key=len, reverse=True)
+    # ── Pass 2: assign images to groups by longest-prefix match ─────
+    gids_by_len = sorted(groups, key=len, reverse=True)
 
     unmatched: list[Path] = []
     for img in sorted(p for p in folder.iterdir()
                       if p.is_file() and p.suffix.lower() in _IMG_EXTS):
         img_lower = img.name.lower()
         matched = False
-        for fid in fids_by_len:
-            if img_lower.startswith(fid.lower()):
-                families[fid]["children"].append(img)
+        for gid in gids_by_len:
+            if img_lower.startswith(gid.lower()):
+                groups[gid]["children"].append(img)
                 matched = True
                 break
         if not matched:
@@ -115,28 +121,46 @@ def _discover_families(folder: Path) -> dict[str, dict]:
         candidate = _strip_view_suffix(img.stem)
         orphan_groups.setdefault(candidate, []).append(img)
 
-    for fid, imgs in orphan_groups.items():
-        if fid not in families:
-            families[fid] = {"children": imgs, "parent": None}
+    for gid, imgs in orphan_groups.items():
+        if gid not in groups:
+            groups[gid] = {"children": imgs, "parent": None}
         else:
-            families[fid]["children"].extend(imgs)
+            groups[gid]["children"].extend(imgs)
 
-    return families
+    return groups
 
 
-# ── Manual overrides (only needed for edge cases auto-discovery can't handle) ──
-# Add entries here to override or supplement auto-discovery for specific families.
-# Example:
-#   _OVERRIDES: dict[str, dict] = {
-#       "MY-PART-001": {
-#           "children": [_TJPG / "MY-PART-001-front.jpg"],
-#           "parent":   _TJPG / "MY-PART-001.pdf",
-#       },
-#   }
+def _groups_from_path(path: Path) -> dict[str, dict]:
+    """
+    Build a groups dict from an arbitrary path:
+      - Directory   → scan it like test_jpg/
+      - Single PDF  → one group (PDF as parent, no children)
+      - Single image → one group (image as the only child, no parent)
+    """
+    if not path.exists():
+        print(f"[ERROR] Path not found: {path}")
+        return {}
+
+    if path.is_dir():
+        return _discover_groups(path)
+
+    if path.is_file():
+        suffix = path.suffix.lower()
+        gid = path.stem
+        if suffix == ".pdf":
+            return {gid: {"children": [], "parent": path}}
+        if suffix in _IMG_EXTS:
+            return {gid: {"children": [path], "parent": None}}
+
+    print(f"[ERROR] Unsupported path: {path}")
+    return {}
+
+
+# ── Manual overrides (only for edge cases auto-discovery can't handle) ──
 _OVERRIDES: dict[str, dict] = {}
 
-# FAMILIES = auto-discovery (covers every file in test_jpg/) + manual overrides
-FAMILIES: dict[str, dict] = {**_discover_families(_TJPG), **_OVERRIDES}
+# GROUPS = auto-discovery (covers every file in test_jpg/) + manual overrides
+GROUPS: dict[str, dict] = {**_discover_groups(_TJPG), **_OVERRIDES}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -170,12 +194,12 @@ def _validate_children(children: list[Path]) -> tuple[list[Path], list[str]]:
     return ok, missing
 
 
-def _fmt_result(family_id: str, result: dict) -> str:
-    """Format one family's pipeline result into a text block."""
+def _fmt_result(group_id: str, result: dict) -> str:
+    """Format one group's pipeline result into a text block."""
     lines = []
     sep = "═" * 72
     lines.append(sep)
-    lines.append(f"零件 ID : {family_id}")
+    lines.append(f"零件 ID : {group_id}")
     lines.append(
         f"耗時   : Step1={result['elapsed_step1']}s  "
         f"Step2={result['elapsed_step2']}s  "
@@ -215,12 +239,16 @@ def _fmt_result(family_id: str, result: dict) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="MVP Multi-Agent VLM Pipeline Runner")
     parser.add_argument(
-        "--family", nargs="*",
-        help="Family ID(s) to run. Omit for all families.",
+        "--group", nargs="*",
+        help="Group ID(s) to run. Omit for all groups in the active source.",
+    )
+    parser.add_argument(
+        "--path", type=str, default=None,
+        help="Run on an arbitrary path (file or directory) instead of test_jpg/.",
     )
     parser.add_argument(
         "--list", action="store_true",
-        help="List available family IDs and exit.",
+        help="List available group IDs and exit.",
     )
     parser.add_argument(
         "--workers", type=int, default=4,
@@ -236,23 +264,31 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Resolve the candidate group set
+    if args.path:
+        available = _groups_from_path(Path(args.path).expanduser().resolve())
+        if not available:
+            sys.exit(1)
+    else:
+        available = GROUPS
+
     if args.list:
-        print("Available families:")
-        for fid in FAMILIES:
-            print(f"  {fid}")
+        print("Available groups:")
+        for gid in available:
+            print(f"  {gid}")
         return
 
-    # Select families to run
-    if args.family:
+    # Select groups to run
+    if args.group:
         selected = {}
-        for fid in args.family:
-            if fid not in FAMILIES:
-                print(f"[ERROR] Unknown family: {fid}")
-                print(f"        Available: {list(FAMILIES.keys())}")
+        for gid in args.group:
+            if gid not in available:
+                print(f"[ERROR] Unknown group: {gid}")
+                print(f"        Available: {list(available.keys())}")
                 sys.exit(1)
-            selected[fid] = FAMILIES[fid]
+            selected[gid] = available[gid]
     else:
-        selected = FAMILIES
+        selected = available
 
     # Health check
     pipeline = MVPPipeline(max_workers=args.workers)
@@ -260,7 +296,6 @@ def main() -> None:
         print("[ERROR] VLM service not available. Is LM Studio running?")
         sys.exit(1)
 
-    # Query actual loaded model name from LM Studio (config default may differ)
     try:
         models_resp = pipeline.client.client.models.list()
         actual_model = models_resp.data[0].id if models_resp.data else pipeline.client.model
@@ -268,8 +303,8 @@ def main() -> None:
         actual_model = pipeline.client.model
 
     print(f"[MVP] VLM service OK. Model: {actual_model}")
-    print(f"[MVP] Running {len(selected)} families × 5 VLM calls each (1+4, Step 3 disabled).")
-    print(f"[MVP] Each family saved as its own txt in test_output/")
+    print(f"[MVP] Running {len(selected)} groups × 5 VLM calls each (1+4, Step 3 disabled).")
+    print(f"[MVP] Each group saved as its own txt in test_output/")
 
     output_dir = _REPO_ROOT / "test_output"
     output_dir.mkdir(exist_ok=True)
@@ -277,31 +312,45 @@ def main() -> None:
 
     saved_files = []
 
-    for family_id, fam in selected.items():
+    for group_id, grp in selected.items():
         print(f"\n{'─'*60}")
-        print(f"[MVP] === {family_id} ===")
+        print(f"[MVP] === {group_id} ===")
 
         # Validate children
-        child_paths, missing = _validate_children(fam["children"])
+        child_paths, missing = _validate_children(grp["children"])
         if missing:
             print(f"  [WARN] Missing child images: {missing}")
 
-        # Load parent
+        # Load parent (skipped if --no-parent)
         parent_img = None
-        if not args.no_parent and fam.get("parent"):
-            parent_img = _load_parent_pdf(fam["parent"])
+        if not args.no_parent and grp.get("parent"):
+            parent_img = _load_parent_pdf(grp["parent"])
 
-        # --parent-only: skip children, require parent
+        # Mode dispatch + parent-PDF-as-child fallback when no real children exist
         if args.parent_only:
             if parent_img is None:
-                print(f"  [SKIP] --parent-only set but no parent available for {family_id}")
+                print(f"  [SKIP] --parent-only set but no parent available for {group_id}")
                 continue
             child_paths = []
+            mode_label = "parent-only"
             print(f"  [RUN] parent-only mode — sending parent image only")
-        else:
+        elif args.no_parent:
+            # No-parent mode: need at least one child. If none, render the PDF as fallback.
+            if not child_paths and grp.get("parent"):
+                fallback = _load_parent_pdf(grp["parent"])
+                if fallback is not None:
+                    child_paths = [fallback]
+                    print(f"  [RUN] No child images — using parent PDF page as child fallback")
             if not child_paths:
-                print(f"  [SKIP] No valid child images for {family_id}")
+                print(f"  [SKIP] --no-parent but no children and no PDF fallback for {group_id}")
                 continue
+            mode_label = "child-only"
+        else:
+            # Default mode: parent + children. At least one of them must exist.
+            if parent_img is None and not child_paths:
+                print(f"  [SKIP] No images at all for {group_id}")
+                continue
+            mode_label = "full"
 
         # Run pipeline
         result = pipeline.run(
@@ -309,28 +358,20 @@ def main() -> None:
             parent_image=parent_img,
         )
 
-        # Determine image mode label
-        if args.parent_only:
-            mode_label = "parent-only"
-        elif args.no_parent:
-            mode_label = "child-only"
-        else:
-            mode_label = "full"
-
-        # Per-family header
-        fam_header = (
+        # Per-group header
+        header = (
             f"MVP Multi-Agent VLM Pipeline — {ts}\n"
             f"Model: {actual_model}\n"
-            f"Family: {family_id}  |  Calls: 5 (1+4, Step3 disabled)  |  Mode: {mode_label}\n"
+            f"Group: {group_id}  |  Calls: 5 (1+4, Step3 disabled)  |  Mode: {mode_label}\n"
             f"Workers (Step 2): {args.workers}\n"
         )
-        block = _fmt_result(family_id, result)
+        block = _fmt_result(group_id, result)
 
-        # Sanitise family_id for use as a filename
-        safe_id = family_id.replace("/", "_").replace(" ", "_").replace("\\", "_")
+        # Sanitise group_id for use as a filename
+        safe_id = group_id.replace("/", "_").replace(" ", "_").replace("\\", "_")
         out_path = output_dir / f"mvp_{safe_id}_{mode_label}_{ts}.txt"
         with open(out_path, "w", encoding="utf-8") as f:
-            f.write(fam_header + "\n" + block)
+            f.write(header + "\n" + block)
         saved_files.append(out_path.name)
         print(f"  [MVP] Saved → {out_path.name}")
 
